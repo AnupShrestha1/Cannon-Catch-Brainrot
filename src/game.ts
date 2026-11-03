@@ -102,18 +102,6 @@ interface Bird {
   vy: number;
 }
 
-/** A caught character flying from the player's stack to its pad, or off to be sold. */
-interface Flyer {
-  rig: CharacterRig;
-  from: THREE.Vector3;
-  to: THREE.Vector3;
-  t: number;
-  pad: number | null;
-  rarity: number;
-  coins: number;
-  replaced: string | null;
-}
-
 const MUZZLE_Y = 3.2;
 /** Height of the player's collision centre above their feet. */
 const BODY_MID = 0.95;
@@ -127,7 +115,6 @@ const CANNON_FOOT = new THREE.Vector3(0, 0, 2.3);
 const WALK_SPEED = 9;
 /** Walking within this distance of a pad's centre collects its coins. */
 const COLLECT_RADIUS = 1.7;
-const FLY_TIME = 0.7;
 /** Characters float larger than life in the sky so they read from the chase camera; held ones shrink. */
 const SKY_SCALE = 1.35;
 const HELD_SCALE = 0.55;
@@ -210,9 +197,11 @@ export class Game {
   private stack: Pickup[] = [];
   private pickups: Pickup[] = [];
   private birds: Bird[] = [];
-  private flyers: Flyer[] = [];
-  /** Pads whose new character is still flying in. */
-  private pending = new Set<number>();
+  /** Rigs of the characters carried at the base, matching save.carrying. */
+  private carried: CharacterRig[] = [];
+  private carrySel = 0;
+  /** What to do when the current walk arrives. */
+  private arrive: (() => void) | null = null;
 
   private slowmo = 0;
   private shake = 0;
@@ -277,7 +266,8 @@ export class Game {
     this.resize();
 
     this.base.sync(this.save);
-    if (this.save.pads.some(Boolean)) {
+    this.buildCarried();
+    if (this.save.pads.some(Boolean) || this.save.carrying.length) {
       // Returning players start at the base, where their pads have been waiting.
       this.px = HOME_SPOT.x;
       this.py = this.prevY = 0;
@@ -342,6 +332,8 @@ export class Game {
     onClick(hud.giftBtn, () => this.claimGift());
     onClick(hud.bookBtn, () => this.openBook());
     hud.onBuy = (item) => this.buy(item);
+    hud.onCarrySelect = (i) => this.selectCarried(i);
+    hud.onCarrySell = (i) => this.sellCarried(i);
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyT') hud.tunePanel.classList.toggle('hidden');
       if (e.code === 'KeyM') this.toggleMute();
@@ -437,7 +429,6 @@ export class Game {
     this.updateEconomy(realDt);
     this.updatePickups(dt);
     this.updateBirds(dt);
-    this.updateFlyers(dt);
     this.base.update(this.save, this.time, realDt);
     this.fx.update(dt);
     this.updateVisuals(realDt, dt);
@@ -934,68 +925,111 @@ export class Game {
 
   // ---------------------------------------------------------------- base
 
-  /** Walk home: each catch flies to a free pad, or replaces a weaker one, or is sold. */
+  /** Walk home carrying the catch. At the base, each one is placed on a pad or sold, the player's choice. */
   private goHome(): void {
     const catches = this.stack.map((p) => ({ name: p.name, rarity: p.rarity }));
-    const starts = this.stack.map((p) => p.rig.group.position.clone());
     this.clearRun();
     this.hud.hideReveal();
-    const outcomes = placeCatches(this.save, catches);
-    outcomes.forEach((o, i) => {
-      const rig = makeCharacter(catches[i].rarity, catches[i].name);
-      rig.cloud.visible = false;
-      rig.group.position.copy(starts[i]);
-      rig.group.scale.setScalar(HELD_SCALE);
-      this.scene.add(rig.group);
-      if (o.pad !== null) this.pending.add(o.pad);
-      const to = o.pad !== null ? Base.padPosition(o.pad) : starts[i].clone().setY(starts[i].y + 5);
-      this.flyers.push({
-        rig,
-        from: starts[i],
-        to,
-        t: -0.3 * i,
-        pad: o.pad,
-        rarity: catches[i].rarity,
-        coins: o.coins,
-        replaced: o.replaced,
-      });
-    });
+    this.save.carrying.push(...catches);
+    this.buildCarried();
     writeSave(this.save);
     this.state = 'home';
-    this.base.sync(this.save, this.pending);
     this.walkTo(HOME_SPOT);
   }
 
-  private updateFlyers(dt: number): void {
-    for (let i = this.flyers.length - 1; i >= 0; i--) {
-      const f = this.flyers[i];
-      f.t += dt;
-      const k = clamp(f.t / FLY_TIME, 0, 1);
-      const pos = f.rig.group.position.lerpVectors(f.from, f.to, k);
-      pos.y += Math.sin(k * Math.PI) * 4;
-      f.rig.group.scale.setScalar(lerp(HELD_SCALE, 1, k));
-      f.rig.figure.rotation.y = k * Math.PI * 2;
-      if (f.t < FLY_TIME) continue;
-      this.scene.remove(f.rig.group);
-      this.flyers.splice(i, 1);
-      const color = RARITIES[f.rarity].color;
-      if (f.pad !== null) {
-        this.pending.delete(f.pad);
-        this.base.sync(this.save, this.pending);
-        this.fx.burst(this.tmp.copy(f.to).setY(1), { count: 16, color, speed: 6, life: 0.7, size: 0.6, up: 3 });
-        this.sfx.pop(f.rarity);
-        if (f.replaced) this.floatAt(this.tmp.copy(f.to).setY(2.4), `Sold ${f.replaced} +${formatCoins(f.coins)}`, 'small');
-      } else {
-        this.fx.burst(f.to, { count: 16, color, speed: 6, life: 0.7, size: 0.6 });
-        this.floatAt(f.to, `Sold +${formatCoins(f.coins)}`, 'small');
-        this.sfx.coin();
-      }
-    }
+  /** Rebuilds the characters on the player's head from the save, selecting the rarest. */
+  private buildCarried(): void {
+    for (const rig of this.carried) this.scene.remove(rig.group);
+    this.carried = this.save.carrying.map((c) => {
+      const rig = makeCharacter(c.rarity, c.name);
+      rig.cloud.visible = false;
+      rig.group.scale.setScalar(HELD_SCALE);
+      this.scene.add(rig.group);
+      return rig;
+    });
+    this.carrySel = this.rarestCarried();
+    this.refreshCarry();
   }
 
-  private walkTo(target: THREE.Vector3): void {
+  private rarestCarried(): number {
+    let best = 0;
+    this.save.carrying.forEach((c, i) => {
+      if (c.rarity > this.save.carrying[best].rarity) best = i;
+    });
+    return best;
+  }
+
+  private refreshCarry(): void {
+    this.hud.renderCarry(
+      this.save.carrying.map((c) => ({ ...c, sell: sellValue(this.save, c) })),
+      this.carrySel,
+    );
+  }
+
+  private selectCarried(i: number): void {
+    if (i < 0 || i >= this.save.carrying.length) return;
+    this.carrySel = i;
+    this.refreshCarry();
+    this.sfx.pop(this.save.carrying[i].rarity);
+  }
+
+  private removeCarried(i: number): void {
+    this.save.carrying.splice(i, 1);
+    this.scene.remove(this.carried[i].group);
+    this.carried.splice(i, 1);
+    this.carrySel = this.save.carrying.length ? this.rarestCarried() : 0;
+    this.refreshCarry();
+  }
+
+  /** Puts the selected carried character on an empty pad. */
+  private placeCarried(pad: number): void {
+    const s = this.save;
+    const c = s.carrying[this.carrySel];
+    if (!c || s.pads[pad]) return;
+    s.pads[pad] = { name: c.name, rarity: c.rarity, cash: 0, level: 1 };
+    this.removeCarried(this.carrySel);
+    this.base.sync(s);
+    this.fx.burst(Base.padPosition(pad, this.tmp).setY(1), {
+      count: 16,
+      color: RARITIES[c.rarity].color,
+      speed: 6,
+      life: 0.7,
+      size: 0.6,
+      up: 3,
+    });
+    this.sfx.pop(c.rarity);
+    this.sfx.chant(c.name);
+    this.completeHint('place');
+    writeSave(s);
+  }
+
+  private sellCarried(i: number): void {
+    const c = this.save.carrying[i];
+    if (!c) return;
+    const coins = sellValue(this.save, c);
+    this.save.coins += coins;
+    this.removeCarried(i);
+    this.floatAt(this.tmp.set(this.px, this.py + 2.6, this.pz), `Sold ${c.name} +${formatCoins(coins)}`, 'small');
+    this.sfx.coin();
+    writeSave(this.save);
+  }
+
+  /** Sells the character on a pad and puts the selected carried one in its place. */
+  private swapCarried(pad: number): void {
+    const s = this.save;
+    const old = s.pads[pad];
+    if (!old || !s.carrying.length) return;
+    const coins = sellValue(s, old) + Math.floor(old.cash);
+    s.coins += coins;
+    s.pads[pad] = null;
+    this.floatAt(Base.padPosition(pad, this.tmp).setY(2.4), `Sold ${old.name} +${formatCoins(coins)}`, 'small');
+    this.placeCarried(pad);
+  }
+
+  private walkTo(target: THREE.Vector3, then: (() => void) | null = null): void {
     this.walkTarget.copy(target);
     this.walking = true;
+    this.arrive = then;
   }
 
   private updateWalk(dt: number): void {
@@ -1006,6 +1040,9 @@ export class Game {
     if (dist < 0.05) {
       this.walking = false;
       if (this.state === 'boarding') this.boardCannon();
+      const then = this.arrive;
+      this.arrive = null;
+      then?.();
       return;
     }
     const step = Math.min(dist, WALK_SPEED * dt);
@@ -1045,8 +1082,16 @@ export class Game {
     const pad = this.base.pick(this.raycaster);
     if (pad !== null) {
       const at = Base.padPosition(pad, this.tmp);
-      if (!this.walking && Math.hypot(at.x - this.px, at.z - this.pz) < COLLECT_RADIUS) this.openPad(pad);
-      else this.walkTo(at.setY(0));
+      const here = !this.walking && Math.hypot(at.x - this.px, at.z - this.pz) < COLLECT_RADIUS;
+      if (this.save.carrying.length && !this.save.pads[pad]) {
+        // Carrying something: an empty pad gets it, once the player gets there.
+        if (here) this.placeCarried(pad);
+        else this.walkTo(at.setY(0), () => this.placeCarried(pad));
+      } else if (here) {
+        this.openPad(pad);
+      } else {
+        this.walkTo(at.setY(0));
+      }
       return;
     }
     if (this.raycaster.intersectObject(this.env.cannon, true).length) {
@@ -1098,7 +1143,13 @@ export class Game {
   private updateHomePrompt(): void {
     const anyCash = this.save.pads.some((slot) => slot !== null && slot.cash >= 1);
     let text = '';
-    if (!this.hasHint('collect') && anyCash) {
+    const carried = this.save.carrying[this.carrySel];
+    if (carried) {
+      const verb = this.input.isTouch ? 'Tap' : 'Click';
+      text = this.save.pads.some((slot) => slot === null)
+        ? `${verb} an empty pad to place ${carried.name}, or sell it`
+        : `Base full: sell a catch, or swap it onto a pad you stand on`;
+    } else if (!this.hasHint('collect') && anyCash) {
       text = this.input.isTouch ? 'Tap a pad to collect its coins' : 'Click a pad to collect its coins';
     } else if (this.wantsUpgradeHint()) {
       text = 'Upgrade your cannon!';
@@ -1113,6 +1164,10 @@ export class Game {
   }
 
   private startBoarding(): void {
+    if (this.save.carrying.length) {
+      this.hud.toast("Place or sell what you're carrying first", 'bad small');
+      return;
+    }
     this.state = 'boarding';
     this.hud.prompt('');
     this.walkTo(CANNON_FOOT);
@@ -1261,7 +1316,7 @@ export class Game {
     s.coins -= cost;
     if (item === 'pads') {
       for (let i = 0; i < ECONOMY.padStep; i++) s.pads.push(null);
-      this.base.sync(s, this.pending);
+      this.base.sync(s);
       this.completeHint('expand');
       this.hud.toast(`${s.pads.length} pads!`, 'gold');
     } else {
@@ -1286,7 +1341,6 @@ export class Game {
     s.carryLevel = s.magnet = s.steering = s.chute = 0;
     s.pads = Array.from({ length: ECONOMY.startPads }, () => null);
     if (keep) s.pads[0] = { ...keep, cash: 0, level: 1 };
-    this.pending.clear();
     this.base.sync(s);
     this.paintCannon();
     writeSave(s);
@@ -1325,10 +1379,15 @@ export class Game {
         ? 'Max level'
         : `Next level: ${formatCoins(padIncome(s, { ...slot, level: level + 1 }))} coins/s`;
     const sell = sellValue(s, slot);
+    const carried = s.carrying[this.carrySel];
+    const swap = carried
+      ? [{ label: `Swap in ${carried.name}`, primary: true, action: () => this.swapCarried(i) }]
+      : [];
     this.hud.showModal(slot.name, [card, stats, next], [
+      ...swap,
       {
         label: cost === null ? 'Max level' : `Level up · ${formatCoins(cost)}`,
-        primary: cost !== null && s.coins >= cost,
+        primary: !carried && cost !== null && s.coins >= cost,
         action: () => this.levelUp(i),
       },
       {
@@ -1373,7 +1432,7 @@ export class Game {
     const coins = sellValue(s, slot) + Math.floor(slot.cash);
     s.coins += coins;
     s.pads[i] = null;
-    this.base.sync(s, this.pending);
+    this.base.sync(s);
     writeSave(s);
     this.sfx.coin();
     this.floatAt(Base.padPosition(i, this.tmp).setY(1.6), `Sold +${formatCoins(coins)}`);
@@ -1452,7 +1511,7 @@ export class Game {
       const name = pickName(reward.rarity);
       placeCatches(s, [{ name, rarity: reward.rarity }]);
       this.addToBook(name);
-      this.base.sync(s, this.pending);
+      this.base.sync(s);
       this.hud.toast(`${RARITIES[reward.rarity].name}: ${name}!`, '', RARITIES[reward.rarity].css);
       this.sfx.chant(name);
     }
@@ -1612,6 +1671,14 @@ export class Game {
       p.rig.figure.position.y = 0;
       p.rig.figure.rotation.y = Math.sin(this.time * 2 + i) * 0.3;
     });
+    this.carried.forEach((rig, i) => {
+      const selected = i === this.carrySel;
+      rig.group.position.set(this.px, this.py + STACK_BASE + i * STACK_STEP, this.pz + 0.15);
+      rig.group.scale.setScalar(HELD_SCALE * (selected ? 1.25 : 1));
+      rig.figure.position.y = selected ? Math.abs(Math.sin(this.time * 6)) * 0.15 : 0;
+      rig.figure.rotation.y = this.player.group.rotation.y + Math.PI;
+    });
+    this.hud.setCarryVisible(this.state === 'home' && this.save.carrying.length > 0);
     animateShared(this.time);
 
     const shadow = this.env.shadow;

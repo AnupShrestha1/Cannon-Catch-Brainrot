@@ -30,6 +30,8 @@ the Network URL it prints.
 | Steer | Mouse position, or A/D or the arrow keys | Drag left and right |
 | Parachute | Space or click | PARACHUTE button |
 | At the base: walk, collect | Click a pad or the ground | Tap a pad or the ground |
+| At the base: place a catch | Click an empty pad | Tap an empty pad |
+| At the base: choose or sell a catch | Click its card in the top tray | Tap its card in the top tray |
 | At the base: level up or sell | Click the pad you stand on | Tap the pad you stand on |
 | At the base: back to the cannon | Space, Launch!, or click the cannon | Launch!, or tap the cannon |
 
@@ -45,13 +47,15 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - Tutorial: flight 1 has one Common straight ahead, birds start on flight 3, flight 3 has a guaranteed
   Rare, and nothing is dropped during the first 3 flights. From flight 4, the apex shows a silhouette
   from the next locked zone and the cannon level that reaches it.
-- At the base, catches fill free pads. A full base sells its weakest character to make room for a rarer
-  catch, and sells catches that aren't better. Selling pays 60 seconds of income.
+- After landing, the player carries the catch home on their head. A tray at the top shows what's
+  carried: tap a card to choose it, or sell it there (60 seconds of its income). Tap an empty pad to
+  walk over and place the chosen character. On a full pad you stand on, the pad's panel can swap it in,
+  selling the old one. The cannon stays locked until everything carried is placed or sold, and carried
+  characters are saved.
 - Each pad piles up its income, capped at 10 minutes. Walk over a pad to collect it.
 - Character levels: tap the pad you stand on to open its panel. Each level (up to 10) adds +25% income;
   level 2 costs 30 seconds of the character's base income, and each level after costs 1.6× more. The
-  panel also sells the character (two taps). A full base replaces its lowest earner, not its lowest
-  rarity, so levelled characters are safe.
+  panel also sells the character (two taps).
 - Session gifts unlock at 5, 10, 20 and 40 minutes of play, worth 2 minutes of income (at least 100).
 - Hints walk new players through collecting, the first cannon upgrade and the first base expansion.
 - Each catch, and now and then a character at the base, chants its name with the browser's built-in

@@ -41,6 +41,8 @@ export class Hud {
   readonly giftBtn = byId<HTMLButtonElement>('giftBtn');
   readonly tunePanel = byId('tune');
   onBuy: (item: ShopItem) => void = () => {};
+  onCarrySelect: (index: number) => void = () => {};
+  onCarrySell: (index: number) => void = () => {};
 
   private coins = byId('coins');
   private income = byId('income');
@@ -65,6 +67,8 @@ export class Hud {
   private shop = byId('shop');
   private shopRows = byId('shopRows');
   private flight = byId('flightNo');
+  private carry = byId('carry');
+  private carryKey = '';
   private modal = byId('modal');
   private modalTitle = byId('modalTitle');
   private modalBody = byId('modalBody');
@@ -260,6 +264,34 @@ export class Hud {
 
   hideReveal(): void {
     this.reveal.classList.add('hidden');
+  }
+
+  /** The tray of carried catches at the base: tap a card to choose it, or sell it outright. */
+  renderCarry(items: { name: string; rarity: number; sell: number }[], selected: number): void {
+    const key = JSON.stringify([items, selected]);
+    if (key === this.carryKey) return;
+    this.carryKey = key;
+    this.carry.replaceChildren(
+      ...items.map((item, i) => {
+        const card = this.characterCard(item.name, item.rarity);
+        card.classList.add('carry-card');
+        if (i === selected) card.classList.add('selected');
+        card.addEventListener('click', () => this.onCarrySelect(i));
+        const sell = document.createElement('button');
+        sell.type = 'button';
+        sell.textContent = `Sell ${formatCoins(item.sell)}`;
+        sell.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.onCarrySell(i);
+        });
+        card.append(sell);
+        return card;
+      }),
+    );
+  }
+
+  setCarryVisible(on: boolean): void {
+    this.carry.classList.toggle('on', on);
   }
 
   get modalOpen(): boolean {

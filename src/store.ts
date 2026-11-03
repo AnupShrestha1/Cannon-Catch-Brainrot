@@ -39,6 +39,8 @@ export interface Save {
   collected: string[];
   /** Book pages (zone indexes) whose completion reward was claimed. */
   bookClaimed: number[];
+  /** Caught characters the player is carrying at the base, not yet placed or sold. */
+  carrying: { name: string; rarity: number }[];
 }
 
 const KEY = 'ccb-slice-v1';
@@ -73,6 +75,7 @@ export function defaultSave(): Save {
     lastDaily: '',
     collected: [],
     bookClaimed: [],
+    carrying: [],
   };
 }
 

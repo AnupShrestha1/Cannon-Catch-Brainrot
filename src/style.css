@@ -1037,3 +1037,78 @@ button:active {
 #modalBody > .card {
   margin: 0 auto;
 }
+
+/* Carried catches at the base */
+/* At the top: the flight's carry slots are hidden at the base, and the player stands near the bottom. */
+#carry {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  display: none;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  width: max-content;
+  max-width: 94vw;
+  pointer-events: auto;
+}
+
+#carry.on {
+  display: flex;
+}
+
+.carry-card {
+  width: 96px;
+  padding: 6px 4px;
+  color: var(--ink);
+  cursor: pointer;
+  animation: none;
+}
+
+.carry-card .swatch {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 4px;
+}
+
+.carry-card .swatch::before,
+.carry-card .swatch::after {
+  top: 8px;
+  width: 8px;
+  height: 8px;
+}
+
+.carry-card .swatch::before {
+  left: 6px;
+}
+
+.carry-card .swatch::after {
+  right: 6px;
+}
+
+.carry-card .name {
+  min-height: 0;
+  font-size: 11px;
+}
+
+.carry-card.selected {
+  box-shadow: 0 0 0 4px var(--gold), 0 0 16px var(--gold);
+  transform: translateY(-6px);
+}
+
+.carry-card button {
+  margin-top: 4px;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+@media (max-width: 640px) {
+  #carry {
+    top: 96px;
+  }
+
+  .carry-card {
+    width: 82px;
+  }
+}
