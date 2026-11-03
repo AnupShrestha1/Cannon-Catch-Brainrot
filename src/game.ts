@@ -1,41 +1,47 @@
-// One run: charge → launch → ascent → apex → fall → parachute → landing → reveal.
+// The game loop. A run goes charge → launch → ascent → apex → fall → parachute → landing → reveal,
+// then home to the base, where catches earn coins on pads and the shop sells upgrades.
 // The flight is scripted rather than simulated, so the apex hits launchHeight() exactly.
 import * as THREE from 'three';
+import { Sfx } from './audio';
+import { Base } from './base';
+import { animateShared, makeCharacter, makeSilhouette, type CharacterRig } from './characters';
 import {
   CHARGE,
   CHUTE,
   CRASH_DROP,
+  ECONOMY,
   FLIGHT,
+  GIFTS,
+  MAX_ZONE,
   RARE,
   RARITIES,
   TUTORIAL,
+  UPGRADES,
   ZONES,
   launchHeight,
+  levelToReach,
   pickName,
   rollRarity,
   zoneIndexAt,
 } from './config';
-import { Sfx } from './audio';
+import { carryLimit, expansionCost, formatCoins, incomePerSecond, placeCatches, upgradeCost } from './economy';
 import { Particles, Streaks } from './fx';
-import { Hud } from './hud';
+import { Hud, type ShopItem, type ShopRow } from './hud';
 import { Input } from './input';
-import { loadSave, writeSave, type Save } from './store';
+import { clearSave, loadSave, writeSave, type Save } from './store';
 import {
   buildEnv,
   makeBird,
-  makeCharacter,
   makeLabel,
   makePlayer,
-  rarityMaterial,
   skyColorAt,
   type BirdRig,
-  type CharacterRig,
   type Env,
   type Label,
   type PlayerRig,
 } from './world';
 
-type State = 'aim' | 'charging' | 'ascent' | 'fall' | 'landed' | 'reveal';
+type State = 'aim' | 'charging' | 'ascent' | 'fall' | 'landed' | 'reveal' | 'home' | 'boarding';
 type Chute = 'closed' | 'open' | 'tangled';
 
 interface Pickup {
@@ -67,6 +73,18 @@ interface Bird {
   vy: number;
 }
 
+/** A caught character flying from the player's stack to its pad, or off to be sold. */
+interface Flyer {
+  rig: CharacterRig;
+  from: THREE.Vector3;
+  to: THREE.Vector3;
+  t: number;
+  pad: number | null;
+  rarity: number;
+  coins: number;
+  replaced: string | null;
+}
+
 const MUZZLE_Y = 3.2;
 /** Height of the player's collision centre above their feet. */
 const BODY_MID = 0.95;
@@ -74,7 +92,16 @@ const STACK_BASE = 2.15;
 const STACK_STEP = 0.6;
 /** Depth the player drifts to while landing, clear of the cannon at z = 0. */
 const LANDING_Z = 3.5;
-const SECRET = RARITIES.length - 1;
+/** Where the player waits at the base, and where they climb into the cannon. */
+const HOME_SPOT = new THREE.Vector3(-3.6, 0, 6.4);
+const CANNON_FOOT = new THREE.Vector3(0, 0, 2.3);
+const WALK_SPEED = 9;
+/** Walking within this distance of a pad's centre collects its coins. */
+const COLLECT_RADIUS = 1.7;
+const FLY_TIME = 0.7;
+/** Characters float larger than life in the sky so they read from the chase camera; held ones shrink. */
+const SKY_SCALE = 1.35;
+const HELD_SCALE = 0.55;
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
@@ -96,6 +123,7 @@ export class Game {
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(60, 1, 0.1, 900);
   private env: Env;
+  private base: Base;
   private player: PlayerRig;
   private fx: Particles;
   private streaks: Streaks;
@@ -105,10 +133,16 @@ export class Game {
   private save: Save = loadSave();
   private recordLine = new THREE.Group();
   private recordLabel: Label;
+  private goal = new THREE.Group();
+  private goalLabel: Label;
   private sky = new THREE.Color(0x8fd3ff);
+  private raycaster = new THREE.Raycaster();
+  private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private tmp = new THREE.Vector3();
-  private offTarget = new THREE.Vector3();
-  private lookTarget = new THREE.Vector3();
+  private tmp2 = new THREE.Vector3();
+  private player3 = new THREE.Vector3();
+  private wantPos = new THREE.Vector3();
+  private wantLook = new THREE.Vector3();
   private camOff = new THREE.Vector3(0, -0.8, 8.5);
   private camLook = new THREE.Vector3(0, 3.8, -1.5);
 
@@ -118,7 +152,7 @@ export class Game {
 
   private px = 0;
   private py = MUZZLE_Y;
-  /** Depth only drifts on the way down, to land in front of the cannon; the run itself is in z = 0. */
+  /** Depth only changes while landing and at the base; the run itself is in z = 0. */
   private pz = 0;
   private vx = 0;
   private vy = 0;
@@ -127,6 +161,9 @@ export class Game {
   private targetX = 0;
   /** Steerable half-width for this run; narrower on portrait screens so the camera can stay close. */
   private lane: number = FLIGHT.lane;
+  private facing = 0;
+  private walking = false;
+  private walkTarget = new THREE.Vector3();
 
   private chargeT = 0;
   private charge = 0;
@@ -144,6 +181,9 @@ export class Game {
   private stack: Pickup[] = [];
   private pickups: Pickup[] = [];
   private birds: Bird[] = [];
+  private flyers: Flyer[] = [];
+  /** Pads whose new character is still flying in. */
+  private pending = new Set<number>();
 
   private slowmo = 0;
   private shake = 0;
@@ -155,6 +195,14 @@ export class Game {
   private bounceVy = 0;
   private bounces = 0;
   private spin = 0;
+  private sessionT = 0;
+  private giftIndex = 0;
+  private saveTimer = 3;
+  private shopTimer = 0;
+  private chantTimer = 20;
+
+  /** Dev-only: stops the frame loop from advancing the game, so debugStep() is the only clock. */
+  debugPaused = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -162,6 +210,7 @@ export class Game {
     this.scene.background = this.sky;
     this.scene.fog = new THREE.Fog(0x8fd3ff, 70, 320);
     this.env = buildEnv(this.scene);
+    this.base = new Base(this.scene);
     this.player = makePlayer();
     this.scene.add(this.player.group);
     this.fx = new Particles(this.scene);
@@ -180,10 +229,30 @@ export class Game {
     this.recordLine.visible = false;
     this.scene.add(this.recordLine);
 
+    // The goal in the sky: what the next locked zone holds, and the cannon level that reaches it.
+    const silhouette = makeSilhouette(3, 'Pizzarotto Pellicano');
+    silhouette.scale.setScalar(1.8);
+    this.goalLabel = makeLabel();
+    this.goalLabel.sprite.position.y = 4.4;
+    this.goalLabel.sprite.scale.multiplyScalar(1.5);
+    this.goal.add(silhouette, this.goalLabel.sprite);
+    this.goal.visible = false;
+    this.scene.add(this.goal);
+
     this.bindUi();
     window.addEventListener('resize', () => this.resize());
     this.resize();
-    this.resetToCannon();
+
+    this.base.sync(this.save);
+    if (this.save.pads.some(Boolean)) {
+      // Returning players start at the base, where their pads have been waiting.
+      this.px = HOME_SPOT.x;
+      this.py = this.prevY = 0;
+      this.pz = HOME_SPOT.z;
+      this.state = 'home';
+    } else {
+      this.boardCannon();
+    }
   }
 
   start(): void {
@@ -191,7 +260,7 @@ export class Game {
   }
 
   /** Dev-only: advance the game by fixed 60 fps steps and render once, for testing in throttled tabs. */
-  debugStep(seconds: number): { state: State; y: number; vy: number; stack: number; pickups: number; birds: number } {
+  debugStep(seconds: number): { state: State; y: number; vy: number; stack: number; coins: number } {
     for (let t = 0; t < seconds; t += 1 / 60) this.update(1 / 60);
     this.renderer.render(this.scene, this.camera);
     return {
@@ -199,13 +268,9 @@ export class Game {
       y: Math.round(this.py * 10) / 10,
       vy: Math.round(this.vy * 10) / 10,
       stack: this.stack.length,
-      pickups: this.pickups.length,
-      birds: this.birds.length,
+      coins: Math.floor(this.save.coins),
     };
   }
-
-  /** Dev-only: stops the frame loop from advancing the game, so debugStep() is the only clock. */
-  debugPaused = false;
 
   private frame = (now: number) => {
     const dt = this.lastFrame ? Math.min(0.05, (now - this.lastFrame) / 1000) : 1 / 60;
@@ -227,18 +292,39 @@ export class Game {
       this.sfx.unlock();
       this.input.requestChute();
     });
-    onClick(hud.againBtn, () => this.again());
+    onClick(hud.againBtn, () => {
+      if (this.state === 'reveal') this.goHome();
+    });
     onClick(hud.soundBtn, () => this.toggleMute());
     onClick(hud.tuneBtn, () => hud.tunePanel.classList.toggle('hidden'));
+    onClick(hud.upgradesBtn, () => {
+      hud.openShop();
+      this.refreshShop();
+    });
+    onClick(hud.launchBtn, () => {
+      if (this.state === 'home') this.startBoarding();
+    });
+    onClick(hud.giftBtn, () => this.claimGift());
+    hud.onBuy = (item) => this.buy(item);
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyT') hud.tunePanel.classList.toggle('hidden');
       if (e.code === 'KeyM') this.toggleMute();
+      if (e.code === 'Escape') hud.closeShop();
     });
-    hud.bindTuning(
-      this.save,
-      () => writeSave(this.save),
-      () => this.resetProgress(),
-    );
+    hud.bindTuning(this.save, {
+      changed: () => {
+        writeSave(this.save);
+        this.refreshShop();
+      },
+      addCoins: () => {
+        this.save.coins += 1000;
+        writeSave(this.save);
+      },
+      resetAll: () => {
+        clearSave();
+        location.reload();
+      },
+    });
     hud.setSound(!this.save.muted);
   }
 
@@ -249,17 +335,18 @@ export class Game {
     writeSave(this.save);
   }
 
-  private resetProgress(): void {
-    this.save.flightNo = 0;
-    this.save.best = 0;
-    writeSave(this.save);
-    if (this.state === 'aim') this.resetToCannon();
-  }
-
   private resize(): void {
     this.renderer.setSize(window.innerWidth, window.innerHeight, false);
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
+  }
+
+  private hasHint(id: string): boolean {
+    return this.save.hints.includes(id);
+  }
+
+  private completeHint(id: string): void {
+    if (!this.hasHint(id)) this.save.hints.push(id);
   }
 
   // ---------------------------------------------------------------- update
@@ -272,7 +359,11 @@ export class Game {
     this.stun = Math.max(0, this.stun - dt);
     this.invuln = Math.max(0, this.invuln - dt);
     this.fullCooldown = Math.max(0, this.fullCooldown - realDt);
-    const pressed = this.input.consumePressed();
+    // The shop is a modal: while it's open, presses don't reach the game.
+    const blocked = this.hud.shopOpen;
+    const pressed = this.input.consumePressed() && !blocked;
+    const space = this.input.consumeSpace() && !blocked;
+    const tap = this.input.consumeTap();
     const chuteRequested = this.input.consumeChute();
 
     switch (this.state) {
@@ -292,12 +383,21 @@ export class Game {
         break;
       case 'reveal':
         this.revealT += realDt;
-        if (pressed && this.revealT > 0.6) this.again();
+        if (space && this.revealT > 0.6) this.goHome();
+        break;
+      case 'home':
+        this.updateHome(dt, blocked ? null : tap, space);
+        break;
+      case 'boarding':
+        this.updateWalk(dt);
         break;
     }
 
+    this.updateEconomy(realDt);
     this.updatePickups(dt);
     this.updateBirds(dt);
+    this.updateFlyers(dt);
+    this.base.update(this.save, this.time, realDt);
     this.fx.update(dt);
     this.updateVisuals(realDt, dt);
   }
@@ -327,7 +427,7 @@ export class Game {
     this.save.flightNo += 1;
     writeSave(this.save);
 
-    const apex = launchHeight(this.save.level) * (1 + bonus);
+    const apex = launchHeight(this.save.cannon) * (1 + bonus);
     const tUp = FLIGHT.ascentTime(apex);
     const v0 = (2 * (apex - MUZZLE_Y)) / tUp;
     this.gUp = v0 / tUp;
@@ -403,12 +503,14 @@ export class Game {
   }
 
   private addPickup(rarity: number, x: number, y: number): void {
-    const rig = makeCharacter(rarity);
+    const name = pickName(rarity);
+    const rig = makeCharacter(rarity, name);
     rig.group.position.set(x, y, 0);
+    rig.group.scale.setScalar(SKY_SCALE);
     this.scene.add(rig.group);
     this.pickups.push({
       rarity,
-      name: pickName(rarity),
+      name,
       rig,
       x,
       y,
@@ -532,7 +634,7 @@ export class Game {
 
   /** A full stack swaps its lowest-rarity character for a rarer one, and passes equal or lower ones by. */
   private tryGrab(p: Pickup): void {
-    if (this.stack.length >= this.save.carry) {
+    if (this.stack.length >= carryLimit(this.save)) {
       const low = this.lowestIndex();
       if (p.rarity <= this.stack[low].rarity) {
         if (!p.passed) {
@@ -554,7 +656,7 @@ export class Game {
     p.state = 'held';
     p.passed = false;
     p.rig.cloud.visible = false;
-    p.rig.group.scale.setScalar(0.55);
+    p.rig.group.scale.setScalar(HELD_SCALE);
     p.rig.figure.rotation.set(0, 0, 0);
     this.stack.push(p);
     this.fx.burst(this.tmp.set(p.x, p.y + 0.6, 0), {
@@ -565,6 +667,7 @@ export class Game {
       size: 0.6,
     });
     this.sfx.pop(p.rarity);
+    this.sfx.chant(p.name);
     if (p.rarity >= RARE) {
       this.slowmo = Math.max(this.slowmo, 0.45);
       this.hud.toast(`${RARITIES[p.rarity].name.toUpperCase()}!`, '', RARITIES[p.rarity].css);
@@ -580,7 +683,7 @@ export class Game {
     p.z = this.pz;
     p.vx = vx;
     p.vy = vy;
-    p.rig.group.scale.setScalar(1);
+    p.rig.group.scale.setScalar(SKY_SCALE);
   }
 
   private hitBird(b: Bird): void {
@@ -606,12 +709,27 @@ export class Game {
   private reachApex(): void {
     this.apex = this.py;
     this.state = 'fall';
-    this.slowmo = Math.max(this.slowmo, 0.55);
+    const goal = this.showGoal();
+    this.slowmo = Math.max(this.slowmo, goal ? 1.1 : 0.55);
     this.hud.toast(`${Math.round(this.apex)} m`, 'big');
     if (this.apex > this.save.best) {
       this.save.best = this.apex;
       writeSave(this.save);
     }
+  }
+
+  /** From flight 4, the apex shows a silhouette from the next locked zone and the cannon level it needs. */
+  private showGoal(): boolean {
+    if (this.save.flightNo < TUTORIAL.goalFromFlight) return false;
+    const next = zoneIndexAt(this.apex) + 1;
+    if (next > MAX_ZONE) return false;
+    const zone = ZONES[next];
+    const level = levelToReach(zone.from);
+    if (this.save.cannon >= level) return false;
+    this.goal.position.set(0, this.apex + 13, -2);
+    this.goal.visible = true;
+    this.goalLabel.set(`${zone.name} · Cannon Lv ${level}`, '#ffe58a');
+    return true;
   }
 
   private chuteLate(): number {
@@ -741,42 +859,318 @@ export class Game {
     const parts = [`Apex ${Math.round(this.apex)} m`, this.landing];
     if (this.knocked) parts.push(`${this.knocked} knocked off`);
     if (this.dropped) parts.push(`${this.dropped} dropped`);
-    this.hud.showReveal(cards, parts.join(' · '));
+    const button = cards.length === 0 ? 'Back to base' : cards.length === 1 ? 'Take it home' : 'Take them home';
+    this.hud.showReveal(cards, parts.join(' · '), button);
     cards.forEach((c, i) => this.sfx.pop(c.rarity, 0.25 + i * 0.32));
   }
 
-  private again(): void {
-    if (this.state !== 'reveal') return;
-    this.hud.hideReveal();
-    this.resetToCannon();
-  }
-
-  private resetToCannon(): void {
+  private clearRun(): void {
     for (const p of this.pickups) this.scene.remove(p.rig.group);
     for (const b of this.birds) this.scene.remove(b.rig.group);
     this.pickups = [];
     this.birds = [];
     this.stack = [];
+    this.goal.visible = false;
+    this.recordLine.visible = false;
+  }
+
+  // ---------------------------------------------------------------- base
+
+  /** Walk home: each catch flies to a free pad, or replaces a weaker one, or is sold. */
+  private goHome(): void {
+    const catches = this.stack.map((p) => ({ name: p.name, rarity: p.rarity }));
+    const starts = this.stack.map((p) => p.rig.group.position.clone());
+    this.clearRun();
+    this.hud.hideReveal();
+    const outcomes = placeCatches(this.save, catches);
+    outcomes.forEach((o, i) => {
+      const rig = makeCharacter(catches[i].rarity, catches[i].name);
+      rig.cloud.visible = false;
+      rig.group.position.copy(starts[i]);
+      rig.group.scale.setScalar(HELD_SCALE);
+      this.scene.add(rig.group);
+      if (o.pad !== null) this.pending.add(o.pad);
+      const to = o.pad !== null ? Base.padPosition(o.pad) : starts[i].clone().setY(starts[i].y + 5);
+      this.flyers.push({
+        rig,
+        from: starts[i],
+        to,
+        t: -0.3 * i,
+        pad: o.pad,
+        rarity: catches[i].rarity,
+        coins: o.coins,
+        replaced: o.replaced,
+      });
+    });
+    writeSave(this.save);
+    this.state = 'home';
+    this.base.sync(this.save, this.pending);
+    this.walkTo(HOME_SPOT);
+  }
+
+  private updateFlyers(dt: number): void {
+    for (let i = this.flyers.length - 1; i >= 0; i--) {
+      const f = this.flyers[i];
+      f.t += dt;
+      const k = clamp(f.t / FLY_TIME, 0, 1);
+      const pos = f.rig.group.position.lerpVectors(f.from, f.to, k);
+      pos.y += Math.sin(k * Math.PI) * 4;
+      f.rig.group.scale.setScalar(lerp(HELD_SCALE, 1, k));
+      f.rig.figure.rotation.y = k * Math.PI * 2;
+      if (f.t < FLY_TIME) continue;
+      this.scene.remove(f.rig.group);
+      this.flyers.splice(i, 1);
+      const color = RARITIES[f.rarity].color;
+      if (f.pad !== null) {
+        this.pending.delete(f.pad);
+        this.base.sync(this.save, this.pending);
+        this.fx.burst(this.tmp.copy(f.to).setY(1), { count: 16, color, speed: 6, life: 0.7, size: 0.6, up: 3 });
+        this.sfx.pop(f.rarity);
+        if (f.replaced) this.floatAt(this.tmp.copy(f.to).setY(2.4), `Sold ${f.replaced} +${formatCoins(f.coins)}`, 'small');
+      } else {
+        this.fx.burst(f.to, { count: 16, color, speed: 6, life: 0.7, size: 0.6 });
+        this.floatAt(f.to, `Sold +${formatCoins(f.coins)}`, 'small');
+        this.sfx.coin();
+      }
+    }
+  }
+
+  private walkTo(target: THREE.Vector3): void {
+    this.walkTarget.copy(target);
+    this.walking = true;
+  }
+
+  private updateWalk(dt: number): void {
+    if (!this.walking) return;
+    const dx = this.walkTarget.x - this.px;
+    const dz = this.walkTarget.z - this.pz;
+    const dist = Math.hypot(dx, dz);
+    if (dist < 0.05) {
+      this.walking = false;
+      if (this.state === 'boarding') this.boardCannon();
+      return;
+    }
+    const step = Math.min(dist, WALK_SPEED * dt);
+    this.px += (dx / dist) * step;
+    this.pz += (dz / dist) * step;
+    this.facing = Math.atan2(-dx, -dz);
+  }
+
+  private updateHome(dt: number, tap: { x: number; y: number } | null, space: boolean): void {
+    this.updateWalk(dt);
+    this.save.pads.forEach((slot, i) => {
+      if (!slot || slot.cash < 1) return;
+      const pad = Base.padPosition(i, this.tmp);
+      if (Math.hypot(pad.x - this.px, pad.z - this.pz) < COLLECT_RADIUS) this.collect(i);
+    });
+    if (space) {
+      this.startBoarding();
+      return;
+    }
+    if (tap) this.tapAt(tap.x, tap.y);
+    this.updateHomePrompt();
+
+    // Now and then a character at the base chants its name.
+    this.chantTimer -= dt;
+    if (this.chantTimer <= 0) {
+      this.chantTimer = rand(18, 30);
+      const placed = this.save.pads.filter((slot) => slot !== null);
+      if (placed.length) this.sfx.chant(placed[Math.floor(Math.random() * placed.length)].name);
+    }
+  }
+
+  /** A tap at the base walks to a pad, boards the cannon, or walks to that spot on the ground. */
+  private tapAt(x: number, y: number): void {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const pad = this.base.pick(this.raycaster);
+    if (pad !== null) {
+      this.walkTo(Base.padPosition(pad, this.tmp).setY(0));
+      return;
+    }
+    if (this.raycaster.intersectObject(this.env.cannon, true).length) {
+      this.startBoarding();
+      return;
+    }
+    const point = this.raycaster.ray.intersectPlane(this.groundPlane, this.tmp);
+    if (point) this.walkTo(point.set(clamp(point.x, -45, 12), 0, clamp(point.z, -12, 12)));
+  }
+
+  private collect(i: number): void {
+    const slot = this.save.pads[i];
+    if (!slot) return;
+    const amount = Math.floor(slot.cash);
+    if (amount < 1) return;
+    slot.cash -= amount;
+    this.save.coins += amount;
+    const at = Base.padPosition(i, this.tmp2).setY(1.4);
+    this.fx.burst(at, { count: 10, color: 0xffc21a, speed: 5, life: 0.6, size: 0.5, up: 5, gravity: 10 });
+    this.floatAt(at, `+${formatCoins(amount)}`);
+    this.sfx.coin();
+    this.completeHint('collect');
+    writeSave(this.save);
+  }
+
+  /** Coin pop-up text at a point in the world. */
+  private floatAt(pos: THREE.Vector3, text: string, kind = ''): void {
+    const v = this.tmp2.copy(pos).project(this.camera);
+    if (v.z > 1) return;
+    this.hud.floatText(((v.x + 1) / 2) * window.innerWidth, ((1 - v.y) / 2) * window.innerHeight, text, kind);
+  }
+
+  private wantsUpgradeHint(): boolean {
+    const cost = upgradeCost(this.save, 'cannon');
+    return !this.hasHint('upgrade') && this.save.cannon === 1 && cost !== null && this.save.coins >= cost;
+  }
+
+  /** "All 4 starting pads fill, which prompts the first base expansion." */
+  private wantsExpandHint(): boolean {
+    return !this.hasHint('expand') && this.save.pads.every(Boolean) && expansionCost(this.save) !== null;
+  }
+
+  private updateHomePrompt(): void {
+    const anyCash = this.save.pads.some((slot) => slot !== null && slot.cash >= 1);
+    let text = '';
+    if (!this.hasHint('collect') && anyCash) {
+      text = this.input.isTouch ? 'Tap a pad to collect its coins' : 'Click a pad to collect its coins';
+    } else if (this.wantsUpgradeHint()) {
+      text = 'Upgrade your cannon!';
+    } else if (this.wantsExpandHint()) {
+      text = 'Your pads are full! Expand the base in Upgrades';
+    }
+    this.hud.prompt(text, !!text);
+  }
+
+  private startBoarding(): void {
+    this.state = 'boarding';
+    this.hud.prompt('');
+    this.walkTo(CANNON_FOOT);
+  }
+
+  /** Into the cannon, ready to charge. */
+  private boardCannon(): void {
     this.px = this.prevX = 0;
     this.py = this.prevY = MUZZLE_Y;
     this.pz = 0;
     this.vx = this.vy = 0;
     this.targetX = 0;
+    this.facing = 0;
+    this.walking = false;
     this.chute = 'closed';
     this.chuteScale = 0;
     this.bounces = 0;
     this.player.body.rotation.set(0, 0, 0);
     this.player.body.position.y = 0.9;
-    this.recordLine.visible = false;
     this.state = 'aim';
     this.hud.showCharge(null);
     this.hud.showGround(null);
     this.hud.showChute(false);
     this.hud.setFlight(this.save.flightNo);
+    this.fx.burst(this.tmp.set(0, MUZZLE_Y + 1, 0), { count: 10, color: 0xd9dde3, speed: 4, life: 0.6, size: 1, grow: 1.5 });
     const howTo = this.input.isTouch
       ? 'Hold to charge, release to fire'
       : 'Hold Space or the mouse to charge, release to fire';
     this.hud.prompt(this.save.flightNo < 2 ? howTo : 'Fire again!', true);
+  }
+
+  // ---------------------------------------------------------------- economy and shop
+
+  private updateEconomy(realDt: number): void {
+    for (const slot of this.save.pads) {
+      if (!slot) continue;
+      const income = RARITIES[slot.rarity].income;
+      slot.cash = Math.min(income * ECONOMY.padCapSeconds, slot.cash + income * realDt);
+    }
+    this.sessionT += realDt;
+    const next = GIFTS.at[this.giftIndex];
+    this.hud.setGift(next === undefined ? null : next - this.sessionT);
+    this.saveTimer -= realDt;
+    if (this.saveTimer <= 0) {
+      this.saveTimer = 3;
+      writeSave(this.save);
+    }
+    this.shopTimer -= realDt;
+    if (this.shopTimer <= 0 && this.hud.shopOpen) {
+      this.shopTimer = 0.25;
+      this.refreshShop();
+    }
+  }
+
+  private claimGift(): void {
+    const next = GIFTS.at[this.giftIndex];
+    if (next === undefined || this.sessionT < next) return;
+    this.giftIndex++;
+    const reward = Math.max(GIFTS.min, Math.round(incomePerSecond(this.save) * GIFTS.incomeSeconds));
+    this.save.coins += reward;
+    this.hud.toast(`Gift! +${formatCoins(reward)} coins`, 'gold');
+    this.sfx.ding();
+    writeSave(this.save);
+  }
+
+  private refreshShop(): void {
+    this.hud.renderShop(this.shopRows());
+  }
+
+  private shopRows(): ShopRow[] {
+    const s = this.save;
+    const apex = (level: number) => Math.round(launchHeight(level));
+    const cannon = upgradeCost(s, 'cannon');
+    const carry = upgradeCost(s, 'carry');
+    const pads = expansionCost(s);
+    const limit = carryLimit(s);
+    return [
+      {
+        id: 'cannon',
+        title: UPGRADES.cannon.name,
+        level: `Lv ${s.cannon}`,
+        detail:
+          cannon === null
+            ? `Apex ${apex(s.cannon)} m, the top of this build`
+            : `Apex ${apex(s.cannon)} m → ${apex(s.cannon + 1)} m`,
+        cost: cannon,
+        affordable: cannon !== null && s.coins >= cannon,
+      },
+      {
+        id: 'carry',
+        title: UPGRADES.carry.name,
+        level: `${limit} per run`,
+        detail: carry === null ? 'Maxed out' : `Carry ${limit} → ${limit + 1} characters`,
+        cost: carry,
+        affordable: carry !== null && s.coins >= carry,
+      },
+      {
+        id: 'pads',
+        title: 'Base pads',
+        level: `${s.pads.length} pads`,
+        detail: pads === null ? 'Maxed out' : `${s.pads.length} → ${s.pads.length + ECONOMY.padStep} pads`,
+        cost: pads,
+        affordable: pads !== null && s.coins >= pads,
+      },
+    ];
+  }
+
+  private buy(item: ShopItem): void {
+    const s = this.save;
+    const cost = item === 'pads' ? expansionCost(s) : upgradeCost(s, item);
+    if (cost === null || s.coins < cost) return;
+    s.coins -= cost;
+    if (item === 'cannon') {
+      s.cannon += 1;
+      this.completeHint('upgrade');
+      this.hud.toast(`Cannon Lv ${s.cannon}!`, 'gold');
+    } else if (item === 'carry') {
+      s.carryLevel += 1;
+      this.hud.toast(`Carry ${carryLimit(s)}!`, 'gold');
+    } else {
+      for (let i = 0; i < ECONOMY.padStep; i++) s.pads.push(null);
+      this.base.sync(s, this.pending);
+      this.completeHint('expand');
+      this.hud.toast(`${s.pads.length} pads!`, 'gold');
+    }
+    this.sfx.ding();
+    writeSave(s);
+    this.refreshShop();
   }
 
   // ---------------------------------------------------------------- entities
@@ -787,6 +1181,7 @@ export class Game {
         p.rig.figure.position.y = Math.sin(this.time * 2 + p.seed) * 0.15;
         p.rig.figure.rotation.y = Math.sin(this.time * 0.8 + p.seed) * 0.35;
         p.rig.group.position.set(p.x, p.y, 0);
+        p.rig.animate(this.time + p.seed);
       } else if (p.state === 'tumbling' || p.state === 'lost') {
         p.cooldown -= dt;
         p.vy = Math.max(p.vy - 14 * dt, p.state === 'lost' ? -30 : -FLIGHT.tumbleFall);
@@ -840,6 +1235,7 @@ export class Game {
   private updateVisuals(realDt: number, dt: number): void {
     const body = this.player.body;
     const inFlight = this.state === 'ascent' || this.state === 'fall';
+    const atBase = this.state === 'home' || this.state === 'boarding';
     const crashed = (this.state === 'landed' || this.state === 'reveal') && this.chute !== 'open';
     const lying = crashed && this.bounces === 0;
     const squash = this.state === 'charging' ? this.charge : 0;
@@ -847,6 +1243,7 @@ export class Game {
     const landingDrift = (this.state === 'fall' && this.chute !== 'closed') || this.state === 'landed';
     if (landingDrift) this.pz = lerp(this.pz, LANDING_Z, damp(1.5, dt));
     this.player.group.position.set(this.px, this.py - squash * 0.5, this.pz);
+    this.player.group.rotation.y = atBase ? this.facing : 0;
     if (crashed) {
       if (this.bounces > 0) {
         body.rotation.z += this.spin * dt;
@@ -861,6 +1258,7 @@ export class Game {
       body.rotation.z = lerp(body.rotation.z, clamp(-this.vx * 0.035, -0.5, 0.5), damp(10, dt));
     }
     body.position.y = lerp(body.position.y, lying ? 0.35 : 0.9, damp(10, dt));
+    if (atBase && this.walking) body.position.y = 0.9 + Math.abs(Math.sin(this.time * 14)) * 0.08;
     body.visible = this.invuln <= 0 || Math.floor(this.time * 20) % 2 === 0;
 
     const chuteTarget = !inFlight ? 0 : this.chute === 'open' ? 1 : this.chute === 'tangled' ? 0.5 : 0;
@@ -877,9 +1275,7 @@ export class Game {
       p.rig.figure.position.y = 0;
       p.rig.figure.rotation.y = Math.sin(this.time * 2 + i) * 0.3;
     });
-    const secret = rarityMaterial(SECRET);
-    secret.color.setHSL((this.time * 0.25) % 1, 0.9, 0.6);
-    secret.emissive.copy(secret.color);
+    animateShared(this.time);
 
     const shadow = this.env.shadow;
     const s = 0.9 + this.py * 0.04;
@@ -899,54 +1295,93 @@ export class Game {
     this.sfx.wind(inFlight ? clamp(Math.abs(this.vy) / 50, 0, 1) * (this.chute === 'open' ? 0.3 : 1) : 0);
 
     const alt = this.state === 'aim' || this.state === 'charging' ? 0 : Math.max(0, this.py);
-    this.hud.setAlt(alt, ZONES[zoneIndexAt(alt)].name, this.save.best);
+    this.hud.setAlt(!atBase && this.state !== 'reveal', alt, ZONES[zoneIndexAt(alt)].name, this.save.best);
     this.hud.setStack(
       this.stack.map((p) => p.rarity),
-      this.save.carry,
+      carryLimit(this.save),
+      !atBase,
     );
+    this.hud.setWallet(this.save.coins, incomePerSecond(this.save));
+    const canShop = this.state === 'home' || this.state === 'aim';
+    const upgradeHint = this.wantsUpgradeHint() || this.wantsExpandHint();
+    const launchHint =
+      this.state === 'home' &&
+      this.hasHint('collect') &&
+      !upgradeHint &&
+      !this.save.pads.some((slot) => slot !== null && slot.cash >= 1);
+    this.hud.showBaseButtons(canShop, this.state === 'home', canShop && upgradeHint, launchHint);
   }
 
+  /**
+   * Each state wants the camera at some position and looking at some point. The camera eases toward
+   * them as offsets from the player rather than as absolute positions, so a fast flight doesn't lag.
+   */
   private updateCamera(realDt: number): void {
-    // 0 in landscape, up to 1 on a tall phone screen: pull back and follow the player more closely.
+    // 0 in landscape, up to 1 on a tall phone screen.
     const portrait = clamp((1 - this.camera.aspect) * 2, 0, 1);
     const speed = Math.abs(this.vy);
-    let follow = lerp(0.6, 0.92, portrait);
+    const pos = this.wantPos;
+    const look = this.wantLook;
+    let rate = 4;
 
-    if (this.state === 'aim' || this.state === 'charging') {
-      // Behind the cannon, looking up the barrel.
-      this.offTarget.set(0, -0.8, 8.5 + portrait * 4);
-      this.lookTarget.set(0, 3.8, -1.5);
-      follow = 0;
-    } else if (this.state === 'fall' && this.chute !== 'closed') {
-      // Level with the player so the canopy stays in view.
-      this.offTarget.set(0, 1.5, 15 * (1 + portrait * 0.25));
-      this.lookTarget.set(0, 2.2, 0);
-    } else if (this.state === 'ascent' || this.state === 'fall') {
-      // Below the player looking up while rising, above looking down while falling.
-      const f = clamp(0.5 - this.vy / 20, 0, 1);
-      const dist = (12 + Math.min(18, speed * 0.1)) * (1 + portrait * 0.25);
-      this.offTarget.set(0, lerp(-5 - Math.min(6, speed * 0.05), 6 + Math.min(6, speed * 0.04), f), dist);
-      // A short look upward at the apex, toward what's above.
-      const apexPan = this.state === 'fall' && this.slowmo > 0 && this.vy > -6 ? 8 : 0;
-      this.lookTarget.set(0, lerp(7, -7, f) + apexPan, 0);
-    } else {
-      this.offTarget.set(0, 4.5, 13 * (1 + portrait * 0.5));
-      this.lookTarget.set(0, 1, 0);
+    switch (this.state) {
+      case 'aim':
+      case 'charging':
+        // Behind the cannon, looking up the barrel.
+        pos.set(0, MUZZLE_Y - 0.8, 8.5 + portrait * 4);
+        look.set(0, MUZZLE_Y + 3.8, -1.5);
+        break;
+      case 'ascent':
+      case 'fall': {
+        const follow = lerp(0.6, 0.92, portrait);
+        if (this.state === 'fall' && this.chute !== 'closed') {
+          // Level with the player so the canopy stays in view.
+          pos.set(this.px * follow, this.py + 1.5, this.pz + 15 * (1 + portrait * 0.25));
+          look.set(this.px * follow * 1.2, this.py + 2.2, this.pz);
+        } else {
+          // Below the player looking up while rising, above looking down while falling.
+          const f = clamp(0.5 - this.vy / 20, 0, 1);
+          const dist = (12 + Math.min(18, speed * 0.1)) * (1 + portrait * 0.25);
+          const height = lerp(-5 - Math.min(6, speed * 0.05), 6 + Math.min(6, speed * 0.04), f);
+          pos.set(this.px * follow, this.py + height, this.pz + dist);
+          // A look upward at the apex, toward what's above.
+          const apexPan = this.state === 'fall' && this.slowmo > 0 && this.vy > -6 ? (this.goal.visible ? 14 : 8) : 0;
+          look.set(this.px * follow * 1.2, this.py + lerp(7, -7, f) + apexPan, this.pz);
+        }
+        rate = this.state === 'ascent' ? 3 : 4;
+        break;
+      }
+      case 'landed':
+      case 'reveal':
+        pos.set(this.px * 0.6, 4.5, this.pz + 13 * (1 + portrait * 0.5));
+        look.set(this.px, 1, this.pz);
+        break;
+      case 'home':
+      case 'boarding': {
+        // Above and in front of the pad grid, pulling back as the base grows.
+        const center = Base.center(this.save.pads.length, look);
+        const scale = (1 + (Base.rows(this.save.pads.length) - 1) * 0.12) * (1 + portrait * 0.7);
+        pos.set(center.x + 3 * scale, 14 * scale, center.z + 15 * scale);
+        rate = 2.5;
+        break;
+      }
     }
 
-    const k = damp(this.state === 'ascent' ? 3 : 4, realDt);
-    this.camOff.lerp(this.offTarget, k);
-    this.camLook.lerp(this.lookTarget, k);
+    const player = this.player3.set(this.px, this.py, this.pz);
+    const k = damp(rate, realDt);
+    this.camOff.lerp(pos.sub(player), k);
+    this.camLook.lerp(look.sub(player), k);
     const jitter = () => (Math.random() - 0.5) * this.shake;
     this.camera.position.set(
-      this.px * follow + this.camOff.x + jitter(),
-      this.py + this.camOff.y + jitter(),
-      this.pz + this.camOff.z,
+      player.x + this.camOff.x + jitter(),
+      player.y + this.camOff.y + jitter(),
+      player.z + this.camOff.z,
     );
-    this.camera.lookAt(this.px * follow * 1.2, this.py + this.camLook.y, this.pz + this.camLook.z);
+    this.camera.lookAt(player.x + this.camLook.x, player.y + this.camLook.y, player.z + this.camLook.z);
 
     let fov = 60 + Math.min(18, speed * 0.12);
     if (this.state === 'charging') fov = 56 - this.charge * 4;
+    if (this.state === 'home' || this.state === 'boarding') fov = 50;
     fov += portrait * 6;
     this.camera.fov = lerp(this.camera.fov, fov, damp(4, realDt));
     this.camera.updateProjectionMatrix();

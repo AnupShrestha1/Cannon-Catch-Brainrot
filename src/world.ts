@@ -1,8 +1,8 @@
 // Gray-box scene pieces: sky, ground, cannon, player, characters and birds.
 import * as THREE from 'three';
-import { RARITIES, ZONES, zoneIndexAt } from './config';
+import { ZONES, zoneIndexAt } from './config';
 
-const flat = (color: number, extra: THREE.MeshLambertMaterialParameters = {}) =>
+export const flat = (color: number, extra: THREE.MeshLambertMaterialParameters = {}) =>
   new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
 
 let softTex: THREE.Texture | null = null;
@@ -59,6 +59,7 @@ export function makeCloud(scale: number, puffs: number): THREE.Group {
 }
 
 export interface Env {
+  cannon: THREE.Group;
   barrel: THREE.Group;
   shadow: THREE.Mesh;
   updateDecor(cameraY: number): void;
@@ -92,15 +93,6 @@ export function buildEnv(scene: THREE.Scene): Env {
     tree.position.set(x, 0, z);
     tree.scale.setScalar(0.8 + Math.random() * 1.2);
     scene.add(tree);
-  }
-
-  // The base's first 4 pads (visual only until Phase 2).
-  const padGeo = new THREE.BoxGeometry(2.4, 0.25, 2.4);
-  const padMat = flat(0xc9ced6);
-  for (let i = 0; i < 4; i++) {
-    const pad = new THREE.Mesh(padGeo, padMat);
-    pad.position.set(-7 - (i % 2) * 3.2, 0.12, -1.5 - Math.floor(i / 2) * 3.2);
-    scene.add(pad);
   }
 
   // Cannon: a wooden carriage with a barrel tilted slightly away so its muzzle sits at x = 0, z = 0.
@@ -151,6 +143,7 @@ export function buildEnv(scene: THREE.Scene): Env {
   }
 
   return {
+    cannon,
     barrel,
     shadow,
     updateDecor(cameraY: number) {
@@ -223,82 +216,6 @@ export function makePlayer(): PlayerRig {
   return { group, body, chute };
 }
 
-export interface CharacterRig {
-  group: THREE.Group;
-  figure: THREE.Group;
-  cloud: THREE.Group;
-  halo: THREE.Sprite;
-}
-
-const bodyGeos = new Map<number, THREE.BoxGeometry>();
-const bodyMats = new Map<number, THREE.MeshLambertMaterial>();
-const haloMats = new Map<number, THREE.SpriteMaterial>();
-const eyeGeo = new THREE.BoxGeometry(0.22, 0.22, 0.05);
-const pupilGeo = new THREE.BoxGeometry(0.1, 0.1, 0.05);
-const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-const pupilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-const antennaGeo = new THREE.IcosahedronGeometry(0.16, 0);
-
-/** Shared per rarity; the Secret one is recoloured every frame for its rainbow. */
-export function rarityMaterial(rarity: number): THREE.MeshLambertMaterial {
-  let mat = bodyMats.get(rarity);
-  if (!mat) {
-    const color = RARITIES[rarity].color;
-    mat = new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.3, flatShading: true });
-    bodyMats.set(rarity, mat);
-  }
-  return mat;
-}
-
-export function makeCharacter(rarity: number): CharacterRig {
-  const size = 0.8 + rarity * 0.07;
-  let geo = bodyGeos.get(rarity);
-  if (!geo) {
-    geo = new THREE.BoxGeometry(size, size, size);
-    bodyGeos.set(rarity, geo);
-  }
-  const group = new THREE.Group();
-  const figure = new THREE.Group();
-  group.add(figure);
-
-  const body = new THREE.Mesh(geo, rarityMaterial(rarity));
-  body.position.y = size / 2 + 0.15;
-  figure.add(body);
-  for (const side of [-1, 1]) {
-    const eye = new THREE.Mesh(eyeGeo, eyeMat);
-    eye.position.set(side * 0.18 * size, body.position.y + 0.12, size / 2 + 0.02);
-    const pupil = new THREE.Mesh(pupilGeo, pupilMat);
-    pupil.position.set(side * 0.18 * size, body.position.y + 0.1, size / 2 + 0.05);
-    figure.add(eye, pupil);
-  }
-  if (rarity >= 2) {
-    const antenna = new THREE.Mesh(antennaGeo, rarityMaterial(rarity));
-    antenna.position.y = size + 0.35;
-    figure.add(antenna);
-  }
-
-  const cloud = makeCloud(0.75, 3);
-  group.add(cloud);
-
-  let haloMat = haloMats.get(rarity);
-  if (!haloMat) {
-    haloMat = new THREE.SpriteMaterial({
-      map: softTexture(),
-      color: RARITIES[rarity].color,
-      transparent: true,
-      depthWrite: false,
-      opacity: rarity === 0 ? 0 : rarity === 1 ? 0.45 : 0.75,
-    });
-    haloMats.set(rarity, haloMat);
-  }
-  const halo = new THREE.Sprite(haloMat);
-  halo.scale.setScalar(2.4 + rarity * 0.5);
-  halo.position.y = body.position.y;
-  group.add(halo);
-
-  return { group, figure, cloud, halo };
-}
-
 export interface BirdRig {
   group: THREE.Group;
   wings: THREE.Group[];
@@ -308,6 +225,8 @@ const birdBodyGeo = new THREE.IcosahedronGeometry(0.5, 0);
 const beakGeo = new THREE.ConeGeometry(0.14, 0.4, 5);
 const wingGeo = new THREE.BoxGeometry(0.5, 0.06, 1.1);
 const beakMat = flat(0xffa62b);
+const birdEyeGeo = new THREE.BoxGeometry(0.1, 0.1, 0.05);
+const birdEyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const birdMats = new Map<number, THREE.MeshLambertMaterial>();
 
 /** A bird that flies along +x; flip it with rotation.y = PI. */
@@ -323,7 +242,7 @@ export function makeBird(color: number): BirdRig {
   const beak = new THREE.Mesh(beakGeo, beakMat);
   beak.rotation.z = -Math.PI / 2;
   beak.position.x = 0.85;
-  const eye = new THREE.Mesh(pupilGeo, eyeMat);
+  const eye = new THREE.Mesh(birdEyeGeo, birdEyeMat);
   eye.position.set(0.5, 0.15, 0.3);
   group.add(body, beak, eye);
   const wings: THREE.Group[] = [];
@@ -342,7 +261,7 @@ export function makeBird(color: number): BirdRig {
 
 export interface Label {
   sprite: THREE.Sprite;
-  set(text: string): void;
+  set(text: string, color?: string): void;
 }
 
 export function makeLabel(): Label {
@@ -356,15 +275,18 @@ export function makeLabel(): Label {
   sprite.scale.set(6, 6 * (96 / 512), 1);
   return {
     sprite,
-    set(text: string) {
+    set(text: string, color = '#ffffff') {
       g.clearRect(0, 0, canvas.width, canvas.height);
+      // Shrink long text to fit the canvas instead of clipping it.
       g.font = '900 56px system-ui, sans-serif';
+      const fit = Math.min(1, (canvas.width - 24) / g.measureText(text).width);
+      g.font = `900 ${Math.floor(56 * fit)}px system-ui, sans-serif`;
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       g.lineWidth = 10;
       g.strokeStyle = '#1d2340';
       g.strokeText(text, 256, 50);
-      g.fillStyle = '#ffffff';
+      g.fillStyle = color;
       g.fillText(text, 256, 50);
       texture.needsUpdate = true;
     },

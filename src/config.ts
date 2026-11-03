@@ -20,14 +20,16 @@ export const RARITIES: RarityDef[] = [
 /** Grabs at this rarity and above get slow-mo and a bigger reveal. */
 export const RARE = 2;
 
+// Vertical-slice roster: 6 of the design doc's 21 characters, up to Epic. It skips the three names
+// the doc flags as too close to their originals.
 export const ROSTER: string[][] = [
-  ['Cannolini Cannonino', 'Bonk Bonk Bonk Spatulur', 'Tostino Tortorino', 'Bananito Paracadutino'],
-  ['Splashalero Splashala', 'Grr Grr Patapum', 'Lampadino Lumachino', 'Spazzolino Struzzo'],
-  ['Ginnasta Gelatina', 'Ventilatore Tartarughino', 'Ombrellone Orsetto'],
-  ['Pizzarotto Pellicano', 'Ninja Macchiatino', 'Sveglia Elefantino'],
-  ['Elicottero Ippopotamo', 'Frigorifero Fenicottero', 'Bombolone Balenottero'],
-  ['Razzo Rinoceronte', 'Satellito Gattino'],
-  ['Galassia Giraffona', 'Nonna Nebulosa'],
+  ['Cannolini Cannonino', 'Tostino Tortorino'],
+  ['Lampadino Lumachino', 'Spazzolino Struzzo'],
+  ['Ginnasta Gelatina'],
+  ['Pizzarotto Pellicano'],
+  [],
+  [],
+  [],
 ];
 
 export interface Zone {
@@ -47,6 +49,9 @@ export const ZONES: Zone[] = [
   { name: 'Cosmic', from: 1500, sky: 0x2a0d45, spawns: [[5, 0.85], [6, 0.15]], hazard: 0xff7a3d },
 ];
 
+/** The vertical slice has Low Sky and Cloud Kingdom only. */
+export const MAX_ZONE = 1;
+
 export function zoneIndexAt(y: number): number {
   let index = 0;
   for (let i = 0; i < ZONES.length; i++) if (y >= ZONES[i].from) index = i;
@@ -54,7 +59,7 @@ export function zoneIndexAt(y: number): number {
 }
 
 export function rollRarity(y: number): number {
-  const spawns = ZONES[zoneIndexAt(y)].spawns;
+  const spawns = ZONES[Math.min(zoneIndexAt(y), MAX_ZONE)].spawns;
   let roll = Math.random();
   for (const [rarity, chance] of spawns) {
     roll -= chance;
@@ -82,6 +87,12 @@ export function launchHeight(level: number): number {
     }
   }
   return HEIGHT_ANCHORS[HEIGHT_ANCHORS.length - 1][1];
+}
+
+/** The first cannon level whose normal launch reaches a height. */
+export function levelToReach(height: number): number {
+  for (let level = 1; level <= 60; level++) if (launchHeight(level) >= height) return level;
+  return 60;
 }
 
 export const CHARGE = {
@@ -132,6 +143,33 @@ export const TUTORIAL = {
   noDropFlights: 3,
   wideChuteFlights: 2,
   guaranteedRareFlight: 3,
+  /** From this flight, the apex shows the next locked zone and the cannon level it needs. */
+  goalFromFlight: 4,
 };
 
 export const CRASH_DROP = { tangled: 0.3, noChute: 0.5 };
+
+export type Track = 'cannon' | 'carry';
+
+/** Cost of the k-th purchase is base × growth^(k−1). `max` counts purchases. */
+export const UPGRADES: Record<Track, { name: string; base: number; growth: number; max: number }> = {
+  // The slice stops at cannon level 20, whose perfect launch stays inside Cloud Kingdom. The doc goes to 60.
+  cannon: { name: 'Cannon power', base: 50, growth: 1.18, max: 19 },
+  carry: { name: 'Carry limit', base: 200, growth: 1.9, max: 12 },
+};
+
+export const ECONOMY = {
+  startCarry: 3,
+  startPads: 4,
+  padStep: 4,
+  maxPads: 40,
+  firstExpansion: 400,
+  expansionGrowth: 3,
+  /** A pad's cash pile stops growing at this many seconds of its income. */
+  padCapSeconds: 600,
+  /** Selling a character pays this many seconds of its income. */
+  sellSeconds: 60,
+};
+
+/** Session gifts at these seconds of play; each pays this many seconds of income, at least `min`. */
+export const GIFTS = { at: [300, 600, 1200, 2400], incomeSeconds: 120, min: 100 };

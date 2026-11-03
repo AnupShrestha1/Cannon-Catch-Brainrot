@@ -44,6 +44,29 @@ export class Sfx {
   setMuted(muted: boolean): void {
     this.muted = muted;
     if (this.ctx) this.master.gain.setTargetAtTime(muted ? 0 : 0.5, this.ctx.currentTime, 0.05);
+    if (muted && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+  }
+
+  /**
+   * Stand-in for the per-character voice line: the browser's own text-to-speech chants the name,
+   * in an Italian voice when one is installed. Final audio replaces this in Phase 3.
+   */
+  chant(name: string): void {
+    if (this.muted || !('speechSynthesis' in window)) return;
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const line = new SpeechSynthesisUtterance(`${name}!`);
+    const voice = synth.getVoices().find((v) => v.lang.startsWith('it'));
+    if (voice) line.voice = voice;
+    line.lang = 'it-IT';
+    line.rate = 1.15;
+    line.pitch = 1.3;
+    synth.speak(line);
+  }
+
+  coin(): void {
+    this.tone('square', 990, 990, 0.06, 0.08);
+    this.tone('square', 1320, 1320, 0.12, 0.08, 0.06);
   }
 
   wind(level: number): void {

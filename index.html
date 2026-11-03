@@ -9,18 +9,23 @@
     <canvas id="game"></canvas>
 
     <div id="hud">
-      <div id="alt" class="outline">
-        <div><span id="altNum">0</span><span class="unit">m</span></div>
-        <div id="zone">Low Sky</div>
-        <div id="best"></div>
+      <div id="topLeft">
+        <div id="wallet" class="outline"><span class="coin"></span><span id="coins">0</span><span id="income"></span></div>
+        <div id="alt" class="outline">
+          <div><span id="altNum">0</span><span class="unit">m</span></div>
+          <div id="zone">Low Sky</div>
+          <div id="best"></div>
+        </div>
       </div>
       <div id="stack"></div>
       <div id="corner">
         <button id="soundBtn" type="button">Sound on</button>
         <button id="tuneBtn" type="button">Tune</button>
       </div>
+      <button id="giftBtn" type="button" disabled></button>
       <div id="prompt" class="outline"></div>
       <div id="toasts"></div>
+      <div id="floats"></div>
       <div id="charge">
         <div class="track"><div class="band green"></div><div class="band perfect"></div></div>
         <div class="needle"></div>
@@ -31,6 +36,8 @@
         <div class="label outline">GROUND</div>
       </div>
       <button id="chuteBtn" type="button">PARA<br />CHUTE<span class="key">Space</span></button>
+      <button id="upgradesBtn" type="button">Upgrades</button>
+      <button id="launchBtn" type="button">Launch!<span class="key">Space</span></button>
       <div id="flightNo" class="outline"></div>
     </div>
 
@@ -39,16 +46,26 @@
         <h2 id="revealTitle"></h2>
         <div id="cards"></div>
         <p id="summary"></p>
-        <button id="againBtn" type="button">Fire again!</button>
+        <button id="againBtn" type="button">Take them home</button>
         <div class="hint">or press Space</div>
+      </div>
+    </div>
+
+    <div id="shop" class="hidden">
+      <div class="panel">
+        <div class="shop-head">
+          <h2>Upgrades</h2>
+          <button id="shopClose" type="button">Close</button>
+        </div>
+        <div id="shopRows"></div>
       </div>
     </div>
 
     <div id="tune" class="hidden">
       <h3>Tuning</h3>
-      <label>Cannon level <b id="levelVal"></b><input id="levelIn" type="range" min="1" max="60" step="1" /></label>
+      <label>Cannon level <b id="levelVal"></b><input id="levelIn" type="range" min="1" max="20" step="1" /></label>
       <div id="heightVal" class="sub"></div>
-      <label>Carry limit <b id="carryVal"></b><input id="carryIn" type="range" min="3" max="15" step="1" /></label>
+      <label>Carry limit <b id="carryVal"></b><input id="carryIn" type="range" min="0" max="12" step="1" /></label>
       <label>Hazards
         <select id="hazIn">
           <option value="auto">From flight 3 (tutorial)</option>
@@ -56,7 +73,8 @@
           <option value="off">Off</option>
         </select>
       </label>
-      <button id="resetBtn" type="button">Reset tutorial and best height</button>
+      <button id="coinsBtn" type="button">+1,000 coins</button>
+      <button id="resetBtn" type="button">Reset everything</button>
       <p class="sub">T toggles this panel. M mutes.</p>
     </div>
 

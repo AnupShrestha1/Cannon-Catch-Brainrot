@@ -1,6 +1,7 @@
 // One input layer for mouse, keyboard and touch.
 // Desktop: hold Space or the mouse to charge, steer with the mouse or A/D, Space or click opens the chute.
 // Touch: hold anywhere to charge, drag to steer, the on-screen button opens the chute.
+// At the base, a tap or click picks a spot and Space heads to the cannon.
 
 export type SteerMode = 'mouse' | 'keys' | 'touch';
 
@@ -13,6 +14,8 @@ export class Input {
   onGesture: () => void = () => {};
 
   private pressed = false;
+  private spacePressed = false;
+  private tap: { x: number; y: number } | null = null;
   private chute = false;
   private touchDx = 0;
   private touchId = -1;
@@ -33,6 +36,7 @@ export class Input {
       }
       this.actionDown = true;
       this.pressed = true;
+      this.tap = { x: e.clientX, y: e.clientY };
     });
     window.addEventListener('pointermove', (e) => {
       if (e.pointerType === 'touch') {
@@ -59,6 +63,7 @@ export class Input {
         this.onGesture();
         this.actionDown = true;
         this.pressed = true;
+        this.spacePressed = true;
         this.chute = true;
         return;
       }
@@ -94,6 +99,20 @@ export class Input {
   consumePressed(): boolean {
     const v = this.pressed;
     this.pressed = false;
+    return v;
+  }
+
+  /** Like consumePressed, but only for Space, so a tap on the base isn't read as a launch. */
+  consumeSpace(): boolean {
+    const v = this.spacePressed;
+    this.spacePressed = false;
+    return v;
+  }
+
+  /** Screen position of the last press on the game surface. */
+  consumeTap(): { x: number; y: number } | null {
+    const v = this.tap;
+    this.tap = null;
     return v;
   }
 
