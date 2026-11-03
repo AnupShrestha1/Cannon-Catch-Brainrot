@@ -1,9 +1,27 @@
 // Coins, upgrades, pads and selling: pure rules over the save.
-import { ECONOMY, RARITIES, UPGRADES, type Track } from './config';
+import { ECONOMY, RARITIES, REBIRTH, UPGRADES, type Track } from './config';
 import type { Save } from './store';
 
 export function upgradesBought(save: Save, track: Track): number {
-  return track === 'cannon' ? save.cannon - 1 : save.carryLevel;
+  switch (track) {
+    case 'cannon':
+      return save.cannon - 1;
+    case 'carry':
+      return save.carryLevel;
+    default:
+      return save[track];
+  }
+}
+
+export function buyUpgrade(save: Save, track: Track): void {
+  if (track === 'cannon') save.cannon += 1;
+  else if (track === 'carry') save.carryLevel += 1;
+  else save[track] += 1;
+}
+
+/** Multiplier from the magnet, steering or parachute track, e.g. 1.3 after 3 magnet upgrades. */
+export function trackBoost(save: Save, track: 'magnet' | 'steering' | 'chute'): number {
+  return 1 + save[track] * UPGRADES[track].effect;
 }
 
 /** Price of the next purchase on a track, or null at max. */
@@ -25,9 +43,18 @@ export function expansionCost(save: Save): number | null {
   return Math.round(ECONOMY.firstExpansion * Math.pow(ECONOMY.expansionGrowth, step));
 }
 
+export function incomeMultiplier(save: Save): number {
+  return 1 + save.rebirths * REBIRTH.incomeBonus;
+}
+
+/** Income of one character on a pad, after rebirths. */
+export function padIncome(save: Save, rarity: number): number {
+  return RARITIES[rarity].income * incomeMultiplier(save);
+}
+
 export function incomePerSecond(save: Save): number {
   let total = 0;
-  for (const slot of save.pads) if (slot) total += RARITIES[slot.rarity].income;
+  for (const slot of save.pads) if (slot) total += padIncome(save, slot.rarity);
   return total;
 }
 

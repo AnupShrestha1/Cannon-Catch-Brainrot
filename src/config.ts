@@ -20,14 +20,14 @@ export const RARITIES: RarityDef[] = [
 /** Grabs at this rarity and above get slow-mo and a bigger reveal. */
 export const RARE = 2;
 
-// Vertical-slice roster: 6 of the design doc's 21 characters, up to Epic. It skips the three names
-// the doc flags as too close to their originals.
+// Basic Launch roster: 10 of the design doc's 21 characters, up to Legendary. It skips the three
+// names the doc flags as too close to their originals.
 export const ROSTER: string[][] = [
   ['Cannolini Cannonino', 'Tostino Tortorino'],
   ['Lampadino Lumachino', 'Spazzolino Struzzo'],
-  ['Ginnasta Gelatina'],
-  ['Pizzarotto Pellicano'],
-  [],
+  ['Ginnasta Gelatina', 'Ventilatore Tartarughino'],
+  ['Pizzarotto Pellicano', 'Ninja Macchiatino'],
+  ['Elicottero Ippopotamo', 'Frigorifero Fenicottero'],
   [],
   [],
 ];
@@ -49,8 +49,8 @@ export const ZONES: Zone[] = [
   { name: 'Cosmic', from: 1500, sky: 0x2a0d45, spawns: [[5, 0.85], [6, 0.15]], hazard: 0xff7a3d },
 ];
 
-/** The vertical slice has Low Sky and Cloud Kingdom only. */
-export const MAX_ZONE = 1;
+/** Basic Launch has Low Sky, Cloud Kingdom and Storm Layer. */
+export const MAX_ZONE = 2;
 
 export function zoneIndexAt(y: number): number {
   let index = 0;
@@ -149,13 +149,31 @@ export const TUTORIAL = {
 
 export const CRASH_DROP = { tangled: 0.3, noChute: 0.5 };
 
-export type Track = 'cannon' | 'carry';
+export type Track = 'cannon' | 'carry' | 'magnet' | 'steering' | 'chute';
 
-/** Cost of the k-th purchase is base × growth^(k−1). `max` counts purchases. */
-export const UPGRADES: Record<Track, { name: string; base: number; growth: number; max: number }> = {
-  // The slice stops at cannon level 20, whose perfect launch stays inside Cloud Kingdom. The doc goes to 60.
-  cannon: { name: 'Cannon power', base: 50, growth: 1.18, max: 19 },
-  carry: { name: 'Carry limit', base: 200, growth: 1.9, max: 12 },
+export const TRACKS: Track[] = ['cannon', 'carry', 'magnet', 'steering', 'chute'];
+
+/**
+ * Cost of the k-th purchase is base × growth^(k−1). `max` counts purchases; `effect` is the gain per
+ * purchase for the three percentage tracks.
+ */
+export const UPGRADES: Record<Track, { name: string; base: number; growth: number; max: number; effect: number }> = {
+  // Basic Launch stops at cannon level 37, whose perfect launch stays inside the Storm Layer. The doc goes to 60.
+  // Retuned with `npm run sim` from the doc's 50 × 1.18: rebirth now unlocks after about 55 minutes, not 8.
+  cannon: { name: 'Cannon power', base: 35, growth: 1.42, max: 36, effect: 0 },
+  carry: { name: 'Carry limit', base: 200, growth: 1.9, max: 12, effect: 0 },
+  magnet: { name: 'Grab magnet', base: 120, growth: 1.25, max: 25, effect: 0.1 },
+  steering: { name: 'Steering', base: 100, growth: 1.22, max: 25, effect: 0.06 },
+  chute: { name: 'Parachute', base: 150, growth: 1.28, max: 20, effect: 0.05 },
+};
+
+export const REBIRTH = {
+  /** Rebirth unlocks at the cannon level whose normal launch reaches the Storm Layer. */
+  cannonLevel: 28,
+  /** A run this high counts as reaching the Storm Layer. */
+  unlockHeight: 400,
+  /** Permanent income bonus per rebirth. */
+  incomeBonus: 0.5,
 };
 
 export const ECONOMY = {
@@ -163,8 +181,9 @@ export const ECONOMY = {
   startPads: 4,
   padStep: 4,
   maxPads: 40,
-  firstExpansion: 400,
-  expansionGrowth: 3,
+  // Retuned with `npm run sim` from the doc's 400 × 3, which let income outrun every cost.
+  firstExpansion: 1000,
+  expansionGrowth: 5,
   /** A pad's cash pile stops growing at this many seconds of its income. */
   padCapSeconds: 600,
   /** Selling a character pays this many seconds of its income. */

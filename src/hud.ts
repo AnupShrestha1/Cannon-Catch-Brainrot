@@ -1,5 +1,5 @@
 // HTML overlay on top of the 3D canvas.
-import { CHARGE, ECONOMY, RARITIES, UPGRADES, launchHeight } from './config';
+import { CHARGE, ECONOMY, RARITIES, UPGRADES, launchHeight, type Track } from './config';
 import { formatCoins } from './economy';
 import type { HazardMode, Save } from './store';
 
@@ -10,7 +10,7 @@ export interface RevealCard {
   rarity: number;
 }
 
-export type ShopItem = 'cannon' | 'carry' | 'pads';
+export type ShopItem = Track | 'pads' | 'rebirth';
 
 export interface ShopRow {
   id: ShopItem;
@@ -20,6 +20,8 @@ export interface ShopRow {
   /** Null when maxed out. */
   cost: number | null;
   affordable: boolean;
+  /** Button text instead of the cost, e.g. for rebirth. */
+  button?: string;
 }
 
 export interface TuningHooks {
@@ -289,8 +291,8 @@ export class Hud {
         const buy = document.createElement('button');
         buy.type = 'button';
         buy.dataset.item = row.id;
-        buy.textContent = row.cost === null ? 'MAX' : formatCoins(row.cost);
-        buy.disabled = row.cost === null || !row.affordable;
+        buy.textContent = row.button ?? (row.cost === null ? 'MAX' : formatCoins(row.cost));
+        buy.disabled = !row.affordable;
         el.append(text, buy);
         return el;
       }),

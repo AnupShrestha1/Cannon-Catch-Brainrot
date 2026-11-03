@@ -17,6 +17,11 @@ export interface Save {
   cannon: number;
   /** Carry upgrades bought; the limit is ECONOMY.startCarry plus this. */
   carryLevel: number;
+  /** Grab magnet, steering and parachute upgrades bought. */
+  magnet: number;
+  steering: number;
+  chute: number;
+  rebirths: number;
   coins: number;
   pads: (PadSlot | null)[];
   hazards: HazardMode;
@@ -35,6 +40,10 @@ export function defaultSave(): Save {
     best: 0,
     cannon: 1,
     carryLevel: 0,
+    magnet: 0,
+    steering: 0,
+    chute: 0,
+    rebirths: 0,
     coins: 0,
     pads: Array.from({ length: ECONOMY.startPads }, () => null),
     hazards: 'auto',

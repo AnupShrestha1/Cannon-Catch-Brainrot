@@ -15,6 +15,8 @@ import {
   MAX_ZONE,
   RARE,
   RARITIES,
+  REBIRTH,
+  TRACKS,
   TUTORIAL,
   UPGRADES,
   ZONES,
@@ -24,15 +26,28 @@ import {
   rollRarity,
   zoneIndexAt,
 } from './config';
-import { carryLimit, expansionCost, formatCoins, incomePerSecond, placeCatches, upgradeCost } from './economy';
+import {
+  buyUpgrade,
+  carryLimit,
+  expansionCost,
+  formatCoins,
+  incomeMultiplier,
+  incomePerSecond,
+  padIncome,
+  placeCatches,
+  trackBoost,
+  upgradeCost,
+} from './economy';
 import { Particles, Streaks } from './fx';
 import { Hud, type ShopItem, type ShopRow } from './hud';
 import { Input } from './input';
-import { clearSave, loadSave, writeSave, type Save } from './store';
+import { clearSave, loadSave, writeSave, type PadSlot, type Save } from './store';
 import {
   buildEnv,
   makeBird,
   makeLabel,
+  makePlane,
+  makeStormCloud,
   makePlayer,
   skyColorAt,
   type BirdRig,
@@ -61,7 +76,16 @@ interface Pickup {
   seed: number;
 }
 
+type HazardKind = 'bird' | 'plane' | 'storm';
+
+const HAZARDS: Record<HazardKind, { radius: number; speed: [number, number]; toast: string }> = {
+  bird: { radius: FLIGHT.hazardRadius, speed: [4, 7], toast: 'BONK!' },
+  plane: { radius: 1.4, speed: [9, 13], toast: 'WHAM!' },
+  storm: { radius: 1.9, speed: [0.6, 1.2], toast: 'ZAP!' },
+};
+
 interface Bird {
+  kind: HazardKind;
   rig: BirdRig;
   x: number;
   y: number;
@@ -200,6 +224,8 @@ export class Game {
   private saveTimer = 3;
   private shopTimer = 0;
   private chantTimer = 20;
+  /** Rebirth needs a second tap in the shop. */
+  private rebirthArmed = false;
 
   /** Dev-only: stops the frame loop from advancing the game, so debugStep() is the only clock. */
   debugPaused = false;
@@ -239,6 +265,7 @@ export class Game {
     this.goal.visible = false;
     this.scene.add(this.goal);
 
+    this.paintCannon();
     this.bindUi();
     window.addEventListener('resize', () => this.resize());
     this.resize();
@@ -298,6 +325,7 @@ export class Game {
     onClick(hud.soundBtn, () => this.toggleMute());
     onClick(hud.tuneBtn, () => hud.tunePanel.classList.toggle('hidden'));
     onClick(hud.upgradesBtn, () => {
+      this.rebirthArmed = false;
       hud.openShop();
       this.refreshShop();
     });
@@ -481,6 +509,9 @@ export class Game {
   private spawnRun(apex: number, v0: number, tUp: number): void {
     const flight = this.save.flightNo;
     const width = FLIGHT.spawnHalfWidth * (this.lane / FLIGHT.lane);
+    // A Storm Layer flight blasts through Low Sky too fast to catch anything, so nothing spawns there.
+    const apexZone = Math.min(zoneIndexAt(apex), MAX_ZONE);
+    const floor = apexZone >= 2 ? ZONES[apexZone - 1].from : 14;
     if (flight === 1) {
       // Tutorial: a single Common straight up the flight path.
       this.addPickup(0, 0, MUZZLE_Y + (apex - MUZZLE_Y) * 0.55);
@@ -488,7 +519,7 @@ export class Game {
       let lastY = -Infinity;
       for (let t = 0.6; t < tUp - 0.1; t += FLIGHT.pickupStep * rand(0.8, 1.2)) {
         const y = MUZZLE_Y + v0 * t - 0.5 * this.gUp * t * t;
-        if (y < 14 || y - lastY < FLIGHT.pickupMinGap) continue;
+        if (y < floor || y - lastY < FLIGHT.pickupMinGap) continue;
         lastY = y;
         this.addPickup(rollRarity(y), rand(-width, width), y);
       }
@@ -498,7 +529,8 @@ export class Game {
     const mode = this.save.hazards;
     if (mode === 'on' || (mode === 'auto' && flight >= TUTORIAL.hazardFromFlight)) {
       // Hazards get denser with height.
-      for (let y = 24; y < apex - 3; y += lerp(24, 12, Math.min(1, y / 1500)) * rand(0.8, 1.25)) this.addBird(y);
+      const lowest = Math.max(24, floor);
+      for (let y = lowest; y < apex - 3; y += lerp(24, 12, Math.min(1, y / 1500)) * rand(0.8, 1.25)) this.addBird(y);
     }
   }
 
@@ -524,16 +556,20 @@ export class Game {
     });
   }
 
+  /** Birds below the Storm Layer; planes and thunderclouds inside it. */
   private addBird(y: number): void {
-    const rig = makeBird(ZONES[zoneIndexAt(y)].hazard);
+    const zone = zoneIndexAt(y);
+    const kind: HazardKind = zone < 2 ? 'bird' : Math.random() < 0.5 ? 'plane' : 'storm';
+    const rig = kind === 'bird' ? makeBird(ZONES[zone].hazard) : kind === 'plane' ? makePlane() : makeStormCloud();
     this.scene.add(rig.group);
     this.birds.push({
+      kind,
       rig,
       x: rand(-this.lane, this.lane),
       y,
       baseY: y,
       dir: Math.random() < 0.5 ? -1 : 1,
-      speed: rand(4, 7),
+      speed: rand(...HAZARDS[kind].speed),
       seed: Math.random() * 10,
       hit: false,
       vy: 0,
@@ -578,7 +614,8 @@ export class Game {
 
   private steer(dt: number): void {
     const lane = this.lane;
-    const maxSpeed = FLIGHT.steerSpeed * (this.chute === 'closed' ? 1 : FLIGHT.chuteSteer);
+    const maxSpeed =
+      FLIGHT.steerSpeed * trackBoost(this.save, 'steering') * (this.chute === 'closed' ? 1 : FLIGHT.chuteSteer);
     if (this.stun > 0) {
       this.vx *= Math.max(0, 1 - 6 * dt);
     } else {
@@ -608,9 +645,10 @@ export class Game {
 
     // Hands are on the straps once the chute is open.
     if (this.chute === 'closed') {
+      const reach = FLIGHT.playerRadius + FLIGHT.pickupRadius * trackBoost(this.save, 'magnet');
       for (const p of this.pickups) {
         if ((p.state !== 'floating' && p.state !== 'tumbling') || p.cooldown > 0) continue;
-        if (segmentDistance(ax, ay, bx, by, p.x, p.y + 0.6) < FLIGHT.playerRadius + FLIGHT.pickupRadius) {
+        if (segmentDistance(ax, ay, bx, by, p.x, p.y + 0.6) < reach) {
           this.tryGrab(p);
         }
       }
@@ -619,7 +657,7 @@ export class Game {
     if (this.invuln > 0) return;
     for (const b of this.birds) {
       if (b.hit) continue;
-      if (segmentDistance(ax, ay, bx, by, b.x, b.y) < FLIGHT.playerRadius + FLIGHT.hazardRadius) {
+      if (segmentDistance(ax, ay, bx, by, b.x, b.y) < FLIGHT.playerRadius + HAZARDS[b.kind].radius) {
         this.hitBird(b);
         return;
       }
@@ -700,9 +738,10 @@ export class Game {
       const [out] = this.stack.splice(this.lowestIndex(), 1);
       this.release(out, 0.8, (this.px >= b.x ? 1 : -1) * 5, 5);
       this.knocked++;
-      this.hud.toast(rising ? 'BONK! Catch it on the way down' : 'BONK!', 'bad small');
+      const word = HAZARDS[b.kind].toast;
+      this.hud.toast(rising ? `${word} Catch it on the way down` : word, 'bad small');
     } else {
-      this.hud.toast('BONK!', 'bad small');
+      this.hud.toast(HAZARDS[b.kind].toast, 'bad small');
     }
   }
 
@@ -732,8 +771,10 @@ export class Game {
     return true;
   }
 
+  /** The parachute upgrade lengthens the safe window by letting it run closer to the ground. */
   private chuteLate(): number {
-    return this.save.flightNo <= TUTORIAL.wideChuteFlights ? CHUTE.tutorialLate : CHUTE.late;
+    const late = this.save.flightNo <= TUTORIAL.wideChuteFlights ? CHUTE.tutorialLate : CHUTE.late;
+    return late / trackBoost(this.save, 'chute');
   }
 
   private secondsToImpact(): number {
@@ -1079,7 +1120,7 @@ export class Game {
   private updateEconomy(realDt: number): void {
     for (const slot of this.save.pads) {
       if (!slot) continue;
-      const income = RARITIES[slot.rarity].income;
+      const income = padIncome(this.save, slot.rarity);
       slot.cash = Math.min(income * ECONOMY.padCapSeconds, slot.cash + income * realDt);
     }
     this.sessionT += realDt;
@@ -1115,62 +1156,121 @@ export class Game {
   private shopRows(): ShopRow[] {
     const s = this.save;
     const apex = (level: number) => Math.round(launchHeight(level));
-    const cannon = upgradeCost(s, 'cannon');
-    const carry = upgradeCost(s, 'carry');
-    const pads = expansionCost(s);
+    const pct = (track: 'magnet' | 'steering' | 'chute', extra = 0) =>
+      `+${Math.round((s[track] + extra) * UPGRADES[track].effect * 100)}%`;
     const limit = carryLimit(s);
-    return [
-      {
-        id: 'cannon',
-        title: UPGRADES.cannon.name,
-        level: `Lv ${s.cannon}`,
-        detail:
-          cannon === null
-            ? `Apex ${apex(s.cannon)} m, the top of this build`
-            : `Apex ${apex(s.cannon)} m → ${apex(s.cannon + 1)} m`,
-        cost: cannon,
-        affordable: cannon !== null && s.coins >= cannon,
-      },
-      {
-        id: 'carry',
-        title: UPGRADES.carry.name,
-        level: `${limit} per run`,
-        detail: carry === null ? 'Maxed out' : `Carry ${limit} → ${limit + 1} characters`,
-        cost: carry,
-        affordable: carry !== null && s.coins >= carry,
-      },
-      {
-        id: 'pads',
-        title: 'Base pads',
-        level: `${s.pads.length} pads`,
-        detail: pads === null ? 'Maxed out' : `${s.pads.length} → ${s.pads.length + ECONOMY.padStep} pads`,
-        cost: pads,
-        affordable: pads !== null && s.coins >= pads,
-      },
-    ];
+    const rows: ShopRow[] = TRACKS.map((track) => {
+      const cost = upgradeCost(s, track);
+      let level: string;
+      let detail: string;
+      switch (track) {
+        case 'cannon':
+          level = `Lv ${s.cannon}`;
+          detail =
+            cost === null
+              ? `Apex ${apex(s.cannon)} m, the top of this build`
+              : `Apex ${apex(s.cannon)} m → ${apex(s.cannon + 1)} m`;
+          break;
+        case 'carry':
+          level = `${limit} per run`;
+          detail = cost === null ? 'Maxed out' : `Carry ${limit} → ${limit + 1} characters`;
+          break;
+        default: {
+          const what = { magnet: 'Grab radius', steering: 'Turn speed', chute: 'Safe window' }[track];
+          level = pct(track);
+          detail = cost === null ? 'Maxed out' : `${what} ${pct(track)} → ${pct(track, 1)}`;
+        }
+      }
+      return {
+        id: track,
+        title: UPGRADES[track].name,
+        level,
+        detail,
+        cost,
+        affordable: cost !== null && s.coins >= cost,
+      };
+    });
+
+    const pads = expansionCost(s);
+    rows.push({
+      id: 'pads',
+      title: 'Base pads',
+      level: `${s.pads.length} pads`,
+      detail: pads === null ? 'Maxed out' : `${s.pads.length} → ${s.pads.length + ECONOMY.padStep} pads`,
+      cost: pads,
+      affordable: pads !== null && s.coins >= pads,
+    });
+
+    const unlocked = s.cannon >= REBIRTH.cannonLevel;
+    const next = incomeMultiplier(s) + REBIRTH.incomeBonus;
+    rows.push({
+      id: 'rebirth',
+      title: 'Rebirth',
+      level: s.rebirths ? `×${incomeMultiplier(s)} income` : '',
+      detail: unlocked
+        ? `Start over with ×${next} income. You keep your rarest character.`
+        : `Unlocks at Cannon Lv ${REBIRTH.cannonLevel}. Resets coins, upgrades and pads for ×${next} income.`,
+      cost: null,
+      affordable: unlocked,
+      button: this.rebirthArmed ? 'Sure?' : 'Rebirth',
+    });
+    return rows;
   }
 
   private buy(item: ShopItem): void {
     const s = this.save;
+    if (item === 'rebirth') {
+      // Two taps, so a stray one can't wipe progress.
+      if (this.rebirthArmed) this.rebirth();
+      else this.rebirthArmed = true;
+      this.refreshShop();
+      return;
+    }
+    this.rebirthArmed = false;
     const cost = item === 'pads' ? expansionCost(s) : upgradeCost(s, item);
     if (cost === null || s.coins < cost) return;
     s.coins -= cost;
-    if (item === 'cannon') {
-      s.cannon += 1;
-      this.completeHint('upgrade');
-      this.hud.toast(`Cannon Lv ${s.cannon}!`, 'gold');
-    } else if (item === 'carry') {
-      s.carryLevel += 1;
-      this.hud.toast(`Carry ${carryLimit(s)}!`, 'gold');
-    } else {
+    if (item === 'pads') {
       for (let i = 0; i < ECONOMY.padStep; i++) s.pads.push(null);
       this.base.sync(s, this.pending);
       this.completeHint('expand');
       this.hud.toast(`${s.pads.length} pads!`, 'gold');
+    } else {
+      buyUpgrade(s, item);
+      if (item === 'cannon') this.completeHint('upgrade');
+      this.hud.toast(item === 'cannon' ? `Cannon Lv ${s.cannon}!` : `${UPGRADES[item].name} up!`, 'gold');
     }
     this.sfx.ding();
     writeSave(s);
     this.refreshShop();
+  }
+
+  /** Back to the start with a permanent income bonus, keeping the rarest character and a new cannon colour. */
+  private rebirth(): void {
+    const s = this.save;
+    this.rebirthArmed = false;
+    let keep: PadSlot | null = null;
+    for (const slot of s.pads) if (slot && (!keep || slot.rarity > keep.rarity)) keep = slot;
+    s.rebirths += 1;
+    s.coins = 0;
+    s.cannon = 1;
+    s.carryLevel = s.magnet = s.steering = s.chute = 0;
+    s.pads = Array.from({ length: ECONOMY.startPads }, () => null);
+    if (keep) s.pads[0] = { ...keep, cash: 0 };
+    this.pending.clear();
+    this.base.sync(s);
+    this.paintCannon();
+    writeSave(s);
+    this.hud.closeShop();
+    this.hud.toast(`REBIRTH! ×${incomeMultiplier(s)} income`, 'gold big');
+    this.sfx.sparkle();
+    this.fx.burst(this.tmp.set(-7, 2, 0), { count: 60, color: 0xffd84a, speed: 12, life: 1.2, size: 0.7, up: 6 });
+  }
+
+  /** Each rebirth unlocks a cannon colour: the design doc's cosmetic skin, in gray-box form. */
+  private paintCannon(): void {
+    const colors = [0x3d4450, 0xc0392b, 0x2e86de, 0xe1b12c, 0x8e44ad, 0x27ae60];
+    this.env.setBarrelColor(colors[this.save.rebirths % colors.length]);
   }
 
   // ---------------------------------------------------------------- entities
@@ -1221,9 +1321,11 @@ export class Game {
           b.dir = -b.dir;
           b.x = clamp(b.x, -edge, edge);
         }
-        b.y = b.baseY + Math.sin(this.time * 2 + b.seed) * 0.6;
-        b.rig.group.rotation.y = b.dir > 0 ? 0 : Math.PI;
+        b.y = b.baseY + Math.sin(this.time * 2 + b.seed) * (b.kind === 'bird' ? 0.6 : 0.3);
+        if (b.kind !== 'storm') b.rig.group.rotation.y = b.dir > 0 ? 0 : Math.PI;
       }
+      if (b.rig.spinner) b.rig.spinner.rotation.x = this.time * 40;
+      if (b.rig.flash) b.rig.flash.visible = Math.sin(this.time * 9 + b.seed * 3) > 0.6;
       const flap = Math.sin(this.time * 14 + b.seed) * 0.8;
       for (const wing of b.rig.wings) wing.rotation.x = flap * (wing.userData.side as number);
       b.rig.group.position.set(b.x, b.y, 0);

@@ -1,10 +1,12 @@
-# Cannon Catch Brainrot — Phase 2 vertical slice
+# Cannon Catch Brainrot — Phase 3 launch content (gray box)
 
-A gray-box build of the core loop: charge the cannon, fly up, grab characters, dodge birds, open the
-parachute, land, then take the catch home. At the base, characters on pads earn coins, and coins buy
-cannon power, carry limit and more pads. It covers Low Sky and Cloud Kingdom with 6 characters, and
-scripts the design doc's first 5 minutes. Its job is the Phase 2 gate: the first 5 minutes hook new
-testers.
+The game's Basic Launch content, still in gray-box art: charge the cannon, fly up, grab characters,
+dodge hazards, open the parachute, land, then take the catch home. Characters on pads earn coins, and
+coins buy five upgrade tracks and more pads. It covers Low Sky, Cloud Kingdom and the Storm Layer with
+10 characters, scripts the design doc's first 5 minutes, and adds rebirth.
+
+Still to come for Phase 3: final art, recorded voice lines and music. Those need assets from outside
+this repo.
 
 Design doc: https://claude.ai/artifact/EMeouczHhzvifYLtwFvrqL
 
@@ -49,13 +51,36 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - Hints walk new players through collecting, the first cannon upgrade and the first base expansion.
 - Each catch, and now and then a character at the base, chants its name with the browser's built-in
   text-to-speech. That's a stand-in for recorded voice lines.
+- Hazards are birds below the Storm Layer, and prop planes and lightning clouds inside it. A flight
+  that reaches the Storm Layer spawns nothing in Low Sky, which it crosses too fast to catch anything.
+- Upgrades: cannon power (to level 37 in this build), carry limit, grab magnet (+10% grab radius each),
+  steering (+6% turn speed each) and parachute (+5% safe window each).
+- Rebirth unlocks at cannon level 28, whose normal launch reaches the Storm Layer. It resets coins,
+  upgrades and pads, keeps the rarest character, adds +50% income per rebirth, and recolours the cannon.
 
-Not in this slice: offline earnings, character levels, rebirth, fusion, sky events, the rival, the
-collection book, and the CrazyGames SDK.
+Not in this build: offline earnings, character levels, fusion, sky events, the rival, the collection
+book, and the CrazyGames SDK.
+
+## Economy simulator
+
+```bash
+npm run sim
+```
+
+It plays the real cost and placement rules with a simple player model and prints the median time to
+each milestone over 200 simulated players. Try other numbers without editing the config:
+
+```bash
+SIM='{"cannon":{"growth":1.3},"economy":{"firstExpansion":600}}' npm run sim
+```
+
+With the current costs: first upgrade at 1 minute, first Cloud Kingdom run at 4 minutes, rebirth
+unlocked at about 55 minutes. The cannon (35 × 1.42 per level) and base expansions (1,000 × 5) were
+retuned from the design doc's first-pass 50 × 1.18 and 400 × 3, which unlocked rebirth after 8 minutes.
 
 ## Tuning
 
-Press **T** (or the Tune button) for the tuning panel: cannon level (1–20 in this slice), carry limit,
+Press **T** (or the Tune button) for the tuning panel: cannon level (1–37 in this build), carry limit,
 hazards, a +1,000 coins button, and a full reset. **M** mutes. All first-pass numbers live in
 `src/config.ts`.
 
@@ -67,13 +92,14 @@ hazards, a +1,000 coins button, and a full reset. **M** mutes. All first-pass nu
 | `src/game.ts` | The state machine: run, landing, base, shop, hints, and camera |
 | `src/economy.ts` | Upgrade costs, income, pad expansion, and placing or selling catches |
 | `src/base.ts` | The pad grid, characters on pads, and cash piles |
-| `src/characters.ts` | The 6 character models and their idle animations |
-| `src/world.ts` | Gray-box scene: sky, ground, cannon, player, birds, labels |
+| `src/characters.ts` | The 10 character models and their idle animations |
+| `src/world.ts` | Gray-box scene: sky, ground, cannon, player, hazards, labels |
 | `src/fx.ts` | Particle bursts and wind streaks |
 | `src/hud.ts` | HTML overlay: wallet, altitude, carry slots, meters, reveal, shop, gift, tuning panel |
 | `src/input.ts` | Mouse, keyboard and touch input |
 | `src/audio.ts` | Synthesised placeholder sounds |
-| `src/store.ts` | Local save: coins, pads, upgrades, flights, hints, settings |
+| `src/store.ts` | Local save: coins, pads, upgrades, rebirths, flights, hints, settings |
+| `scripts/sim.ts` | The economy simulator |
 
 In dev builds, `window.game.debugStep(seconds)` advances the game at a fixed 60 fps,
 `window.game.debugPaused = true` stops the frame loop, and opening the page with `?nosave` starts

@@ -193,6 +193,104 @@ const MODELS: Record<string, Model> = {
   },
 };
 
+const MODELS_STORM: Record<string, Model> = {
+  // Turtle that flies with a desk-fan shell; hovers and spins its blades.
+  'Ventilatore Tartarughino': (f, accent) => {
+    const skin = mat(0x6fb06a);
+    const hover = at(new THREE.Group(), 0, 0.2, 0);
+    const shell = at(cyl(0.48, 0.52, 0.3, mat(0xe9edf2), 14), 0, 0.5, 0);
+    const cage = at(ring(0.46, 0.04, accent), 0, 0.68, 0);
+    cage.rotation.x = Math.PI / 2;
+    const blades = at(new THREE.Group(), 0, 0.68, 0);
+    for (let i = 0; i < 3; i++) {
+      const blade = at(box(0.36, 0.03, 0.14, mat(0x8fc8ff)), 0, 0, 0);
+      blade.position.set(Math.cos((i * Math.PI * 2) / 3) * 0.2, 0, Math.sin((i * Math.PI * 2) / 3) * 0.2);
+      blade.rotation.y = (-i * Math.PI * 2) / 3;
+      blades.add(blade);
+    }
+    hover.add(shell, cage, blades, at(ball(0.2, skin), 0, 0.42, 0.5));
+    for (const side of [-1, 1]) hover.add(at(box(0.16, 0.1, 0.22, skin), side * 0.42, 0.3, 0.15));
+    eyes(hover, 0, 0.48, 0.68, 0.07);
+    f.add(hover);
+    return (t) => {
+      blades.rotation.y = t * 18;
+      hover.position.y = 0.2 + Math.sin(t * 2.5) * 0.08;
+    };
+  },
+
+  // Macchiato cup in a ninja mask; flicks a sugar-cube star.
+  'Ninja Macchiatino': (f, accent) => {
+    const cup = at(cyl(0.38, 0.3, 0.7, mat(0xf4f4f4), 14), 0, 0.38, 0);
+    const foam = at(cyl(0.36, 0.36, 0.06, mat(0xe8c9a1), 14), 0, 0.74, 0);
+    const mask = at(cyl(0.385, 0.37, 0.16, mat(0x1f1f28), 14), 0, 0.52, 0);
+    const handle = at(ring(0.14, 0.04, mat(0xf4f4f4)), 0.42, 0.42, 0);
+    const tail = at(box(0.3, 0.06, 0.08, accent), -0.48, 0.58, -0.05);
+    tail.rotation.z = 0.4;
+    const star = at(box(0.12, 0.12, 0.12, mat(0xffffff)), 0.4, 0.75, 0.2);
+    f.add(cup, foam, mask, handle, tail, star);
+    eyes(f, 0, 0.53, 0.37, 0.11);
+    return (t) => {
+      const p = (t * 0.8) % 1;
+      star.position.set(0.4 + p * 1.2, 0.75 + Math.sin(p * Math.PI) * 0.4, 0.2);
+      star.rotation.set(t * 9, t * 7, 0);
+      star.visible = p < 0.8;
+    };
+  },
+
+  // Hippo with helicopter blades for a head; lifts off the pad slightly.
+  'Elicottero Ippopotamo': (f, accent) => {
+    const purple = mat(0x9a8fb8);
+    const lift = new THREE.Group();
+    const body = at(ball(0.5, purple), 0, 0.6, 0);
+    body.scale.set(1.2, 0.95, 1);
+    const snout = at(box(0.5, 0.34, 0.3, purple), 0, 0.62, 0.48);
+    lift.add(body, snout, at(cyl(0.05, 0.05, 0.3, mat(0x3d4450), 6), 0, 1.15, 0));
+    for (const side of [-1, 1]) {
+      lift.add(at(cyl(0.12, 0.12, 0.25, purple, 8), side * 0.3, 0.13, 0.15));
+      lift.add(at(box(0.05, 0.08, 0.04, pupilMat), side * 0.1, 0.64, 0.64));
+    }
+    const rotor = at(new THREE.Group(), 0, 1.3, 0);
+    rotor.add(box(1.6, 0.04, 0.12, accent), box(0.12, 0.04, 1.6, accent));
+    lift.add(rotor);
+    eyes(lift, 0, 0.98, 0.42, 0.14);
+    f.add(lift);
+    return (t) => {
+      rotor.rotation.y = t * 22;
+      lift.position.y = Math.max(0, Math.sin(t * 1.4)) * 0.25;
+    };
+  },
+
+  // Flamingo with a fridge body and jet-engine legs; the door swings open and mist spills.
+  'Frigorifero Fenicottero': (f, accent) => {
+    const pink = mat(0xff8fb8);
+    const fridge = at(box(0.6, 0.8, 0.5, mat(0xeef3f7)), 0, 0.85, 0);
+    const door = at(new THREE.Group(), 0.3, 0.85, 0.25);
+    door.add(at(box(0.6, 0.8, 0.05, mat(0xdfe6ec)), -0.3, 0, 0.02), at(box(0.05, 0.3, 0.05, accent), -0.52, 0, 0.07));
+    const mist = at(ball(0.18, smokeMat, 1), 0, 0.75, 0.4);
+    f.add(fridge, door, mist);
+    for (const side of [-1, 1]) {
+      f.add(at(cyl(0.04, 0.04, 0.3, pink, 6), side * 0.16, 0.32, 0));
+      f.add(at(cyl(0.09, 0.12, 0.2, mat(0x5a606b), 10), side * 0.16, 0.1, 0));
+    }
+    const neck = at(cyl(0.05, 0.05, 0.5, pink, 6), 0.15, 1.45, 0);
+    neck.rotation.z = -0.3;
+    const head = at(ball(0.17, pink), 0.25, 1.72, 0.05);
+    const beak = at(cone(0.06, 0.2, mat(0x2b2b33), 6), 0.25, 1.62, 0.22);
+    beak.rotation.x = Math.PI * 0.7;
+    f.add(neck, head, beak);
+    eyes(f, 0.25, 1.76, 0.19, 0.07);
+    return (t) => {
+      const open = Math.max(0, Math.sin(t * 1.2));
+      door.rotation.y = -open * 1.4;
+      mist.visible = open > 0.3;
+      mist.scale.setScalar(0.6 + open);
+      mist.position.y = 0.75 - open * 0.3;
+    };
+  },
+};
+
+Object.assign(MODELS, MODELS_STORM);
+
 /** Fallback for characters without a model yet: a cube in the rarity colour. */
 const cubeModel: Model = (f, accent) => {
   f.add(at(box(0.9, 0.9, 0.9, accent), 0, 0.6, 0));

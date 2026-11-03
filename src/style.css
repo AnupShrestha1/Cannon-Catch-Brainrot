@@ -879,3 +879,8 @@ button:active {
     transform: translate(-50%, -160%) scale(1);
   }
 }
+
+#shopRows {
+  max-height: 65vh;
+  overflow: auto;
+}

@@ -8,6 +8,7 @@ import type { Save } from './store';
 import { flat, makeLabel, type Label } from './world';
 
 interface PadView {
+  pad: THREE.Mesh;
   hit: THREE.Mesh;
   rig: CharacterRig | null;
   name: string;
@@ -56,6 +57,12 @@ export class Base {
    */
   sync(save: Save, pending: ReadonlySet<number> = new Set()): void {
     while (this.views.length < save.pads.length) this.addPad(this.views.length);
+    // Rebirth shrinks the base back to its starting pads.
+    while (this.views.length > save.pads.length) {
+      const view = this.views.pop()!;
+      if (view.rig) this.group.remove(view.rig.group);
+      this.group.remove(view.pad, view.hit, ...view.coins, view.label.sprite);
+    }
     save.pads.forEach((slot, i) => {
       if (pending.has(i)) return;
       const view = this.views[i];
@@ -123,6 +130,6 @@ export class Base {
     label.sprite.scale.multiplyScalar(0.6);
     label.sprite.visible = false;
     this.group.add(pad, hit, ...coins, label.sprite);
-    this.views.push({ hit, rig: null, name: '', coins, label, shown: -1, seed: Math.random() * 10 });
+    this.views.push({ pad, hit, rig: null, name: '', coins, label, shown: -1, seed: Math.random() * 10 });
   }
 }

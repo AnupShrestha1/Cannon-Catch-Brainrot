@@ -61,6 +61,7 @@ export function makeCloud(scale: number, puffs: number): THREE.Group {
 export interface Env {
   cannon: THREE.Group;
   barrel: THREE.Group;
+  setBarrelColor(color: number): void;
   shadow: THREE.Mesh;
   updateDecor(cameraY: number): void;
 }
@@ -110,7 +111,8 @@ export function buildEnv(scene: THREE.Scene): Env {
   const barrel = new THREE.Group();
   barrel.position.set(0, 1.2, 0.38);
   barrel.rotation.x = -0.12;
-  const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.1, 3.2, 12), flat(0x3d4450));
+  const tubeMat = flat(0x3d4450);
+  const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.1, 3.2, 12), tubeMat);
   tube.position.y = 1.6;
   const lip = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.16, 6, 14), flat(0x2a2f38));
   lip.rotation.x = Math.PI / 2;
@@ -145,6 +147,9 @@ export function buildEnv(scene: THREE.Scene): Env {
   return {
     cannon,
     barrel,
+    setBarrelColor(color: number) {
+      tubeMat.color.setHex(color);
+    },
     shadow,
     updateDecor(cameraY: number) {
       for (const cloud of decor) {
@@ -219,6 +224,10 @@ export function makePlayer(): PlayerRig {
 export interface BirdRig {
   group: THREE.Group;
   wings: THREE.Group[];
+  /** A propeller to spin (planes). */
+  spinner?: THREE.Object3D;
+  /** A lightning bolt to flash (storm clouds). */
+  flash?: THREE.Object3D;
 }
 
 const birdBodyGeo = new THREE.IcosahedronGeometry(0.5, 0);
@@ -257,6 +266,52 @@ export function makeBird(color: number): BirdRig {
     wings.push(pivot);
   }
   return { group, wings };
+}
+
+const planeBodyMat = flat(0xe8ecf2);
+const planeTrimMat = flat(0xd64545);
+const planeBodyGeo = new THREE.CylinderGeometry(0.45, 0.3, 3, 10);
+const planeWingGeo = new THREE.BoxGeometry(0.7, 0.08, 3.2);
+const planeTailGeo = new THREE.BoxGeometry(0.5, 0.7, 0.08);
+const propGeo = new THREE.BoxGeometry(0.06, 1.2, 0.12);
+
+/** A small prop plane that flies along +x; flip it with rotation.y = PI. */
+export function makePlane(): BirdRig {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(planeBodyGeo, planeBodyMat);
+  body.rotation.z = -Math.PI / 2;
+  const wing = new THREE.Mesh(planeWingGeo, planeTrimMat);
+  const tail = new THREE.Mesh(planeTailGeo, planeTrimMat);
+  tail.position.set(-1.3, 0.4, 0);
+  const spinner = new THREE.Mesh(propGeo, flat(0x2b2b33));
+  spinner.position.x = 1.55;
+  group.add(body, wing, tail, spinner);
+  return { group, wings: [], spinner };
+}
+
+const stormMat = flat(0x4a4466, { emissive: 0x141024 });
+const boltMat = new THREE.MeshBasicMaterial({ color: 0xfff27a });
+const boltGeo = new THREE.BoxGeometry(0.18, 1.6, 0.18);
+
+/** A dark thundercloud with a lightning bolt that flickers beneath it. */
+export function makeStormCloud(): BirdRig {
+  const group = new THREE.Group();
+  for (let i = 0; i < 5; i++) {
+    const puff = new THREE.Mesh(puffGeo, stormMat);
+    puff.scale.setScalar(0.9 + Math.random() * 0.5);
+    puff.position.set((i - 2) * 0.8, (Math.random() - 0.3) * 0.4, (Math.random() - 0.5) * 0.6);
+    group.add(puff);
+  }
+  const flash = new THREE.Group();
+  const upper = new THREE.Mesh(boltGeo, boltMat);
+  upper.position.set(0.2, -1.3, 0);
+  upper.rotation.z = 0.4;
+  const lower = new THREE.Mesh(boltGeo, boltMat);
+  lower.position.set(-0.1, -2.6, 0);
+  lower.rotation.z = -0.4;
+  flash.add(upper, lower);
+  group.add(flash);
+  return { group, wings: [], flash };
 }
 
 export interface Label {
