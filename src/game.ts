@@ -41,6 +41,7 @@ import {
 import { Particles, Streaks } from './fx';
 import { Hud, type ShopItem, type ShopRow } from './hud';
 import { Input } from './input';
+import { platform } from './platform';
 import { clearSave, loadSave, writeSave, type PadSlot, type Save } from './store';
 import {
   buildEnv,
@@ -243,7 +244,7 @@ export class Game {
     this.streaks = new Streaks(this.scene);
     this.input = new Input(canvas);
     this.input.onGesture = () => this.sfx.unlock();
-    this.sfx.setMuted(this.save.muted);
+    this.applyMute();
 
     const bar = new THREE.Mesh(
       new THREE.BoxGeometry(FLIGHT.lane * 2 + 4, 0.08, 0.08),
@@ -266,6 +267,7 @@ export class Game {
     this.scene.add(this.goal);
 
     this.paintCannon();
+    platform.onSettingsChange(() => this.applyMute());
     this.bindUi();
     window.addEventListener('resize', () => this.resize());
     this.resize();
@@ -356,9 +358,14 @@ export class Game {
     hud.setSound(!this.save.muted);
   }
 
+  /** The game's own mute, overridden by CrazyGames' mute setting. */
+  private applyMute(): void {
+    this.sfx.setMuted(this.save.muted || platform.muted);
+  }
+
   private toggleMute(): void {
     this.save.muted = !this.save.muted;
-    this.sfx.setMuted(this.save.muted);
+    this.applyMute();
     this.hud.setSound(!this.save.muted);
     writeSave(this.save);
   }
@@ -428,6 +435,8 @@ export class Game {
     this.base.update(this.save, this.time, realDt);
     this.fx.update(dt);
     this.updateVisuals(realDt, dt);
+    // The reveal screen and the shop are breaks in play.
+    platform.setPlaying(this.state !== 'reveal' && !this.hud.shopOpen);
   }
 
   // ---------------------------------------------------------------- charge and launch
@@ -706,6 +715,7 @@ export class Game {
     });
     this.sfx.pop(p.rarity);
     this.sfx.chant(p.name);
+    if (p.rarity >= 4) platform.happytime();
     if (p.rarity >= RARE) {
       this.slowmo = Math.max(this.slowmo, 0.45);
       this.hud.toast(`${RARITIES[p.rarity].name.toUpperCase()}!`, '', RARITIES[p.rarity].css);
@@ -1263,6 +1273,7 @@ export class Game {
     writeSave(s);
     this.hud.closeShop();
     this.hud.toast(`REBIRTH! ×${incomeMultiplier(s)} income`, 'gold big');
+    platform.happytime();
     this.sfx.sparkle();
     this.fx.burst(this.tmp.set(-7, 2, 0), { count: 60, color: 0xffd84a, speed: 12, life: 1.2, size: 0.7, up: 6 });
   }

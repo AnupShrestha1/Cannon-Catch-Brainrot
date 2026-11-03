@@ -61,6 +61,31 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 Not in this build: offline earnings, character levels, fusion, sky events, the rival, the collection
 book, and the CrazyGames SDK.
 
+## CrazyGames
+
+The CrazyGames HTML5 SDK v3 loads from `index.html`, and `src/platform.ts` wraps it so the game runs
+the same without it (blocked script, offline, or any domain other than localhost or CrazyGames).
+
+- Loading start and stop around game setup.
+- Gameplay start once the cannon (or the base) is ready, which is where CrazyGames measures the
+  initial download. Gameplay stop and start around the shop and the landing reveal.
+- Saves go through the SDK's data module, which follows a signed-in player across devices.
+- CrazyGames' mute setting overrides the game's own. Test it locally with `?muteAudio=true`.
+- A happytime celebration on Legendary catches and rebirths.
+- No ads: CrazyGames disables them during Basic Launch. Rewarded ads come with Full Launch.
+
+On localhost the SDK runs in its local mode and logs every call to the console.
+
+### Upload
+
+```bash
+npm run build
+```
+
+Then zip the contents of `dist/` (not the folder itself) and upload the zip in the CrazyGames developer
+portal. The build is 3 files and about 150 KB zipped, far under the 20 MB limit for the mobile
+homepage.
+
 ## Economy simulator
 
 ```bash

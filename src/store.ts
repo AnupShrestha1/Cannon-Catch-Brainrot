@@ -34,6 +34,14 @@ const KEY = 'ccb-slice-v1';
 // Dev-only: ?nosave starts fresh and never touches the real save, for scripted tests.
 const ephemeral = import.meta.env.DEV && new URLSearchParams(location.search).has('nosave');
 
+type Backend = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+let backend: Backend | null = null;
+
+/** Saves go to this instead of localStorage, e.g. the CrazyGames SDK's cross-device save. */
+export function useStorage(storage: Backend): void {
+  backend = storage;
+}
+
 export function defaultSave(): Save {
   return {
     flightNo: 0,
@@ -56,7 +64,7 @@ export function loadSave(): Save {
   const save = defaultSave();
   if (ephemeral) return save;
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = (backend ?? localStorage).getItem(KEY);
     if (raw) Object.assign(save, JSON.parse(raw) as Partial<Save>);
   } catch {
     // fall through to defaults
@@ -68,7 +76,7 @@ export function loadSave(): Save {
 export function writeSave(save: Save): void {
   if (ephemeral) return;
   try {
-    localStorage.setItem(KEY, JSON.stringify(save));
+    (backend ?? localStorage).setItem(KEY, JSON.stringify(save));
   } catch {
     // progress just won't persist
   }
@@ -77,7 +85,7 @@ export function writeSave(save: Save): void {
 export function clearSave(): void {
   if (ephemeral) return;
   try {
-    localStorage.removeItem(KEY);
+    (backend ?? localStorage).removeItem(KEY);
   } catch {
     // nothing to clear
   }
