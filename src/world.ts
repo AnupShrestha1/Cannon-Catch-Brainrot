@@ -1,0 +1,372 @@
+// Gray-box scene pieces: sky, ground, cannon, player, characters and birds.
+import * as THREE from 'three';
+import { RARITIES, ZONES, zoneIndexAt } from './config';
+
+const flat = (color: number, extra: THREE.MeshLambertMaterialParameters = {}) =>
+  new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
+
+let softTex: THREE.Texture | null = null;
+
+/** A white radial blob used for glows and particles. */
+export function softTexture(): THREE.Texture {
+  if (softTex) return softTex;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const g = canvas.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.4, 'rgba(255,255,255,0.55)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  softTex = new THREE.CanvasTexture(canvas);
+  softTex.colorSpace = THREE.SRGBColorSpace;
+  return softTex;
+}
+
+const nextSky = new THREE.Color();
+
+/** Sky colour at a height, blending into the next zone over its last 40 m. */
+export function skyColorAt(y: number, out: THREE.Color): THREE.Color {
+  const i = zoneIndexAt(y);
+  out.setHex(ZONES[i].sky);
+  const next = ZONES[i + 1];
+  if (next) {
+    const t = (y - (next.from - 40)) / 40;
+    if (t > 0) out.lerp(nextSky.setHex(next.sky), Math.min(1, t));
+  }
+  return out;
+}
+
+const puffGeo = new THREE.IcosahedronGeometry(1, 1);
+// Emissive lifts the shaded undersides so clouds stay white instead of going gray.
+const cloudMat = flat(0xffffff, { emissive: 0x8fa3b8 });
+
+export function makeCloud(scale: number, puffs: number): THREE.Group {
+  const group = new THREE.Group();
+  for (let i = 0; i < puffs; i++) {
+    const puff = new THREE.Mesh(puffGeo, cloudMat);
+    puff.scale.setScalar((0.6 + Math.random() * 0.5) * scale);
+    puff.position.set(
+      (i - (puffs - 1) / 2) * 0.9 * scale,
+      (Math.random() - 0.3) * 0.35 * scale,
+      (Math.random() - 0.5) * 0.6 * scale,
+    );
+    group.add(puff);
+  }
+  group.scale.y = 0.65;
+  return group;
+}
+
+export interface Env {
+  barrel: THREE.Group;
+  shadow: THREE.Mesh;
+  updateDecor(cameraY: number): void;
+}
+
+export function buildEnv(scene: THREE.Scene): Env {
+  scene.add(new THREE.HemisphereLight(0xe4f4ff, 0x5a8f4a, 1.15));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.7);
+  sun.position.set(30, 80, 50);
+  scene.add(sun);
+
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(420, 48), flat(0x6cc070));
+  ground.rotation.x = -Math.PI / 2;
+  scene.add(ground);
+
+  // Trees for scale, kept out of the space between the camera and the cannon.
+  const trunkGeo = new THREE.CylinderGeometry(0.25, 0.35, 1.4, 6);
+  const leafGeo = new THREE.ConeGeometry(1.6, 3.6, 6);
+  const trunkMat = flat(0x7a4f2c);
+  const leafMat = flat(0x2f8f45);
+  for (let i = 0; i < 90; i++) {
+    const x = (Math.random() - 0.5) * 300;
+    const z = -Math.random() * 220 + 30;
+    if (Math.abs(x) < 22 && z > -14) continue;
+    const tree = new THREE.Group();
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.position.y = 0.7;
+    const leaves = new THREE.Mesh(leafGeo, leafMat);
+    leaves.position.y = 3;
+    tree.add(trunk, leaves);
+    tree.position.set(x, 0, z);
+    tree.scale.setScalar(0.8 + Math.random() * 1.2);
+    scene.add(tree);
+  }
+
+  // The base's first 4 pads (visual only until Phase 2).
+  const padGeo = new THREE.BoxGeometry(2.4, 0.25, 2.4);
+  const padMat = flat(0xc9ced6);
+  for (let i = 0; i < 4; i++) {
+    const pad = new THREE.Mesh(padGeo, padMat);
+    pad.position.set(-7 - (i % 2) * 3.2, 0.12, -1.5 - Math.floor(i / 2) * 3.2);
+    scene.add(pad);
+  }
+
+  // Cannon: a wooden carriage with a barrel tilted slightly away so its muzzle sits at x = 0, z = 0.
+  const cannon = new THREE.Group();
+  const carriage = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.2, 2.4), flat(0x8a5a33));
+  carriage.position.y = 0.6;
+  const wheelGeo = new THREE.CylinderGeometry(0.75, 0.75, 0.3, 10);
+  const wheelMat = flat(0x3d2a1a);
+  for (const side of [-1, 1]) {
+    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(side * 1.35, 0.75, 0);
+    cannon.add(wheel);
+  }
+  const barrel = new THREE.Group();
+  barrel.position.set(0, 1.2, 0.38);
+  barrel.rotation.x = -0.12;
+  const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.1, 3.2, 12), flat(0x3d4450));
+  tube.position.y = 1.6;
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.16, 6, 14), flat(0x2a2f38));
+  lip.rotation.x = Math.PI / 2;
+  lip.position.y = 3.2;
+  barrel.add(tube, lip);
+  cannon.add(carriage, barrel);
+  scene.add(cannon);
+
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 20),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false }),
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.03;
+  scene.add(shadow);
+
+  // Background clouds recycle through a 240 m window around the camera, so every height has some.
+  const decor: THREE.Group[] = [];
+  for (let i = 0; i < 46; i++) {
+    const near = i < 12;
+    const cloud = makeCloud(near ? 1.6 + Math.random() : 2.5 + Math.random() * 4, near ? 3 : 4 + Math.floor(Math.random() * 3));
+    if (near) {
+      cloud.position.set((Math.random() < 0.5 ? -1 : 1) * (17 + Math.random() * 14), 0, -6 + Math.random() * 10);
+    } else {
+      cloud.position.set((Math.random() - 0.5) * 200, 0, -30 - Math.random() * 130);
+    }
+    cloud.position.y = 25 + Math.random() * 240;
+    scene.add(cloud);
+    decor.push(cloud);
+  }
+
+  return {
+    barrel,
+    shadow,
+    updateDecor(cameraY: number) {
+      for (const cloud of decor) {
+        while (cloud.position.y < cameraY - 120) cloud.position.y += 240;
+        while (cloud.position.y > cameraY + 120) cloud.position.y -= 240;
+        cloud.visible = cloud.position.y > 22;
+      }
+    },
+  };
+}
+
+export interface PlayerRig {
+  group: THREE.Group;
+  body: THREE.Group;
+  chute: THREE.Group;
+}
+
+/** The player faces away from the camera (-z), so the camera sees their back and the stack on it. */
+export function makePlayer(): PlayerRig {
+  const group = new THREE.Group();
+  const body = new THREE.Group();
+  body.position.y = 0.9;
+  group.add(body);
+
+  const suit = flat(0xff7a1a);
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.9, 0.5), suit);
+  torso.position.y = 0.05;
+  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 1), flat(0xffd2a1));
+  head.position.y = 0.75;
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.37, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), flat(0xe63946));
+  helmet.position.y = 0.8;
+  const pack = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.7, 0.28), flat(0x2b6cb0));
+  pack.position.set(0, 0.08, 0.38);
+  const limbMat = flat(0x3a3f58);
+  const legGeo = new THREE.BoxGeometry(0.28, 0.55, 0.3);
+  const armGeo = new THREE.BoxGeometry(0.22, 0.7, 0.22);
+  for (const side of [-1, 1]) {
+    const leg = new THREE.Mesh(legGeo, limbMat);
+    leg.position.set(side * 0.2, -0.65, 0);
+    const arm = new THREE.Mesh(armGeo, suit);
+    arm.position.set(side * 0.58, 0.32, 0);
+    arm.rotation.z = side * 0.55;
+    body.add(leg, arm);
+  }
+  body.add(torso, head, helmet, pack);
+
+  // Parachute, scaled from 0 when it opens.
+  const chute = new THREE.Group();
+  chute.position.set(0, 1.3, 0.3);
+  const canopy = new THREE.Mesh(
+    new THREE.SphereGeometry(2.4, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+    flat(0xff4d6d, { side: THREE.DoubleSide }),
+  );
+  canopy.scale.y = 0.55;
+  canopy.position.y = 2.6;
+  const linePoints: THREE.Vector3[] = [];
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    linePoints.push(new THREE.Vector3(0, 0, 0), new THREE.Vector3(Math.cos(a) * 2.3, 2.6, Math.sin(a) * 2.3));
+  }
+  const lines = new THREE.LineSegments(
+    new THREE.BufferGeometry().setFromPoints(linePoints),
+    new THREE.LineBasicMaterial({ color: 0x1d2340 }),
+  );
+  chute.add(canopy, lines);
+  chute.visible = false;
+  group.add(chute);
+
+  return { group, body, chute };
+}
+
+export interface CharacterRig {
+  group: THREE.Group;
+  figure: THREE.Group;
+  cloud: THREE.Group;
+  halo: THREE.Sprite;
+}
+
+const bodyGeos = new Map<number, THREE.BoxGeometry>();
+const bodyMats = new Map<number, THREE.MeshLambertMaterial>();
+const haloMats = new Map<number, THREE.SpriteMaterial>();
+const eyeGeo = new THREE.BoxGeometry(0.22, 0.22, 0.05);
+const pupilGeo = new THREE.BoxGeometry(0.1, 0.1, 0.05);
+const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+const pupilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+const antennaGeo = new THREE.IcosahedronGeometry(0.16, 0);
+
+/** Shared per rarity; the Secret one is recoloured every frame for its rainbow. */
+export function rarityMaterial(rarity: number): THREE.MeshLambertMaterial {
+  let mat = bodyMats.get(rarity);
+  if (!mat) {
+    const color = RARITIES[rarity].color;
+    mat = new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.3, flatShading: true });
+    bodyMats.set(rarity, mat);
+  }
+  return mat;
+}
+
+export function makeCharacter(rarity: number): CharacterRig {
+  const size = 0.8 + rarity * 0.07;
+  let geo = bodyGeos.get(rarity);
+  if (!geo) {
+    geo = new THREE.BoxGeometry(size, size, size);
+    bodyGeos.set(rarity, geo);
+  }
+  const group = new THREE.Group();
+  const figure = new THREE.Group();
+  group.add(figure);
+
+  const body = new THREE.Mesh(geo, rarityMaterial(rarity));
+  body.position.y = size / 2 + 0.15;
+  figure.add(body);
+  for (const side of [-1, 1]) {
+    const eye = new THREE.Mesh(eyeGeo, eyeMat);
+    eye.position.set(side * 0.18 * size, body.position.y + 0.12, size / 2 + 0.02);
+    const pupil = new THREE.Mesh(pupilGeo, pupilMat);
+    pupil.position.set(side * 0.18 * size, body.position.y + 0.1, size / 2 + 0.05);
+    figure.add(eye, pupil);
+  }
+  if (rarity >= 2) {
+    const antenna = new THREE.Mesh(antennaGeo, rarityMaterial(rarity));
+    antenna.position.y = size + 0.35;
+    figure.add(antenna);
+  }
+
+  const cloud = makeCloud(0.75, 3);
+  group.add(cloud);
+
+  let haloMat = haloMats.get(rarity);
+  if (!haloMat) {
+    haloMat = new THREE.SpriteMaterial({
+      map: softTexture(),
+      color: RARITIES[rarity].color,
+      transparent: true,
+      depthWrite: false,
+      opacity: rarity === 0 ? 0 : rarity === 1 ? 0.45 : 0.75,
+    });
+    haloMats.set(rarity, haloMat);
+  }
+  const halo = new THREE.Sprite(haloMat);
+  halo.scale.setScalar(2.4 + rarity * 0.5);
+  halo.position.y = body.position.y;
+  group.add(halo);
+
+  return { group, figure, cloud, halo };
+}
+
+export interface BirdRig {
+  group: THREE.Group;
+  wings: THREE.Group[];
+}
+
+const birdBodyGeo = new THREE.IcosahedronGeometry(0.5, 0);
+const beakGeo = new THREE.ConeGeometry(0.14, 0.4, 5);
+const wingGeo = new THREE.BoxGeometry(0.5, 0.06, 1.1);
+const beakMat = flat(0xffa62b);
+const birdMats = new Map<number, THREE.MeshLambertMaterial>();
+
+/** A bird that flies along +x; flip it with rotation.y = PI. */
+export function makeBird(color: number): BirdRig {
+  let mat = birdMats.get(color);
+  if (!mat) {
+    mat = flat(color);
+    birdMats.set(color, mat);
+  }
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(birdBodyGeo, mat);
+  body.scale.set(1.4, 0.8, 0.8);
+  const beak = new THREE.Mesh(beakGeo, beakMat);
+  beak.rotation.z = -Math.PI / 2;
+  beak.position.x = 0.85;
+  const eye = new THREE.Mesh(pupilGeo, eyeMat);
+  eye.position.set(0.5, 0.15, 0.3);
+  group.add(body, beak, eye);
+  const wings: THREE.Group[] = [];
+  for (const side of [-1, 1]) {
+    const pivot = new THREE.Group();
+    pivot.position.z = side * 0.25;
+    const wing = new THREE.Mesh(wingGeo, mat);
+    wing.position.z = side * 0.55;
+    pivot.add(wing);
+    pivot.userData.side = side;
+    group.add(pivot);
+    wings.push(pivot);
+  }
+  return { group, wings };
+}
+
+export interface Label {
+  sprite: THREE.Sprite;
+  set(text: string): void;
+}
+
+export function makeLabel(): Label {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 96;
+  const g = canvas.getContext('2d')!;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }));
+  sprite.scale.set(6, 6 * (96 / 512), 1);
+  return {
+    sprite,
+    set(text: string) {
+      g.clearRect(0, 0, canvas.width, canvas.height);
+      g.font = '900 56px system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.lineWidth = 10;
+      g.strokeStyle = '#1d2340';
+      g.strokeText(text, 256, 50);
+      g.fillStyle = '#ffffff';
+      g.fillText(text, 256, 50);
+      texture.needsUpdate = true;
+    },
+  };
+}

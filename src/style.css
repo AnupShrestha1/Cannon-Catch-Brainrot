@@ -1,0 +1,650 @@
+:root {
+  --ink: #1d2340;
+  --green: #3ccf5a;
+  --gold: #ffc21a;
+  --red: #ff4d4d;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #8fd3ff;
+  color: #fff;
+  font-family: var(--font);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#game {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.outline {
+  text-shadow:
+    3px 0 0 var(--ink),
+    -3px 0 0 var(--ink),
+    0 3px 0 var(--ink),
+    0 -2px 0 var(--ink),
+    2px 2px 0 var(--ink),
+    -2px 2px 0 var(--ink),
+    2px -2px 0 var(--ink),
+    -2px -2px 0 var(--ink);
+}
+
+.hidden {
+  display: none !important;
+}
+
+button {
+  font-family: var(--font);
+  font-weight: 900;
+  color: var(--ink);
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+button:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+/* Altitude, zone and best height */
+#alt {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 16px;
+  line-height: 1;
+}
+
+#altNum {
+  font-size: 46px;
+  font-weight: 900;
+}
+
+#alt .unit {
+  margin-left: 3px;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+#zone {
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#best {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Carry slots */
+#stack {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  max-width: 40vw;
+}
+
+.slot {
+  width: 26px;
+  height: 26px;
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.slot.filled {
+  background: var(--c);
+  animation: slot-in 0.25s ease-out;
+}
+
+.slot.secret,
+.card.secret .swatch {
+  background: linear-gradient(135deg, #ff4d4d, #ffc21a, #3ccf5a, #2f7dff, #a64dff);
+}
+
+#corner {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+#corner button {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+/* Prompts and pop-up text */
+#prompt {
+  position: absolute;
+  top: 24%;
+  left: 0;
+  right: 0;
+  padding: 0 16px;
+  text-align: center;
+  font-size: 30px;
+  font-weight: 900;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+#prompt.on {
+  opacity: 1;
+}
+
+#prompt.pulse {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+#toasts {
+  position: absolute;
+  top: 36%;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.toast {
+  padding: 0 12px;
+  text-align: center;
+  font-size: 40px;
+  font-weight: 900;
+  animation: toast 1.4s ease-out forwards;
+}
+
+.toast.big {
+  font-size: 60px;
+}
+
+.toast.small {
+  font-size: 22px;
+}
+
+.toast.gold {
+  color: var(--gold);
+}
+
+.toast.good {
+  color: #9dffb0;
+}
+
+.toast.bad {
+  color: #ff8a8a;
+}
+
+/* Charge meter */
+#charge {
+  position: absolute;
+  left: calc(50% + 90px);
+  bottom: 16%;
+  width: 30px;
+  height: min(220px, 34vh);
+  display: none;
+}
+
+#charge.on {
+  display: block;
+}
+
+.track {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border: 4px solid var(--ink);
+  border-radius: 16px;
+  background: rgba(29, 35, 64, 0.55);
+}
+
+#charge .band {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+
+#charge .green {
+  background: var(--green);
+}
+
+#charge .perfect {
+  background: var(--gold);
+}
+
+#charge .needle,
+#groundBar .marker {
+  position: absolute;
+  left: -10px;
+  right: -10px;
+  height: 8px;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background: #fff;
+}
+
+#charge .needle.green {
+  background: #c9ffd3;
+}
+
+#charge .needle.perfect {
+  background: #fff3b0;
+  box-shadow: 0 0 14px var(--gold);
+}
+
+/* Time-to-ground bar */
+#groundBar {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  width: 30px;
+  height: min(300px, 44vh);
+  margin-top: calc(min(300px, 44vh) / -2);
+  display: none;
+}
+
+#groundBar.on {
+  display: block;
+}
+
+#groundBar .track {
+  background: rgba(60, 207, 90, 0.6);
+}
+
+#groundBar .zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+
+#groundBar .crash {
+  bottom: 0;
+  background: var(--red);
+}
+
+#groundBar .perfect {
+  background: var(--gold);
+}
+
+#groundBar.danger .marker {
+  background: var(--red);
+}
+
+#groundBar .label {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+#chuteBtn {
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(22px, env(safe-area-inset-bottom));
+  width: 116px;
+  height: 116px;
+  display: none;
+  border-width: 5px;
+  border-radius: 50%;
+  box-shadow: 0 5px 0 var(--ink);
+  background: #ff4d6d;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1.05;
+}
+
+#chuteBtn.on {
+  display: block;
+}
+
+#chuteBtn.pulse {
+  animation: pulse 0.7s ease-in-out infinite;
+}
+
+#chuteBtn .key {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+#flightNo {
+  position: absolute;
+  left: 16px;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  font-size: 14px;
+  font-weight: 800;
+}
+
+/* Landing reveal */
+#reveal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 20, 45, 0.5);
+}
+
+.panel {
+  width: min(600px, 100%);
+  padding: 20px 18px;
+  border: 5px solid var(--ink);
+  border-radius: 24px;
+  box-shadow: 0 8px 0 var(--ink);
+  background: #fff;
+  color: var(--ink);
+  text-align: center;
+  animation: panel-in 0.3s ease-out;
+}
+
+#revealTitle {
+  margin: 0 0 12px;
+  font-size: 32px;
+  font-weight: 900;
+}
+
+#cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  max-height: 50vh;
+  overflow: auto;
+  /* Room for the rare cards' pop-in scale. */
+  padding: 16px 8px;
+}
+
+.card {
+  width: 118px;
+  padding: 10px 6px;
+  border: 4px solid var(--c);
+  border-radius: 16px;
+  background: #f6f7fb;
+  animation: card-in 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) backwards;
+}
+
+.card.rare {
+  box-shadow: 0 0 0 3px #fff, 0 0 22px var(--c);
+  animation-name: card-in-big;
+  animation-duration: 0.7s;
+}
+
+.card .swatch {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 8px;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  background: var(--c);
+}
+
+.card .swatch::before,
+.card .swatch::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: #fff;
+}
+
+.card .swatch::before {
+  left: 9px;
+}
+
+.card .swatch::after {
+  right: 9px;
+}
+
+.card .name {
+  min-height: 30px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.card .rarity {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c);
+}
+
+.card.secret .rarity {
+  background: linear-gradient(90deg, #ff4d4d, #ffc21a, #3ccf5a, #2f7dff, #a64dff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.card .income {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+#summary {
+  margin: 14px 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+#againBtn {
+  padding: 12px 28px;
+  background: var(--green);
+  color: #fff;
+  font-size: 24px;
+  text-shadow: 0 2px 0 var(--ink);
+}
+
+.hint {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+/* Tuning panel */
+#tune {
+  position: fixed;
+  top: 56px;
+  right: 12px;
+  width: 270px;
+  padding: 12px 14px;
+  border: 4px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 0 4px 0 var(--ink);
+  background: #fff;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+#tune h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+#tune label {
+  display: block;
+  margin: 10px 0 4px;
+}
+
+#tune input[type='range'],
+#tune select {
+  width: 100%;
+  margin-top: 4px;
+  font: inherit;
+}
+
+#tune button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 6px;
+  font-size: 13px;
+}
+
+#tune .sub {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+@media (hover: none) {
+  #chuteBtn .key,
+  .hint {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  #altNum {
+    font-size: 36px;
+  }
+
+  #stack {
+    top: 64px;
+    max-width: 90vw;
+  }
+
+  #prompt {
+    font-size: 22px;
+  }
+
+  .toast {
+    font-size: 30px;
+  }
+
+  .toast.big {
+    font-size: 44px;
+  }
+
+  #charge {
+    left: calc(50% + 60px);
+  }
+
+  .card {
+    width: 100px;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes toast {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  15% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  25% {
+    transform: scale(1);
+  }
+  75% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+}
+
+@keyframes slot-in {
+  from {
+    transform: scale(1.6);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.3) rotate(-8deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes card-in-big {
+  0% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.25) rotate(4deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
