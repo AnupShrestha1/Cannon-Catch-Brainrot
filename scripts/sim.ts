@@ -26,7 +26,10 @@ import {
   expansionCost,
   incomePerSecond,
   levelCost,
+  gainXp,
+  levelReady,
   placeCatches,
+  trackUnlocked,
   upgradeCost,
 } from '../src/economy';
 import { defaultSave, type Save } from '../src/store';
@@ -72,12 +75,21 @@ function shop(save: Save): void {
   for (;;) {
     const options: { cost: number; buy: () => void }[] = [];
     for (const track of TRACKS) {
+      if (!trackUnlocked(save, track as Track)) continue;
       const cost = upgradeCost(save, track as Track);
       if (cost !== null) options.push({ cost, buy: () => buyUpgrade(save, track as Track) });
     }
     for (const slot of save.pads) {
-      const cost = slot ? levelCost(slot) : null;
-      if (slot && cost !== null) options.push({ cost, buy: () => (slot.level = (slot.level ?? 1) + 1) });
+      const cost = slot && levelReady(slot) ? levelCost(slot) : null;
+      if (slot && cost !== null) {
+        options.push({
+          cost,
+          buy: () => {
+            slot.level = (slot.level ?? 1) + 1;
+            slot.xp = 0;
+          },
+        });
+      }
     }
     const pads = expansionCost(save);
     if (pads !== null && save.pads.every(Boolean)) {
@@ -101,6 +113,7 @@ function simulate(minutes: number): Milestones {
     const apex = launchHeight(save.cannon) * (1 + bonus);
     const runTime = 2.2 * FLIGHT.ascentTime(apex) + 17;
     save.coins += incomePerSecond(save) * runTime;
+    for (const slot of save.pads) if (slot) gainXp(slot, runTime);
     t += runTime;
     if (gift < GIFTS.at.length && t >= GIFTS.at[gift]) {
       save.coins += Math.max(GIFTS.min, incomePerSecond(save) * GIFTS.incomeSeconds);
@@ -114,6 +127,7 @@ function simulate(minutes: number): Milestones {
       kept.map((rarity) => ({ name: '', rarity })),
     );
 
+    save.best = Math.max(save.best, apex);
     if (apex >= 150 && Number.isNaN(m.cloudKingdom)) m.cloudKingdom = t;
     if (apex >= REBIRTH.unlockHeight && Number.isNaN(m.stormLayer)) m.stormLayer = t;
     const before = save.cannon;

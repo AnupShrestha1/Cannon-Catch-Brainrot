@@ -1,5 +1,5 @@
 // Local save. Browser storage can be missing or blocked, so every access is guarded.
-import { ECONOMY } from './config';
+import { ECONOMY, UPGRADES } from './config';
 
 export type HazardMode = 'auto' | 'on' | 'off';
 
@@ -10,6 +10,8 @@ export interface PadSlot {
   cash: number;
   /** 1 to LEVELS.max; missing in saves from before levels. */
   level?: number;
+  /** Seconds of XP toward the next level. */
+  xp?: number;
 }
 
 export interface Save {
@@ -89,6 +91,8 @@ export function loadSave(): Save {
     // fall through to defaults
   }
   while (save.pads.length < ECONOMY.startPads) save.pads.push(null);
+  // Older saves could carry up to 15; the cap is now 8.
+  save.carryLevel = Math.min(save.carryLevel, UPGRADES.carry.max);
   return save;
 }
 

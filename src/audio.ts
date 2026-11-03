@@ -48,20 +48,47 @@ export class Sfx {
   }
 
   /**
-   * Stand-in for the per-character voice line: the browser's own text-to-speech chants the name,
-   * in an Italian voice when one is installed. Final audio replaces this in Phase 3.
+   * Stand-in for the per-character voice line: the browser's own text-to-speech chants the name.
+   * Recorded lines replace this when they exist.
    */
   chant(name: string): void {
     if (this.muted || !('speechSynthesis' in window)) return;
     const synth = window.speechSynthesis;
     synth.cancel();
+    const voice = this.chantVoice();
     const line = new SpeechSynthesisUtterance(`${name}!`);
-    const voice = synth.getVoices().find((v) => v.lang.startsWith('it'));
     if (voice) line.voice = voice;
-    line.lang = 'it-IT';
-    line.rate = 1.15;
-    line.pitch = 1.3;
+    line.lang = voice?.lang ?? 'it-IT';
+    // The meme's narrator: a deep, deliberate delivery rather than a chipmunk.
+    line.rate = 0.92;
+    line.pitch = 0.85;
     synth.speak(line);
+  }
+
+  private voice: SpeechSynthesisVoice | null | undefined;
+
+  /**
+   * The best voice the device has for the chant, picked once and again when the list loads late:
+   * Italian first, then the natural/neural/online voices that sound far less robotic, then male ones.
+   */
+  private chantVoice(): SpeechSynthesisVoice | null {
+    if (this.voice !== undefined) return this.voice;
+    const synth = window.speechSynthesis;
+    const score = (v: SpeechSynthesisVoice) =>
+      (v.lang.toLowerCase().startsWith('it') ? 100 : 0) +
+      (/natural|neural|online/i.test(v.name) ? 40 : 0) +
+      (/google/i.test(v.name) ? 30 : 0) +
+      (/premium|enhanced/i.test(v.name) ? 20 : 0) +
+      (/diego|giuseppe|cosimo|luca|paolo|male/i.test(v.name) ? 10 : 0) +
+      (v.localService ? 0 : 5);
+    const voices = synth.getVoices();
+    if (!voices.length) {
+      // Chrome fills the list asynchronously; choose again once it has.
+      synth.addEventListener('voiceschanged', () => (this.voice = undefined), { once: true });
+      return null;
+    }
+    this.voice = [...voices].sort((a, b) => score(b) - score(a))[0] ?? null;
+    return this.voice;
   }
 
   coin(): void {

@@ -1,5 +1,5 @@
 // Coins, upgrades, pads and selling: pure rules over the save.
-import { ECONOMY, LEVELS, RARITIES, REBIRTH, UPGRADES, type Track } from './config';
+import { CARRY_UNLOCK_HEIGHT, ECONOMY, LEVELS, RARITIES, REBIRTH, UPGRADES, type Track } from './config';
 import type { PadSlot, Save } from './store';
 
 export function upgradesBought(save: Save, track: Track): number {
@@ -22,6 +22,11 @@ export function buyUpgrade(save: Save, track: Track): void {
 /** Multiplier from the magnet, steering or parachute track, e.g. 1.3 after 3 magnet upgrades. */
 export function trackBoost(save: Save, track: 'magnet' | 'steering' | 'chute'): number {
   return 1 + save[track] * UPGRADES[track].effect;
+}
+
+/** Whether a track can be bought yet: carry waits until the player has reached Cloud Kingdom. */
+export function trackUnlocked(save: Save, track: Track): boolean {
+  return track !== 'carry' || save.best >= CARRY_UNLOCK_HEIGHT;
 }
 
 /** Price of the next purchase on a track, or null at max. */
@@ -57,6 +62,28 @@ export function incomePerSecond(save: Save): number {
   let total = 0;
   for (const slot of save.pads) if (slot) total += padIncome(save, slot);
   return total;
+}
+
+/** Seconds on a pad the next level needs, or null at max. */
+export function xpNeeded(slot: Pick<PadSlot, 'level'>): number | null {
+  const level = slot.level ?? 1;
+  if (level >= LEVELS.max) return null;
+  return Math.round(LEVELS.xpFirstSeconds * Math.pow(LEVELS.xpGrowth, level - 1));
+}
+
+/** Whether a character has the XP for its next level. */
+export function levelReady(slot: PadSlot): boolean {
+  const need = xpNeeded(slot);
+  return need !== null && (slot.xp ?? 0) >= need;
+}
+
+/** Adds XP, stopping at what the next level needs. Returns true if this made the level ready. */
+export function gainXp(slot: PadSlot, seconds: number): boolean {
+  const need = xpNeeded(slot);
+  if (need === null) return false;
+  const before = slot.xp ?? 0;
+  slot.xp = Math.min(need, before + seconds);
+  return before < need && slot.xp >= need;
 }
 
 /** Price of the next level for a character, or null at max. */

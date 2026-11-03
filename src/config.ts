@@ -159,13 +159,17 @@ export const TRACKS: Track[] = ['cannon', 'carry', 'magnet', 'steering', 'chute'
  */
 export const UPGRADES: Record<Track, { name: string; base: number; growth: number; max: number; effect: number }> = {
   // Basic Launch stops at cannon level 37, whose perfect launch stays inside the Storm Layer. The doc goes to 60.
-  // Retuned with `npm run sim` from the doc's 50 × 1.18: rebirth now unlocks after about 55 minutes, not 8.
-  cannon: { name: 'Cannon power', base: 35, growth: 1.42, max: 36, effect: 0 },
-  carry: { name: 'Carry limit', base: 200, growth: 1.9, max: 12, effect: 0 },
+  // Retuned with `npm run sim` from the doc's 50 × 1.18: rebirth now unlocks after about 63 minutes, not 8.
+  cannon: { name: 'Cannon power', base: 25, growth: 1.5, max: 36, effect: 0 },
+  // At most 8 carried (3 + 5), and only once the player has reached Cloud Kingdom: see CARRY_UNLOCK_HEIGHT.
+  carry: { name: 'Carry limit', base: 200, growth: 1.9, max: 5, effect: 0 },
   magnet: { name: 'Grab magnet', base: 120, growth: 1.25, max: 25, effect: 0.1 },
   steering: { name: 'Steering', base: 100, growth: 1.22, max: 25, effect: 0.06 },
   chute: { name: 'Parachute', base: 150, growth: 1.28, max: 20, effect: 0.05 },
 };
+
+/** Carry upgrades unlock mid game, once a run has reached this height (Cloud Kingdom). */
+export const CARRY_UNLOCK_HEIGHT = 150;
 
 export const REBIRTH = {
   /** Rebirth unlocks at the cannon level whose normal launch reaches the Storm Layer. */
@@ -190,8 +194,11 @@ export const ECONOMY = {
   sellSeconds: 60,
 };
 
-/** Character levels: each adds `incomeBonus`; level 2 costs `firstCostSeconds` of base income, then ×`growth`. */
-export const LEVELS = { max: 10, incomeBonus: 0.25, firstCostSeconds: 30, growth: 1.6 };
+/**
+ * Character levels: each adds `incomeBonus`; level 2 costs `firstCostSeconds` of base income, then ×`growth`.
+ * A level also needs XP, earned by time on a pad: `xpFirstSeconds` for level 2, then ×`xpGrowth`.
+ */
+export const LEVELS = { max: 10, incomeBonus: 0.25, firstCostSeconds: 30, growth: 1.6, xpFirstSeconds: 60, xpGrowth: 1.5 };
 
 /** Session gifts at these seconds of play; each pays this many seconds of income, at least `min`. */
 export const GIFTS = { at: [300, 600, 1200, 2400], incomeSeconds: 120, min: 100 };

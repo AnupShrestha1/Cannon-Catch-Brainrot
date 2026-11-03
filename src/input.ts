@@ -1,7 +1,8 @@
 // One input layer for mouse, keyboard and touch.
 // Desktop: hold Space or the mouse to charge, steer with the mouse or A/D, Space or click opens the chute.
 // Touch: hold anywhere to charge, drag to steer, the on-screen button opens the chute.
-// At the base, a tap or click picks a spot and Space heads to the cannon.
+// At the base, a tap or click picks a spot, WASD or the arrows walk, E uses the pad underfoot, 1-8 choose a
+// carried character, and Space heads to the cannon.
 
 export type SteerMode = 'mouse' | 'keys' | 'touch';
 
@@ -21,6 +22,8 @@ export class Input {
   private touchId = -1;
   private lastTouchX = 0;
   private keys = new Set<string>();
+  /** Keys pressed since last consumed, for one-shot actions. */
+  private taps = new Set<string>();
 
   constructor(surface: HTMLElement) {
     surface.addEventListener('pointerdown', (e) => {
@@ -67,9 +70,11 @@ export class Input {
         this.chute = true;
         return;
       }
-      if (['KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+      if (!e.repeat) this.taps.add(e.code);
+      if (['KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight'].includes(e.code)) this.mode = 'keys';
+      if (['KeyA', 'KeyD', 'KeyW', 'KeyS', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code)) {
+        if (e.code.startsWith('Arrow')) e.preventDefault();
         this.keys.add(e.code);
-        this.mode = 'keys';
       }
     });
     window.addEventListener('keyup', (e) => {
@@ -90,6 +95,23 @@ export class Input {
     const right = this.keys.has('KeyD') || this.keys.has('ArrowRight') ? 1 : 0;
     const left = this.keys.has('KeyA') || this.keys.has('ArrowLeft') ? 1 : 0;
     return right - left;
+  }
+
+  /** -1 to 1 from W/S or the up/down arrows; up is +1. */
+  get axisY(): number {
+    const up = this.keys.has('KeyW') || this.keys.has('ArrowUp') ? 1 : 0;
+    const down = this.keys.has('KeyS') || this.keys.has('ArrowDown') ? 1 : 0;
+    return up - down;
+  }
+
+  /** True once per press of a key, e.g. 'KeyE' or 'Digit3'. */
+  consumeKey(code: string): boolean {
+    return this.taps.delete(code);
+  }
+
+  /** Drops one-shot presses nobody read this frame, so they don't fire later. */
+  endFrame(): void {
+    this.taps.clear();
   }
 
   requestChute(): void {

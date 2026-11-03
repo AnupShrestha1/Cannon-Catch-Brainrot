@@ -33,12 +33,16 @@ import {
   expansionCost,
   formatCoins,
   incomeMultiplier,
+  gainXp,
   incomePerSecond,
   levelCost,
+  levelReady,
+  xpNeeded,
   padIncome,
   placeCatches,
   sellValue,
   trackBoost,
+  trackUnlocked,
   upgradeCost,
 } from './economy';
 import { Particles, Streaks } from './fx';
@@ -179,6 +183,8 @@ export class Game {
   private lane: number = FLIGHT.lane;
   private facing = 0;
   private walking = false;
+  /** Walking under keyboard control this frame. */
+  private stepping = false;
   private walkTarget = new THREE.Vector3();
 
   private chargeT = 0;
@@ -419,7 +425,7 @@ export class Game {
         if (space && this.revealT > 0.6) this.goHome();
         break;
       case 'home':
-        this.updateHome(dt, blocked ? null : tap, space);
+        this.updateHome(dt, blocked ? null : tap, space, blocked);
         break;
       case 'boarding':
         this.updateWalk(dt);
@@ -434,6 +440,7 @@ export class Game {
     this.updateVisuals(realDt, dt);
     // The reveal screen and the shop are breaks in play.
     platform.setPlaying(this.state !== 'reveal' && !this.hud.shopOpen && !this.hud.modalOpen);
+    this.input.endFrame();
   }
 
   // ---------------------------------------------------------------- charge and launch
@@ -1051,7 +1058,9 @@ export class Game {
     this.facing = Math.atan2(-dx, -dz);
   }
 
-  private updateHome(dt: number, tap: { x: number; y: number } | null, space: boolean): void {
+  private updateHome(dt: number, tap: { x: number; y: number } | null, space: boolean, blocked: boolean): void {
+    this.stepping = false;
+    if (!blocked) this.keyboardAtBase(dt);
     this.updateWalk(dt);
     this.save.pads.forEach((slot, i) => {
       if (!slot || slot.cash < 1) return;
@@ -1072,6 +1081,41 @@ export class Game {
       const placed = this.save.pads.filter((slot) => slot !== null);
       if (placed.length) this.sfx.chant(placed[Math.floor(Math.random() * placed.length)].name);
     }
+  }
+
+  /** WASD or the arrows walk (the camera looks along -z), E uses the pad underfoot, 1-8 choose a carried catch. */
+  private keyboardAtBase(dt: number): void {
+    const kx = this.input.axis;
+    const kz = -this.input.axisY;
+    if (kx || kz) {
+      this.walking = false;
+      this.arrive = null;
+      this.stepping = true;
+      const len = Math.hypot(kx, kz);
+      this.px = clamp(this.px + (kx / len) * WALK_SPEED * dt, -45, 12);
+      this.pz = clamp(this.pz + (kz / len) * WALK_SPEED * dt, -12, 12);
+      this.facing = Math.atan2(-kx, -kz);
+    }
+    for (let n = 1; n <= 8; n++) if (this.input.consumeKey(`Digit${n}`)) this.selectCarried(n - 1);
+    if (this.input.consumeKey('KeyE') || this.input.consumeKey('Enter')) this.usePadUnderfoot();
+  }
+
+  private padUnderfoot(): number | null {
+    for (let i = 0; i < this.save.pads.length; i++) {
+      const at = Base.padPosition(i, this.tmp);
+      if (Math.hypot(at.x - this.px, at.z - this.pz) < COLLECT_RADIUS) return i;
+    }
+    return null;
+  }
+
+  private usePadUnderfoot(): void {
+    const pad = this.padUnderfoot();
+    if (pad === null) {
+      this.hud.toast('Stand on a pad first', 'small');
+      return;
+    }
+    if (this.save.carrying.length && !this.save.pads[pad]) this.placeCarried(pad);
+    else this.openPad(pad);
   }
 
   /** A tap at the base walks to a pad, boards the cannon, or walks to that spot on the ground. */
@@ -1206,6 +1250,7 @@ export class Game {
       if (!slot) continue;
       const income = padIncome(this.save, slot);
       slot.cash = Math.min(income * ECONOMY.padCapSeconds, slot.cash + income * realDt);
+      if (gainXp(slot, realDt)) this.hud.toast(`${slot.name} can level up!`, 'good small');
     }
     this.sessionT += realDt;
     const next = GIFTS.at[this.giftIndex];
@@ -1257,7 +1302,11 @@ export class Game {
           break;
         case 'carry':
           level = `${limit} per run`;
-          detail = cost === null ? 'Maxed out' : `Carry ${limit} → ${limit + 1} characters`;
+          detail = !trackUnlocked(s, 'carry')
+            ? 'Unlocks once you reach Cloud Kingdom'
+            : cost === null
+              ? 'Maxed out'
+              : `Carry ${limit} → ${limit + 1} characters`;
           break;
         default: {
           const what = { magnet: 'Grab radius', steering: 'Turn speed', chute: 'Safe window' }[track];
@@ -1271,7 +1320,8 @@ export class Game {
         level,
         detail,
         cost,
-        affordable: cost !== null && s.coins >= cost,
+        affordable: trackUnlocked(s, track) && cost !== null && s.coins >= cost,
+        button: trackUnlocked(s, track) ? undefined : 'Locked',
       };
     });
 
@@ -1312,7 +1362,7 @@ export class Game {
     }
     this.rebirthArmed = false;
     const cost = item === 'pads' ? expansionCost(s) : upgradeCost(s, item);
-    if (cost === null || s.coins < cost) return;
+    if (cost === null || s.coins < cost || (item !== 'pads' && !trackUnlocked(s, item))) return;
     s.coins -= cost;
     if (item === 'pads') {
       for (let i = 0; i < ECONOMY.padStep; i++) s.pads.push(null);
@@ -1340,7 +1390,7 @@ export class Game {
     s.cannon = 1;
     s.carryLevel = s.magnet = s.steering = s.chute = 0;
     s.pads = Array.from({ length: ECONOMY.startPads }, () => null);
-    if (keep) s.pads[0] = { ...keep, cash: 0, level: 1 };
+    if (keep) s.pads[0] = { ...keep, cash: 0, level: 1, xp: 0 };
     this.base.sync(s);
     this.paintCannon();
     writeSave(s);
@@ -1374,10 +1424,18 @@ export class Game {
     const stats = document.createElement('p');
     stats.textContent = `Level ${level}/${LEVELS.max} · ${formatCoins(income)} coins/s`;
     const next = document.createElement('p');
+    const need = xpNeeded(slot);
+    const ready = levelReady(slot);
     next.textContent =
+      cost === null || need === null
+        ? 'Max level'
+        : `XP ${Math.floor(slot.xp ?? 0)}/${need} s · next level ${formatCoins(padIncome(s, { ...slot, level: level + 1 }))} coins/s`;
+    const levelLabel =
       cost === null
         ? 'Max level'
-        : `Next level: ${formatCoins(padIncome(s, { ...slot, level: level + 1 }))} coins/s`;
+        : ready
+          ? `Level up · ${formatCoins(cost)}`
+          : `Needs XP · ${Math.ceil((need ?? 0) - (slot.xp ?? 0))} s`;
     const sell = sellValue(s, slot);
     const carried = s.carrying[this.carrySel];
     const swap = carried
@@ -1386,8 +1444,8 @@ export class Game {
     this.hud.showModal(slot.name, [card, stats, next], [
       ...swap,
       {
-        label: cost === null ? 'Max level' : `Level up · ${formatCoins(cost)}`,
-        primary: !carried && cost !== null && s.coins >= cost,
+        label: levelLabel,
+        primary: !carried && ready && cost !== null && s.coins >= cost,
         action: () => this.levelUp(i),
       },
       {
@@ -1404,11 +1462,14 @@ export class Game {
     if (!slot) return;
     const cost = levelCost(slot);
     if (cost === null) return;
-    if (s.coins < cost) {
+    if (!levelReady(slot)) {
+      this.hud.toast(`${slot.name} needs more time on its pad`, 'small');
+    } else if (s.coins < cost) {
       this.hud.toast(`Need ${formatCoins(cost - s.coins)} more coins`, 'bad small');
     } else {
       s.coins -= cost;
       slot.level = (slot.level ?? 1) + 1;
+      slot.xp = 0;
       this.completeHint('level');
       writeSave(s);
       this.sfx.ding();
@@ -1442,7 +1503,7 @@ export class Game {
   private cheapestLevel(): number | null {
     let best: number | null = null;
     for (const slot of this.save.pads) {
-      const cost = slot ? levelCost(slot) : null;
+      const cost = slot && levelReady(slot) ? levelCost(slot) : null;
       if (cost !== null && (best === null || cost < best)) best = cost;
     }
     return best;
@@ -1453,6 +1514,7 @@ export class Game {
   /** On load: offline earnings first, then the daily reward. */
   private welcome(): void {
     const away = offlineEarnings(this.save, Date.now());
+    for (const slot of this.save.pads) if (slot) gainXp(slot, away.seconds);
     if (away.coins <= 0) {
       this.offerDaily();
       return;
@@ -1654,7 +1716,7 @@ export class Game {
       body.rotation.z = lerp(body.rotation.z, clamp(-this.vx * 0.035, -0.5, 0.5), damp(10, dt));
     }
     body.position.y = lerp(body.position.y, lying ? 0.35 : 0.9, damp(10, dt));
-    if (atBase && this.walking) body.position.y = 0.9 + Math.abs(Math.sin(this.time * 14)) * 0.08;
+    if (atBase && (this.walking || this.stepping)) body.position.y = 0.9 + Math.abs(Math.sin(this.time * 14)) * 0.08;
     body.visible = this.invuln <= 0 || Math.floor(this.time * 20) % 2 === 0;
 
     const chuteTarget = !inFlight ? 0 : this.chute === 'open' ? 1 : this.chute === 'tangled' ? 0.5 : 0;

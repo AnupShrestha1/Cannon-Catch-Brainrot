@@ -29,7 +29,9 @@ the Network URL it prints.
 | Charge, then fire | Hold and release Space or the mouse | Hold and release anywhere |
 | Steer | Mouse position, or A/D or the arrow keys | Drag left and right |
 | Parachute | Space or click | PARACHUTE button |
-| At the base: walk, collect | Click a pad or the ground | Tap a pad or the ground |
+| At the base: walk, collect | WASD or arrows, or click a pad or the ground | Tap a pad or the ground |
+| At the base: use the pad underfoot | E (place a carried catch, or open the pad) | Tap the pad you stand on |
+| At the base: choose a carried catch | 1–8, or click its card | Tap its card |
 | At the base: place a catch | Click an empty pad | Tap an empty pad |
 | At the base: choose or sell a catch | Click its card in the top tray | Tap its card in the top tray |
 | At the base: level up or sell | Click the pad you stand on | Tap the pad you stand on |
@@ -53,16 +55,22 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   selling the old one. The cannon stays locked until everything carried is placed or sold, and carried
   characters are saved.
 - Each pad piles up its income, capped at 10 minutes. Walk over a pad to collect it.
-- Character levels: tap the pad you stand on to open its panel. Each level (up to 10) adds +25% income;
-  level 2 costs 30 seconds of the character's base income, and each level after costs 1.6× more. The
-  panel also sells the character (two taps).
+- Character levels: characters gain XP from time on their pad (offline time counts). Once the XP bar
+  on the pad's badge fills, open the pad's panel to level up for coins. Level 2 needs 1 minute of XP and
+  30 seconds of the character's base income in coins; each level after needs 1.5× the XP and 1.6× the
+  coins, up to level 10, and each level adds +25% income. The panel also sells the character (two
+  taps).
+- Pads glow in the rarity colour of their character.
+- Carry limit: 3 at the start, at most 8. Carry upgrades unlock once a run has reached Cloud Kingdom.
 - Session gifts unlock at 5, 10, 20 and 40 minutes of play, worth 2 minutes of income (at least 100).
 - Hints walk new players through collecting, the first cannon upgrade and the first base expansion.
 - Each catch, and now and then a character at the base, chants its name with the browser's built-in
-  text-to-speech. That's a stand-in for recorded voice lines.
+  text-to-speech, in a slow, deep delivery. It picks the best voice the device has: Italian first, then
+  natural or online voices (Edge's Microsoft natural voices, Chrome's Google voices). That's a stand-in
+  for recorded voice lines, and it sounds only as good as the voices installed.
 - Hazards are birds below the Storm Layer, and prop planes and lightning clouds inside it. A flight
   that reaches the Storm Layer spawns nothing in Low Sky, which it crosses too fast to catch anything.
-- Upgrades: cannon power (to level 37 in this build), carry limit, grab magnet (+10% grab radius each),
+- Upgrades: cannon power (to level 37 in this build), carry limit (to 8), grab magnet (+10% grab radius each),
   steering (+6% turn speed each) and parachute (+5% safe window each).
 - Rebirth unlocks at cannon level 28, whose normal launch reaches the Storm Layer. It resets coins,
   upgrades and pads, keeps the rarest character, adds +50% income per rebirth, and recolours the cannon.
@@ -114,10 +122,11 @@ each milestone over 200 simulated players. Try other numbers without editing the
 SIM='{"cannon":{"growth":1.3},"economy":{"firstExpansion":600}}' npm run sim
 ```
 
-With the current costs, and with simulated players also buying character levels: first upgrade at
-1 minute, first Cloud Kingdom run at about 5 minutes, rebirth unlocked at about 73 minutes. Offline
-earnings aren't modelled, so players who come and go will move faster. The cannon (35 × 1.42 per level) and base expansions (1,000 × 5) were
-retuned from the design doc's first-pass 50 × 1.18 and 400 × 3, which unlocked rebirth after 8 minutes.
+With the current costs (cannon 25 × 1.5 per level), XP-gated levels and the carry unlock: first
+upgrade at 1 minute, first Cloud Kingdom run at about 4 minutes, rebirth unlocked at about 63 minutes.
+Offline earnings aren't modelled, so players who come and go will move faster. The cannon and base
+expansions (1,000 × 5) were retuned from the design doc's first-pass 50 × 1.18 and 400 × 3, which
+unlocked rebirth after 8 minutes.
 
 ## Tuning
 
