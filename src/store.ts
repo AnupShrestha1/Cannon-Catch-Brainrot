@@ -28,6 +28,15 @@ export interface Save {
   muted: boolean;
   /** Tutorial hints already completed. */
   hints: string[];
+  /** When the game last saved, for offline earnings (ms since 1970). */
+  lastSeen: number;
+  /** Day of the login streak last claimed (1–7), and the local date it was claimed. */
+  dailyStreak: number;
+  lastDaily: string;
+  /** Names of every character ever caught, for the collection book. */
+  collected: string[];
+  /** Book pages (zone indexes) whose completion reward was claimed. */
+  bookClaimed: number[];
 }
 
 const KEY = 'ccb-slice-v1';
@@ -57,6 +66,11 @@ export function defaultSave(): Save {
     hazards: 'auto',
     muted: false,
     hints: [],
+    lastSeen: 0,
+    dailyStreak: 0,
+    lastDaily: '',
+    collected: [],
+    bookClaimed: [],
   };
 }
 
@@ -74,6 +88,7 @@ export function loadSave(): Save {
 }
 
 export function writeSave(save: Save): void {
+  save.lastSeen = Date.now();
   if (ephemeral) return;
   try {
     (backend ?? localStorage).setItem(KEY, JSON.stringify(save));

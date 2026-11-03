@@ -58,8 +58,14 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - Rebirth unlocks at cannon level 28, whose normal launch reaches the Storm Layer. It resets coins,
   upgrades and pads, keeps the rarest character, adds +50% income per rebirth, and recolours the cannon.
 
-Not in this build: offline earnings, character levels, fusion, sky events, the rival, the collection
-book, and the CrazyGames SDK.
+- Offline earnings: characters keep earning while you're away, at half rate for up to 2 hours, paid on
+  a welcome-back screen.
+- Daily rewards: a 7-day login streak (coins, a guaranteed Rare on day 3, a guaranteed Epic on day 7).
+  Missing a day restarts it. A brand-new player's first session skips it so play starts instantly.
+- Collection book: every character as a silhouette until caught, with a one-time reward per completed
+  zone (500, 5,000 and 50,000 coins).
+
+Not in this build: character levels, fusion, sky events, the rival, the spin wheel, and ads.
 
 ## CrazyGames
 
@@ -116,6 +122,8 @@ hazards, a +1,000 coins button, and a full reset. **M** mutes. All first-pass nu
 | `src/config.ts` | Rarities, roster, zones, height curve, upgrades, economy, and every tuning number |
 | `src/game.ts` | The state machine: run, landing, base, shop, hints, and camera |
 | `src/economy.ts` | Upgrade costs, income, pad expansion, and placing or selling catches |
+| `src/meta.ts` | Offline earnings, the daily streak, and collection book pages |
+| `src/platform.ts` | The CrazyGames SDK wrapper |
 | `src/base.ts` | The pad grid, characters on pads, and cash piles |
 | `src/characters.ts` | The 10 character models and their idle animations |
 | `src/world.ts` | Gray-box scene: sky, ground, cannon, player, hazards, labels |

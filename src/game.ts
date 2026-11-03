@@ -41,6 +41,7 @@ import {
 import { Particles, Streaks } from './fx';
 import { Hud, type ShopItem, type ShopRow } from './hud';
 import { Input } from './input';
+import { BOOK_ZONES, DAILY, bookEntries, dailyCoins, dailyStatus, dayKey, offlineEarnings, zoneComplete } from './meta';
 import { platform } from './platform';
 import { clearSave, loadSave, writeSave, type PadSlot, type Save } from './store';
 import {
@@ -282,6 +283,7 @@ export class Game {
     } else {
       this.boardCannon();
     }
+    this.welcome();
   }
 
   start(): void {
@@ -335,6 +337,7 @@ export class Game {
       if (this.state === 'home') this.startBoarding();
     });
     onClick(hud.giftBtn, () => this.claimGift());
+    onClick(hud.bookBtn, () => this.openBook());
     hud.onBuy = (item) => this.buy(item);
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyT') hud.tunePanel.classList.toggle('hidden');
@@ -394,8 +397,8 @@ export class Game {
     this.stun = Math.max(0, this.stun - dt);
     this.invuln = Math.max(0, this.invuln - dt);
     this.fullCooldown = Math.max(0, this.fullCooldown - realDt);
-    // The shop is a modal: while it's open, presses don't reach the game.
-    const blocked = this.hud.shopOpen;
+    // The shop and other modals swallow presses while they're open.
+    const blocked = this.hud.shopOpen || this.hud.modalOpen;
     const pressed = this.input.consumePressed() && !blocked;
     const space = this.input.consumeSpace() && !blocked;
     const tap = this.input.consumeTap();
@@ -436,7 +439,7 @@ export class Game {
     this.fx.update(dt);
     this.updateVisuals(realDt, dt);
     // The reveal screen and the shop are breaks in play.
-    platform.setPlaying(this.state !== 'reveal' && !this.hud.shopOpen);
+    platform.setPlaying(this.state !== 'reveal' && !this.hud.shopOpen && !this.hud.modalOpen);
   }
 
   // ---------------------------------------------------------------- charge and launch
@@ -715,6 +718,7 @@ export class Game {
     });
     this.sfx.pop(p.rarity);
     this.sfx.chant(p.name);
+    if (this.addToBook(p.name)) this.hud.toast('NEW! Added to your book', 'small');
     if (p.rarity >= 4) platform.happytime();
     if (p.rarity >= RARE) {
       this.slowmo = Math.max(this.slowmo, 0.45);
@@ -1284,6 +1288,125 @@ export class Game {
     this.env.setBarrelColor(colors[this.save.rebirths % colors.length]);
   }
 
+  // ---------------------------------------------------------------- return visits
+
+  /** On load: offline earnings first, then the daily reward. */
+  private welcome(): void {
+    const away = offlineEarnings(this.save, Date.now());
+    if (away.coins <= 0) {
+      this.offerDaily();
+      return;
+    }
+    this.save.coins += away.coins;
+    writeSave(this.save);
+    const minutes = Math.round(away.seconds / 60);
+    const text = document.createElement('p');
+    text.textContent = `Your characters kept earning for ${minutes} min while you were away, at half rate.`;
+    const amount = document.createElement('div');
+    amount.className = 'big';
+    amount.textContent = `+${formatCoins(away.coins)} coins`;
+    this.hud.showModal('Welcome back!', [text, amount], [
+      { label: 'Collect', primary: true, action: () => this.offerDaily() },
+    ]);
+  }
+
+  private offerDaily(): void {
+    // A brand-new player goes straight to the cannon; their streak starts next visit.
+    if (this.save.flightNo === 0) return;
+    const { due, day } = dailyStatus(this.save, new Date());
+    if (!due) return;
+    const grid = document.createElement('div');
+    grid.className = 'daily-grid';
+    DAILY.forEach((reward, i) => {
+      const tile = document.createElement('div');
+      tile.className = `daily-day${i + 1 < day ? ' done' : ''}${i + 1 === day ? ' today' : ''}`;
+      const label = document.createElement('b');
+      label.textContent = `Day ${i + 1}`;
+      tile.append(
+        label,
+        reward.kind === 'coins'
+          ? `${formatCoins(dailyCoins(this.save, reward.minutes))} coins`
+          : `A ${RARITIES[reward.rarity].name}!`,
+      );
+      grid.append(tile);
+    });
+    const note = document.createElement('p');
+    note.textContent = 'Come back tomorrow to keep your streak. Missing a day starts it over.';
+    this.hud.showModal(`Daily reward · Day ${day}`, [grid, note], [
+      { label: 'Claim', primary: true, action: () => this.claimDaily(day) },
+    ]);
+  }
+
+  private claimDaily(day: number): void {
+    const s = this.save;
+    const reward = DAILY[day - 1];
+    s.dailyStreak = day;
+    s.lastDaily = dayKey(new Date());
+    if (reward.kind === 'coins') {
+      const coins = dailyCoins(s, reward.minutes);
+      s.coins += coins;
+      this.hud.toast(`+${formatCoins(coins)} coins!`, 'gold');
+      this.sfx.coin();
+    } else {
+      const name = pickName(reward.rarity);
+      placeCatches(s, [{ name, rarity: reward.rarity }]);
+      this.addToBook(name);
+      this.base.sync(s, this.pending);
+      this.hud.toast(`${RARITIES[reward.rarity].name}: ${name}!`, '', RARITIES[reward.rarity].css);
+      this.sfx.chant(name);
+    }
+    writeSave(s);
+  }
+
+  private addToBook(name: string): boolean {
+    if (this.save.collected.includes(name)) return false;
+    this.save.collected.push(name);
+    return true;
+  }
+
+  private bookRewardWaiting(): boolean {
+    return BOOK_ZONES.some((zone, i) => !this.save.bookClaimed.includes(i) && zoneComplete(this.save, zone));
+  }
+
+  private openBook(): void {
+    const s = this.save;
+    const pages = BOOK_ZONES.map((zone, i) => {
+      const entries = bookEntries(zone);
+      const caught = entries.filter((e) => s.collected.includes(e.name)).length;
+      const page = document.createElement('div');
+      page.className = 'book-page';
+      const head = document.createElement('h3');
+      const title = document.createElement('span');
+      title.textContent = `${zone.name} · ${caught}/${entries.length}`;
+      head.append(title);
+      if (zoneComplete(s, zone) && !s.bookClaimed.includes(i)) {
+        const claim = document.createElement('button');
+        claim.type = 'button';
+        claim.textContent = `Claim ${formatCoins(zone.reward)}`;
+        claim.addEventListener('click', () => {
+          s.bookClaimed.push(i);
+          s.coins += zone.reward;
+          writeSave(s);
+          this.hud.toast(`${zone.name} complete! +${formatCoins(zone.reward)}`, 'gold');
+          this.sfx.ding();
+          this.openBook();
+        });
+        head.append(claim);
+      } else {
+        const status = document.createElement('span');
+        status.textContent = s.bookClaimed.includes(i) ? 'Complete' : `Reward ${formatCoins(zone.reward)}`;
+        head.append(status);
+      }
+      const grid = document.createElement('div');
+      grid.className = 'book-grid';
+      grid.append(...entries.map((e) => this.hud.characterCard(e.name, e.rarity, !s.collected.includes(e.name))));
+      page.append(head, grid);
+      return page;
+    });
+    const total = BOOK_ZONES.reduce((n, zone) => n + bookEntries(zone).length, 0);
+    this.hud.showModal(`Collection book · ${s.collected.length}/${total}`, pages, [{ label: 'Close' }]);
+  }
+
   // ---------------------------------------------------------------- entities
 
   private updatePickups(dt: number): void {
@@ -1422,7 +1545,7 @@ export class Game {
       this.hasHint('collect') &&
       !upgradeHint &&
       !this.save.pads.some((slot) => slot !== null && slot.cash >= 1);
-    this.hud.showBaseButtons(canShop, this.state === 'home', canShop && upgradeHint, launchHint);
+    this.hud.showBaseButtons(canShop, this.state === 'home', canShop && upgradeHint, launchHint, this.bookRewardWaiting());
   }
 
   /**

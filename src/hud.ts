@@ -36,6 +36,7 @@ export class Hud {
   readonly soundBtn = byId<HTMLButtonElement>('soundBtn');
   readonly tuneBtn = byId<HTMLButtonElement>('tuneBtn');
   readonly upgradesBtn = byId<HTMLButtonElement>('upgradesBtn');
+  readonly bookBtn = byId<HTMLButtonElement>('bookBtn');
   readonly launchBtn = byId<HTMLButtonElement>('launchBtn');
   readonly giftBtn = byId<HTMLButtonElement>('giftBtn');
   readonly tunePanel = byId('tune');
@@ -64,6 +65,10 @@ export class Hud {
   private shop = byId('shop');
   private shopRows = byId('shopRows');
   private flight = byId('flightNo');
+  private modal = byId('modal');
+  private modalTitle = byId('modalTitle');
+  private modalBody = byId('modalBody');
+  private modalButtons = byId('modalButtons');
   private last = { alt: -1, zone: '', best: -1, stack: '', prompt: '', coins: '', income: -1, gift: '', shop: '' };
 
   constructor() {
@@ -190,7 +195,9 @@ export class Hud {
     this.chuteBtn.classList.toggle('pulse', on && pulse);
   }
 
-  showBaseButtons(upgrades: boolean, launch: boolean, pulseUpgrades = false, pulseLaunch = false): void {
+  showBaseButtons(upgrades: boolean, launch: boolean, pulseUpgrades = false, pulseLaunch = false, pulseBook = false): void {
+    this.bookBtn.classList.toggle('on', upgrades);
+    this.bookBtn.classList.toggle('pulse', upgrades && pulseBook);
     this.upgradesBtn.classList.toggle('on', upgrades);
     this.upgradesBtn.classList.toggle('pulse', upgrades && pulseUpgrades);
     this.launchBtn.classList.toggle('on', launch);
@@ -253,6 +260,52 @@ export class Hud {
 
   hideReveal(): void {
     this.reveal.classList.add('hidden');
+  }
+
+  get modalOpen(): boolean {
+    return !this.modal.classList.contains('hidden');
+  }
+
+  /** One modal at a time: a title, any content, and buttons that each close it and run their action. */
+  showModal(title: string, body: Node[], buttons: { label: string; primary?: boolean; action?: () => void }[]): void {
+    this.modalTitle.textContent = title;
+    this.modalBody.replaceChildren(...body);
+    this.modalButtons.replaceChildren(
+      ...buttons.map(({ label, primary, action }) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        if (primary) button.className = 'primary';
+        button.addEventListener('click', () => {
+          this.closeModal();
+          action?.();
+        });
+        return button;
+      }),
+    );
+    this.modal.classList.remove('hidden');
+  }
+
+  closeModal(): void {
+    this.modal.classList.add('hidden');
+  }
+
+  /** A character card like the reveal's; locked ones show a dark silhouette and no name. */
+  characterCard(name: string, rarity: number, locked = false): HTMLElement {
+    const r = RARITIES[rarity];
+    const card = document.createElement('div');
+    card.className = locked ? 'card locked' : 'card';
+    card.style.setProperty('--c', r.css);
+    const swatch = document.createElement('div');
+    swatch.className = 'swatch';
+    const label = document.createElement('div');
+    label.className = 'name';
+    label.textContent = locked ? '???' : name;
+    const tier = document.createElement('div');
+    tier.className = 'rarity';
+    tier.textContent = r.name;
+    card.append(swatch, label, tier);
+    return card;
   }
 
   get shopOpen(): boolean {

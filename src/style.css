@@ -884,3 +884,152 @@ button:active {
   max-height: 65vh;
   overflow: auto;
 }
+
+/* Book button sits beside Upgrades */
+#bookBtn {
+  position: absolute;
+  left: 150px;
+  bottom: max(40px, env(safe-area-inset-bottom));
+  display: none;
+  padding: 12px 18px;
+  font-size: 20px;
+  background: #9dd8ff;
+}
+
+#bookBtn.on {
+  display: block;
+}
+
+#bookBtn.pulse {
+  animation: pulse 0.8s ease-in-out infinite;
+}
+
+/* General modal: welcome back, daily reward, collection book */
+#modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 20, 45, 0.5);
+}
+
+#modalTitle {
+  margin: 0 0 10px;
+  font-size: 28px;
+  font-weight: 900;
+}
+
+#modalBody {
+  max-height: 62vh;
+  overflow: auto;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+#modalBody .big {
+  margin: 8px 0;
+  font-size: 34px;
+  font-weight: 900;
+  color: #c98a00;
+}
+
+#modalButtons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+#modalButtons button {
+  padding: 10px 22px;
+  font-size: 20px;
+}
+
+#modalButtons button.primary {
+  background: var(--green);
+  color: #fff;
+  text-shadow: 0 2px 0 var(--ink);
+}
+
+.daily-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.daily-day {
+  width: 70px;
+  padding: 8px 4px;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  background: #f6f7fb;
+  font-size: 12px;
+}
+
+.daily-day b {
+  display: block;
+  font-size: 13px;
+}
+
+.daily-day.done {
+  opacity: 0.45;
+}
+
+.daily-day.today {
+  background: var(--gold);
+  transform: scale(1.08);
+}
+
+.book-page {
+  margin-top: 12px;
+  text-align: left;
+}
+
+.book-page h3 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.book-page h3 button {
+  padding: 4px 10px;
+  font-size: 13px;
+  background: var(--green);
+  color: #fff;
+}
+
+.book-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.book-grid .card {
+  width: 104px;
+  animation: none;
+}
+
+.book-grid .card.locked {
+  border-color: #c9ced6;
+}
+
+.book-grid .card.locked .swatch {
+  background: #2b2b3a;
+}
+
+.book-grid .card.locked .swatch::before,
+.book-grid .card.locked .swatch::after {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  #bookBtn {
+    left: 130px;
+    font-size: 16px;
+  }
+}
