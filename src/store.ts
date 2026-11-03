@@ -8,6 +8,8 @@ export interface PadSlot {
   rarity: number;
   /** Uncollected coins piled on the pad. */
   cash: number;
+  /** 1 to LEVELS.max; missing in saves from before levels. */
+  level?: number;
 }
 
 export interface Save {

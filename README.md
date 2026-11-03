@@ -30,6 +30,7 @@ the Network URL it prints.
 | Steer | Mouse position, or A/D or the arrow keys | Drag left and right |
 | Parachute | Space or click | PARACHUTE button |
 | At the base: walk, collect | Click a pad or the ground | Tap a pad or the ground |
+| At the base: level up or sell | Click the pad you stand on | Tap the pad you stand on |
 | At the base: back to the cannon | Space, Launch!, or click the cannon | Launch!, or tap the cannon |
 
 Release the charge in the green band for +15% height, or the gold band for +30%.
@@ -47,6 +48,10 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - At the base, catches fill free pads. A full base sells its weakest character to make room for a rarer
   catch, and sells catches that aren't better. Selling pays 60 seconds of income.
 - Each pad piles up its income, capped at 10 minutes. Walk over a pad to collect it.
+- Character levels: tap the pad you stand on to open its panel. Each level (up to 10) adds +25% income;
+  level 2 costs 30 seconds of the character's base income, and each level after costs 1.6× more. The
+  panel also sells the character (two taps). A full base replaces its lowest earner, not its lowest
+  rarity, so levelled characters are safe.
 - Session gifts unlock at 5, 10, 20 and 40 minutes of play, worth 2 minutes of income (at least 100).
 - Hints walk new players through collecting, the first cannon upgrade and the first base expansion.
 - Each catch, and now and then a character at the base, chants its name with the browser's built-in
@@ -65,7 +70,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - Collection book: every character as a silhouette until caught, with a one-time reward per completed
   zone (500, 5,000 and 50,000 coins).
 
-Not in this build: character levels, fusion, sky events, the rival, the spin wheel, and ads.
+Not in this build: fusion, sky events, the rival, the spin wheel, and ads.
 
 ## CrazyGames
 
@@ -105,8 +110,9 @@ each milestone over 200 simulated players. Try other numbers without editing the
 SIM='{"cannon":{"growth":1.3},"economy":{"firstExpansion":600}}' npm run sim
 ```
 
-With the current costs: first upgrade at 1 minute, first Cloud Kingdom run at 4 minutes, rebirth
-unlocked at about 55 minutes. The cannon (35 × 1.42 per level) and base expansions (1,000 × 5) were
+With the current costs, and with simulated players also buying character levels: first upgrade at
+1 minute, first Cloud Kingdom run at about 5 minutes, rebirth unlocked at about 73 minutes. Offline
+earnings aren't modelled, so players who come and go will move faster. The cannon (35 × 1.42 per level) and base expansions (1,000 × 5) were
 retuned from the design doc's first-pass 50 × 1.18 and 400 × 3, which unlocked rebirth after 8 minutes.
 
 ## Tuning

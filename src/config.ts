@@ -190,5 +190,8 @@ export const ECONOMY = {
   sellSeconds: 60,
 };
 
+/** Character levels: each adds `incomeBonus`; level 2 costs `firstCostSeconds` of base income, then ×`growth`. */
+export const LEVELS = { max: 10, incomeBonus: 0.25, firstCostSeconds: 30, growth: 1.6 };
+
 /** Session gifts at these seconds of play; each pays this many seconds of income, at least `min`. */
 export const GIFTS = { at: [300, 600, 1200, 2400], incomeSeconds: 120, min: 100 };

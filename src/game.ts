@@ -12,6 +12,7 @@ import {
   ECONOMY,
   FLIGHT,
   GIFTS,
+  LEVELS,
   MAX_ZONE,
   RARE,
   RARITIES,
@@ -33,8 +34,10 @@ import {
   formatCoins,
   incomeMultiplier,
   incomePerSecond,
+  levelCost,
   padIncome,
   placeCatches,
+  sellValue,
   trackBoost,
   upgradeCost,
 } from './economy';
@@ -1041,7 +1044,9 @@ export class Game {
     this.raycaster.setFromCamera(ndc, this.camera);
     const pad = this.base.pick(this.raycaster);
     if (pad !== null) {
-      this.walkTo(Base.padPosition(pad, this.tmp).setY(0));
+      const at = Base.padPosition(pad, this.tmp);
+      if (!this.walking && Math.hypot(at.x - this.px, at.z - this.pz) < COLLECT_RADIUS) this.openPad(pad);
+      else this.walkTo(at.setY(0));
       return;
     }
     if (this.raycaster.intersectObject(this.env.cannon, true).length) {
@@ -1084,6 +1089,12 @@ export class Game {
     return !this.hasHint('expand') && this.save.pads.every(Boolean) && expansionCost(this.save) !== null;
   }
 
+  /** After the first upgrade: once a level-up is affordable, show how to buy one. */
+  private wantsLevelHint(): boolean {
+    const cost = this.cheapestLevel();
+    return !this.hasHint('level') && this.hasHint('upgrade') && cost !== null && this.save.coins >= cost;
+  }
+
   private updateHomePrompt(): void {
     const anyCash = this.save.pads.some((slot) => slot !== null && slot.cash >= 1);
     let text = '';
@@ -1093,6 +1104,10 @@ export class Game {
       text = 'Upgrade your cannon!';
     } else if (this.wantsExpandHint()) {
       text = 'Your pads are full! Expand the base in Upgrades';
+    } else if (this.wantsLevelHint()) {
+      text = this.input.isTouch
+        ? 'Tap the pad you stand on to level up its character'
+        : 'Click the pad you stand on to level up its character';
     }
     this.hud.prompt(text, !!text);
   }
@@ -1134,7 +1149,7 @@ export class Game {
   private updateEconomy(realDt: number): void {
     for (const slot of this.save.pads) {
       if (!slot) continue;
-      const income = padIncome(this.save, slot.rarity);
+      const income = padIncome(this.save, slot);
       slot.cash = Math.min(income * ECONOMY.padCapSeconds, slot.cash + income * realDt);
     }
     this.sessionT += realDt;
@@ -1270,7 +1285,7 @@ export class Game {
     s.cannon = 1;
     s.carryLevel = s.magnet = s.steering = s.chute = 0;
     s.pads = Array.from({ length: ECONOMY.startPads }, () => null);
-    if (keep) s.pads[0] = { ...keep, cash: 0 };
+    if (keep) s.pads[0] = { ...keep, cash: 0, level: 1 };
     this.pending.clear();
     this.base.sync(s);
     this.paintCannon();
@@ -1286,6 +1301,92 @@ export class Game {
   private paintCannon(): void {
     const colors = [0x3d4450, 0xc0392b, 0x2e86de, 0xe1b12c, 0x8e44ad, 0x27ae60];
     this.env.setBarrelColor(colors[this.save.rebirths % colors.length]);
+  }
+
+  // ---------------------------------------------------------------- pad panel
+
+  /** Level up or sell the character on a pad. */
+  private openPad(i: number, sellArmed = false): void {
+    const s = this.save;
+    const slot = s.pads[i];
+    if (!slot) {
+      this.hud.toast('Empty pad: catch something to fill it', 'small');
+      return;
+    }
+    const level = slot.level ?? 1;
+    const cost = levelCost(slot);
+    const income = padIncome(s, slot);
+    const card = this.hud.characterCard(slot.name, slot.rarity);
+    const stats = document.createElement('p');
+    stats.textContent = `Level ${level}/${LEVELS.max} · ${formatCoins(income)} coins/s`;
+    const next = document.createElement('p');
+    next.textContent =
+      cost === null
+        ? 'Max level'
+        : `Next level: ${formatCoins(padIncome(s, { ...slot, level: level + 1 }))} coins/s`;
+    const sell = sellValue(s, slot);
+    this.hud.showModal(slot.name, [card, stats, next], [
+      {
+        label: cost === null ? 'Max level' : `Level up · ${formatCoins(cost)}`,
+        primary: cost !== null && s.coins >= cost,
+        action: () => this.levelUp(i),
+      },
+      {
+        label: sellArmed ? `Sure? +${formatCoins(sell)}` : `Sell · ${formatCoins(sell)}`,
+        action: () => (sellArmed ? this.sellPad(i) : this.openPad(i, true)),
+      },
+      { label: 'Close' },
+    ]);
+  }
+
+  private levelUp(i: number): void {
+    const s = this.save;
+    const slot = s.pads[i];
+    if (!slot) return;
+    const cost = levelCost(slot);
+    if (cost === null) return;
+    if (s.coins < cost) {
+      this.hud.toast(`Need ${formatCoins(cost - s.coins)} more coins`, 'bad small');
+    } else {
+      s.coins -= cost;
+      slot.level = (slot.level ?? 1) + 1;
+      this.completeHint('level');
+      writeSave(s);
+      this.sfx.ding();
+      this.hud.toast(`${slot.name} Lv ${slot.level}!`, 'gold');
+      this.fx.burst(Base.padPosition(i, this.tmp).setY(1), {
+        count: 18,
+        color: RARITIES[slot.rarity].color,
+        speed: 6,
+        life: 0.7,
+        size: 0.6,
+        up: 4,
+      });
+    }
+    this.openPad(i);
+  }
+
+  private sellPad(i: number): void {
+    const s = this.save;
+    const slot = s.pads[i];
+    if (!slot) return;
+    const coins = sellValue(s, slot) + Math.floor(slot.cash);
+    s.coins += coins;
+    s.pads[i] = null;
+    this.base.sync(s, this.pending);
+    writeSave(s);
+    this.sfx.coin();
+    this.floatAt(Base.padPosition(i, this.tmp).setY(1.6), `Sold +${formatCoins(coins)}`);
+  }
+
+  /** The cheapest level-up on the base, for the level hint. */
+  private cheapestLevel(): number | null {
+    let best: number | null = null;
+    for (const slot of this.save.pads) {
+      const cost = slot ? levelCost(slot) : null;
+      if (cost !== null && (best === null || cost < best)) best = cost;
+    }
+    return best;
   }
 
   // ---------------------------------------------------------------- return visits

@@ -3,7 +3,8 @@
 //
 // The player model: launches land green 40% and perfect 25% of the time, each run grabs 60% of the
 // characters it passes and keeps the best ones the carry limit allows, a run plus the base visit takes
-// 2.2 × the ascent time + 17 s, and at the base the player buys the cheapest thing they can afford.
+// 2.2 × the ascent time + 17 s, and at the base the player buys the cheapest thing they can afford,
+// character levels included. Time away (offline earnings) isn't modelled.
 import {
   CHARGE,
   ECONOMY,
@@ -19,7 +20,15 @@ import {
   zoneIndexAt,
   type Track,
 } from '../src/config';
-import { buyUpgrade, carryLimit, expansionCost, incomePerSecond, placeCatches, upgradeCost } from '../src/economy';
+import {
+  buyUpgrade,
+  carryLimit,
+  expansionCost,
+  incomePerSecond,
+  levelCost,
+  placeCatches,
+  upgradeCost,
+} from '../src/economy';
 import { defaultSave, type Save } from '../src/store';
 
 // Try other numbers without editing config, e.g.
@@ -65,6 +74,10 @@ function shop(save: Save): void {
     for (const track of TRACKS) {
       const cost = upgradeCost(save, track as Track);
       if (cost !== null) options.push({ cost, buy: () => buyUpgrade(save, track as Track) });
+    }
+    for (const slot of save.pads) {
+      const cost = slot ? levelCost(slot) : null;
+      if (slot && cost !== null) options.push({ cost, buy: () => (slot.level = (slot.level ?? 1) + 1) });
     }
     const pads = expansionCost(save);
     if (pads !== null && save.pads.every(Boolean)) {

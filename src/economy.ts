@@ -1,6 +1,6 @@
 // Coins, upgrades, pads and selling: pure rules over the save.
-import { ECONOMY, RARITIES, REBIRTH, UPGRADES, type Track } from './config';
-import type { Save } from './store';
+import { ECONOMY, LEVELS, RARITIES, REBIRTH, UPGRADES, type Track } from './config';
+import type { PadSlot, Save } from './store';
 
 export function upgradesBought(save: Save, track: Track): number {
   switch (track) {
@@ -47,19 +47,28 @@ export function incomeMultiplier(save: Save): number {
   return 1 + save.rebirths * REBIRTH.incomeBonus;
 }
 
-/** Income of one character on a pad, after rebirths. */
-export function padIncome(save: Save, rarity: number): number {
-  return RARITIES[rarity].income * incomeMultiplier(save);
+/** Income of one character on a pad, after its level and rebirths. */
+export function padIncome(save: Save, slot: Pick<PadSlot, 'rarity' | 'level'>): number {
+  const level = slot.level ?? 1;
+  return RARITIES[slot.rarity].income * (1 + (level - 1) * LEVELS.incomeBonus) * incomeMultiplier(save);
 }
 
 export function incomePerSecond(save: Save): number {
   let total = 0;
-  for (const slot of save.pads) if (slot) total += padIncome(save, slot.rarity);
+  for (const slot of save.pads) if (slot) total += padIncome(save, slot);
   return total;
 }
 
-export function sellValue(rarity: number): number {
-  return RARITIES[rarity].income * ECONOMY.sellSeconds;
+/** Price of the next level for a character, or null at max. */
+export function levelCost(slot: PadSlot): number | null {
+  const level = slot.level ?? 1;
+  if (level >= LEVELS.max) return null;
+  return Math.round(RARITIES[slot.rarity].income * LEVELS.firstCostSeconds * Math.pow(LEVELS.growth, level - 1));
+}
+
+/** Selling pays ECONOMY.sellSeconds of the character's current income. */
+export function sellValue(save: Save, slot: Pick<PadSlot, 'rarity' | 'level'>): number {
+  return Math.round(padIncome(save, slot) * ECONOMY.sellSeconds);
 }
 
 export interface Catch {
@@ -88,22 +97,23 @@ export function placeCatches(save: Save, catches: Catch[]): Outcome[] {
     const c = catches[i];
     let pad = save.pads.findIndex((slot) => slot === null);
     if (pad < 0) {
+      // Weakest by income, so a levelled-up character isn't sold for a barely rarer newcomer.
       let weakest = 0;
       save.pads.forEach((slot, k) => {
-        if (slot && slot.rarity < save.pads[weakest]!.rarity) weakest = k;
+        if (slot && padIncome(save, slot) < padIncome(save, save.pads[weakest]!)) weakest = k;
       });
       const old = save.pads[weakest]!;
-      if (c.rarity <= old.rarity) {
-        outcomes[i].coins = sellValue(c.rarity);
+      if (padIncome(save, c) <= padIncome(save, old)) {
+        outcomes[i].coins = sellValue(save, c);
         save.coins += outcomes[i].coins;
         continue;
       }
       pad = weakest;
-      outcomes[i].coins = sellValue(old.rarity) + Math.floor(old.cash);
+      outcomes[i].coins = sellValue(save, old) + Math.floor(old.cash);
       outcomes[i].replaced = old.name;
       save.coins += outcomes[i].coins;
     }
-    save.pads[pad] = { name: c.name, rarity: c.rarity, cash: 0 };
+    save.pads[pad] = { name: c.name, rarity: c.rarity, cash: 0, level: 1 };
     outcomes[i].pad = pad;
   }
   return outcomes;

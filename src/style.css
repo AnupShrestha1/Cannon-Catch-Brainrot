@@ -1033,3 +1033,7 @@ button:active {
     font-size: 16px;
   }
 }
+
+#modalBody > .card {
+  margin: 0 auto;
+}
