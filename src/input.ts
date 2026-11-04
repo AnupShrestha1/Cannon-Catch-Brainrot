@@ -1,9 +1,9 @@
 // One input layer for mouse, keyboard and touch.
 // Desktop: hold Space or the mouse to charge, steer with the mouse or A/D, Space or click opens the chute.
 // Touch: hold anywhere to charge, drag to steer, the on-screen button opens the chute.
-// At the base: WASD or the arrows walk, dragging the mouse turns the camera, a click picks a pad, E uses the
-// pad underfoot, 1-8 choose a carried character and Space heads to the cannon. On touch, a drag that starts
-// on the left of the screen is a joystick, a drag on the right turns the camera, and a tap picks a pad.
+// At the base: WASD or the arrows walk, dragging the mouse turns the camera, E uses the pad underfoot, Q/Tab
+// or 1-8 choose a carried character and Space heads to the cannon. On touch, a drag that starts on the left of
+// the screen is a joystick and a drag on the right turns the camera; on-screen buttons do the rest.
 
 export type SteerMode = 'mouse' | 'keys' | 'touch';
 
@@ -101,6 +101,7 @@ export class Input {
         this.chute = true;
         return;
       }
+      if (e.code === 'Tab') e.preventDefault();
       if (!e.repeat) this.taps.add(e.code);
       if (['KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight'].includes(e.code)) this.mode = 'keys';
       if (['KeyA', 'KeyD', 'KeyW', 'KeyS', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code)) {

@@ -41,7 +41,8 @@ export class Hud {
   readonly giftBtn = byId<HTMLButtonElement>('giftBtn');
   readonly tunePanel = byId('tune');
   onBuy: (item: ShopItem) => void = () => {};
-  onCarrySelect: (index: number) => void = () => {};
+  onCarryNext: () => void = () => {};
+  onAction: () => void = () => {};
   onCarrySell: (index: number) => void = () => {};
 
   private coins = byId('coins');
@@ -69,6 +70,8 @@ export class Hud {
   private flight = byId('flightNo');
   private carry = byId('carry');
   private stick = byId('stick');
+  private actionBtn = byId<HTMLButtonElement>('actionBtn');
+  private actionKey = '';
   private stickKnob = this.stick.querySelector<HTMLElement>('.knob')!;
   private carryKey = '';
   private modal = byId('modal');
@@ -95,6 +98,10 @@ export class Hud {
       },
       true,
     );
+    this.actionBtn.addEventListener('click', () => {
+      this.onAction();
+      this.actionBtn.blur();
+    });
     this.modal.addEventListener('click', (e) => {
       if (e.target !== this.modal) return;
       const buttons = this.modalButtons.querySelectorAll('button');
@@ -300,7 +307,6 @@ export class Hud {
         const card = this.characterCard(item.name, item.rarity);
         card.classList.add('carry-card');
         if (i === selected) card.classList.add('selected');
-        card.addEventListener('click', () => this.onCarrySelect(i));
         const sell = document.createElement('button');
         sell.type = 'button';
         sell.textContent = `Sell ${formatCoins(item.sell)}`;
@@ -312,6 +318,28 @@ export class Hud {
         return card;
       }),
     );
+    if (items.length > 1) {
+      const next = document.createElement('button');
+      next.type = 'button';
+      next.className = 'carry-next';
+      next.textContent = this.isTouchLike ? 'Next' : 'Next (Q)';
+      next.addEventListener('click', () => this.onCarryNext());
+      this.carry.append(next);
+    }
+  }
+
+  /** Whether the device has no hover, i.e. a phone or tablet: key hints are left off there. */
+  private get isTouchLike(): boolean {
+    return window.matchMedia('(hover: none)').matches;
+  }
+
+  /** The context button for the pad underfoot, e.g. "Place Cannolini"; null hides it. */
+  showAction(label: string | null): void {
+    const text = label ? (this.isTouchLike ? label : `${label} (E)`) : '';
+    if (text === this.actionKey) return;
+    this.actionKey = text;
+    this.actionBtn.textContent = text;
+    this.actionBtn.classList.toggle('on', !!label);
   }
 
   /** The touch joystick at the base: a ring where the drag started and a knob that follows it. */

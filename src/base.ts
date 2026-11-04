@@ -17,7 +17,6 @@ interface PadView {
   padMat: THREE.MeshLambertMaterial;
   glow: THREE.Mesh;
   glowMat: THREE.MeshBasicMaterial;
-  hit: THREE.Mesh;
   rig: CharacterRig | null;
   name: string;
   coins: THREE.Mesh[];
@@ -30,8 +29,6 @@ interface PadView {
 
 const padGeo = new THREE.BoxGeometry(2.6, 0.25, 2.6);
 const glowGeo = new THREE.PlaneGeometry(4.2, 4.2);
-const hitGeo = new THREE.BoxGeometry(3.1, 1.6, 3.1);
-const hitMat = new THREE.MeshBasicMaterial({ visible: false });
 const coinGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.09, 12);
 const coinMat = flat(0xffc21a, { emissive: 0x6b4a00 });
 const EMPTY_PAD = 0xc9ced6;
@@ -104,7 +101,7 @@ export class Base {
     while (this.views.length > save.pads.length) {
       const view = this.views.pop()!;
       if (view.rig) this.group.remove(view.rig.group);
-      this.group.remove(view.pad, view.glow, view.hit, ...view.coins, view.label.sprite, view.badge.sprite);
+      this.group.remove(view.pad, view.glow, ...view.coins, view.label.sprite, view.badge.sprite);
     }
     save.pads.forEach((slot, i) => {
       const view = this.views[i];
@@ -147,15 +144,6 @@ export class Base {
       const stack = cash <= 0 ? 0 : Math.min(view.coins.length, 1 + Math.floor(Math.log2(cash + 1) / 1.5));
       view.coins.forEach((coin, k) => (coin.visible = k < stack));
     });
-  }
-
-  /** Index of the pad under a ray, or null. */
-  pick(raycaster: THREE.Raycaster): number | null {
-    const hits = raycaster.intersectObjects(
-      this.views.map((v) => v.hit),
-      false,
-    );
-    return hits.length ? (hits[0].object.userData.pad as number) : null;
   }
 
   /** An occupied pad takes on its character's rarity colour and glows; an empty one is plain gray. */
@@ -202,9 +190,6 @@ export class Base {
     glow.rotation.x = -Math.PI / 2;
     glow.position.set(pos.x, 0.03, pos.z);
     glow.visible = false;
-    const hit = new THREE.Mesh(hitGeo, hitMat);
-    hit.position.set(pos.x, 0.8, pos.z);
-    hit.userData.pad = i;
     const coins = Array.from({ length: 6 }, (_, k) => {
       const coin = new THREE.Mesh(coinGeo, coinMat);
       coin.position.set(pos.x + 0.85, PAD_TOP + 0.05 + k * 0.1, pos.z + 0.85);
@@ -218,13 +203,12 @@ export class Base {
     const badge = makeBadge();
     badge.sprite.position.set(pos.x, 2.25, pos.z);
     badge.sprite.visible = false;
-    this.group.add(glow, pad, hit, ...coins, label.sprite, badge.sprite);
+    this.group.add(glow, pad, ...coins, label.sprite, badge.sprite);
     this.views.push({
       pad,
       padMat,
       glow,
       glowMat,
-      hit,
       rig: null,
       name: '',
       coins,

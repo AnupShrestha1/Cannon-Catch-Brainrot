@@ -29,14 +29,11 @@ the Network URL it prints.
 | Charge, then fire | Hold and release Space or the mouse | Hold and release anywhere |
 | Steer | Mouse position, or A/D or the arrow keys | Drag left and right |
 | Parachute | Space or click | PARACHUTE button |
-| At the base: walk, collect | WASD or arrows (relative to the camera), or click a pad or the ground | Drag on the left half (joystick), or tap a pad or the ground |
+| At the base: walk (collects pads you cross) | WASD or arrows, relative to the camera | Drag on the left half (joystick) |
 | At the base: turn the camera | Drag with the mouse | Drag on the right half |
-| At the base: use the pad underfoot | E (place a carried catch, or open the pad) | Tap the pad you stand on |
-| At the base: choose a carried catch | 1–8, or click its card | Tap its card |
-| At the base: place a catch | Click an empty pad | Tap an empty pad |
-| At the base: choose or sell a catch | Click its card in the top tray | Tap its card in the top tray |
-| At the base: level up or sell | Click the pad you stand on | Tap the pad you stand on |
-| At the base: back to the cannon | Space, Launch!, or click the cannon | Launch!, or tap the cannon |
+| At the base: place a catch, or open a pad | Stand on the pad, press E | Stand on the pad, tap the action button |
+| At the base: choose which catch to place | Q, Tab or 1–8 | Next button in the top tray |
+| At the base: sell a carried catch | Its Sell button in the top tray | Its Sell button in the top tray |
 
 Release the charge in the green band for +15% height, or the gold band for +30%.
 
@@ -51,9 +48,9 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   Rare, and nothing is dropped during the first 3 flights. From flight 4, the apex shows a silhouette
   from the next locked zone and the cannon level that reaches it.
 - After landing, the player carries the catch home on their head. A tray at the top shows what's
-  carried: tap a card to choose it, or sell it there (60 seconds of its income). Tap an empty pad to
-  walk over and place the chosen character. On a full pad you stand on, the pad's panel can swap it in,
-  selling the old one. The cannon stays locked until everything carried is placed or sold, and carried
+  carried; the chosen one is highlighted (Q or Next changes it), and each card can be sold there (60
+  seconds of its income). Stand on an empty pad and press E (or tap the action button) to place the
+  chosen character. On a full pad, its panel can swap the chosen one in, selling the old one. The cannon stays locked until everything carried is placed or sold, and carried
   characters are saved.
 - Each pad piles up its income, capped at 10 minutes. Walk over a pad to collect it.
 - Character levels: characters gain XP from time on their pad (offline time counts). Once the XP bar
@@ -64,7 +61,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - Pads glow in the rarity colour of their character.
 - The base uses a third-person camera behind the player. Drag to turn it; WASD and the touch joystick
   move relative to it, easing in and out over about a tenth of a second, and the character turns
-  smoothly toward where it's heading. Only tap-to-walk swings the camera round behind the player.
+  smoothly toward where it's heading. Clicking and tapping don't move or select anything.
 - The player has a walk cycle at the base, reaches up like Superman on the way up, flails spread-eagle
   with a wobble in free fall, and hangs from the straps under the parachute.
 - Carry limit: 3 at the start, at most 8. Carry upgrades unlock once a run has reached Cloud Kingdom.
@@ -151,7 +148,8 @@ hazards, a +1,000 coins button, and a full reset. **M** mutes. All first-pass nu
 | `src/platform.ts` | The CrazyGames SDK wrapper |
 | `src/base.ts` | The pad grid, characters on pads, and cash piles |
 | `src/characters.ts` | The 10 character models and their idle animations |
-| `src/world.ts` | Gray-box scene: sky, ground, cannon, player, hazards, labels |
+| `src/world.ts` | Gray-box scene: sky, cannon, player, hazards, labels |
+| `src/scenery.ts` | Ground, hills, path, fence, trees, flowers, rocks and the pond |
 | `src/fx.ts` | Particle bursts and wind streaks |
 | `src/hud.ts` | HTML overlay: wallet, altitude, carry slots, meters, reveal, shop, gift, tuning panel |
 | `src/input.ts` | Mouse, keyboard and touch input |

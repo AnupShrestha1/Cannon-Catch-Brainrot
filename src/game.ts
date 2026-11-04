@@ -161,8 +161,6 @@ export class Game {
   private goal = new THREE.Group();
   private goalLabel: Label;
   private sky = new THREE.Color(0x8fd3ff);
-  private raycaster = new THREE.Raycaster();
-  private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private tmp = new THREE.Vector3();
   private tmp2 = new THREE.Vector3();
   private player3 = new THREE.Vector3();
@@ -350,7 +348,8 @@ export class Game {
     onClick(hud.giftBtn, () => this.claimGift());
     onClick(hud.bookBtn, () => this.openBook());
     hud.onBuy = (item) => this.buy(item);
-    hud.onCarrySelect = (i) => this.selectCarried(i);
+    hud.onCarryNext = () => this.cycleCarried();
+    hud.onAction = () => this.usePadUnderfoot();
     hud.onCarrySell = (i) => this.sellCarried(i);
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyT') hud.tunePanel.classList.toggle('hidden');
@@ -417,7 +416,8 @@ export class Game {
     const blocked = this.hud.shopOpen || this.hud.modalOpen;
     const pressed = this.input.consumePressed() && !blocked;
     const space = this.input.consumeSpace() && !blocked;
-    const tap = this.input.consumeTap();
+    // Clicks and taps don't move or select anything any more; drop them.
+    this.input.consumeTap();
     const chuteRequested = this.input.consumeChute();
 
     switch (this.state) {
@@ -440,7 +440,7 @@ export class Game {
         if (space && this.revealT > 0.6) this.goHome();
         break;
       case 'home':
-        this.updateHome(dt, blocked ? null : tap, space, blocked);
+        this.updateHome(dt, space, blocked);
         break;
       case 'boarding':
         this.updateWalk(dt);
@@ -995,6 +995,12 @@ export class Game {
     );
   }
 
+  /** Q, Tab or the tray's Next button: choose the next carried character. */
+  private cycleCarried(): void {
+    const n = this.save.carrying.length;
+    if (n > 1) this.selectCarried((this.carrySel + 1) % n);
+  }
+
   private selectCarried(i: number): void {
     if (i < 0 || i >= this.save.carrying.length) return;
     this.carrySel = i;
@@ -1081,7 +1087,7 @@ export class Game {
     this.facing = lerpAngle(this.facing, Math.atan2(-dx, -dz), damp(14, dt));
   }
 
-  private updateHome(dt: number, tap: { x: number; y: number } | null, space: boolean, blocked: boolean): void {
+  private updateHome(dt: number, space: boolean, blocked: boolean): void {
     this.stepping = false;
     this.moveAtBase(dt, blocked);
     this.updateWalk(dt);
@@ -1094,7 +1100,6 @@ export class Game {
       this.startBoarding();
       return;
     }
-    if (tap) this.tapAt(tap.x, tap.y);
     this.updateHomePrompt();
 
     // Now and then a character at the base chants its name.
@@ -1148,6 +1153,7 @@ export class Game {
       this.walkVel.set(0, 0);
     }
     for (let n = 1; n <= 8; n++) if (this.input.consumeKey(`Digit${n}`)) this.selectCarried(n - 1);
+    if (this.input.consumeKey('KeyQ') || this.input.consumeKey('Tab')) this.cycleCarried();
     if (this.input.consumeKey('KeyE') || this.input.consumeKey('Enter')) this.usePadUnderfoot();
   }
 
@@ -1159,6 +1165,16 @@ export class Game {
     return null;
   }
 
+  /** What E (or the action button) would do on the pad underfoot, or null when there's nothing to do. */
+  private padActionLabel(): string | null {
+    const pad = this.padUnderfoot();
+    if (pad === null) return null;
+    const slot = this.save.pads[pad];
+    const carried = this.save.carrying[this.carrySel];
+    if (!slot) return carried ? `Place ${carried.name}` : null;
+    return `Open ${slot.name}`;
+  }
+
   private usePadUnderfoot(): void {
     const pad = this.padUnderfoot();
     if (pad === null) {
@@ -1167,34 +1183,6 @@ export class Game {
     }
     if (this.save.carrying.length && !this.save.pads[pad]) this.placeCarried(pad);
     else this.openPad(pad);
-  }
-
-  /** A tap at the base walks to a pad, boards the cannon, or walks to that spot on the ground. */
-  private tapAt(x: number, y: number): void {
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
-    this.raycaster.setFromCamera(ndc, this.camera);
-    const pad = this.base.pick(this.raycaster);
-    if (pad !== null) {
-      const at = Base.padPosition(pad, this.tmp);
-      const here = !this.walking && Math.hypot(at.x - this.px, at.z - this.pz) < COLLECT_RADIUS;
-      if (this.save.carrying.length && !this.save.pads[pad]) {
-        // Carrying something: an empty pad gets it, once the player gets there.
-        if (here) this.placeCarried(pad);
-        else this.walkTo(at.setY(0), () => this.placeCarried(pad));
-      } else if (here) {
-        this.openPad(pad);
-      } else {
-        this.walkTo(at.setY(0));
-      }
-      return;
-    }
-    if (this.raycaster.intersectObject(this.env.cannon, true).length) {
-      this.startBoarding();
-      return;
-    }
-    const point = this.raycaster.ray.intersectPlane(this.groundPlane, this.tmp);
-    if (point) this.walkTo(point.set(clamp(point.x, -45, 12), 0, clamp(point.z, -12, 12)));
   }
 
   private collect(i: number): void {
@@ -1239,21 +1227,19 @@ export class Game {
     const anyCash = this.save.pads.some((slot) => slot !== null && slot.cash >= 1);
     let text = '';
     const carried = this.save.carrying[this.carrySel];
+    const press = this.input.isTouch ? 'tap the button' : 'press E';
     if (carried) {
-      const verb = this.input.isTouch ? 'Tap' : 'Click';
       text = this.save.pads.some((slot) => slot === null)
-        ? `${verb} an empty pad to place ${carried.name}, or sell it`
-        : `Base full: sell a catch, or swap it onto a pad you stand on`;
+        ? `Walk onto an empty pad and ${press} to place ${carried.name}`
+        : `Base full: stand on a pad and ${press} to swap ${carried.name} in, or sell it`;
     } else if (!this.hasHint('collect') && anyCash) {
-      text = this.input.isTouch ? 'Tap a pad to collect its coins' : 'Click a pad to collect its coins';
+      text = 'Walk over a pad to collect its coins';
     } else if (this.wantsUpgradeHint()) {
       text = 'Upgrade your cannon!';
     } else if (this.wantsExpandHint()) {
       text = 'Your pads are full! Expand the base in Upgrades';
     } else if (this.wantsLevelHint()) {
-      text = this.input.isTouch
-        ? 'Tap the pad you stand on to level up its character'
-        : 'Click the pad you stand on to level up its character';
+      text = `Stand on a pad and ${press} to level up its character`;
     }
     this.hud.prompt(text, !!text);
   }
@@ -1793,6 +1779,7 @@ export class Game {
       rig.figure.rotation.y = this.player.group.rotation.y + Math.PI;
     });
     this.hud.setCarryVisible(this.state === 'home' && this.save.carrying.length > 0);
+    this.hud.showAction(this.state === 'home' && !this.walking ? this.padActionLabel() : null);
     animateShared(this.time);
 
     const shadow = this.env.shadow;

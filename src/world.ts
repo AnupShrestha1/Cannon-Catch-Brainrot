@@ -1,6 +1,7 @@
 // Gray-box scene pieces: sky, ground, cannon, player, characters and birds.
 import * as THREE from 'three';
 import { ZONES, zoneIndexAt } from './config';
+import { addScenery } from './scenery';
 
 export const flat = (color: number, extra: THREE.MeshLambertMaterialParameters = {}) =>
   new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
@@ -72,29 +73,7 @@ export function buildEnv(scene: THREE.Scene): Env {
   sun.position.set(30, 80, 50);
   scene.add(sun);
 
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(420, 48), flat(0x6cc070));
-  ground.rotation.x = -Math.PI / 2;
-  scene.add(ground);
-
-  // Trees for scale, kept out of the space between the camera and the cannon.
-  const trunkGeo = new THREE.CylinderGeometry(0.25, 0.35, 1.4, 6);
-  const leafGeo = new THREE.ConeGeometry(1.6, 3.6, 6);
-  const trunkMat = flat(0x7a4f2c);
-  const leafMat = flat(0x2f8f45);
-  for (let i = 0; i < 90; i++) {
-    const x = (Math.random() - 0.5) * 300;
-    const z = -Math.random() * 220 + 30;
-    if (Math.abs(x) < 22 && z > -14) continue;
-    const tree = new THREE.Group();
-    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-    trunk.position.y = 0.7;
-    const leaves = new THREE.Mesh(leafGeo, leafMat);
-    leaves.position.y = 3;
-    tree.add(trunk, leaves);
-    tree.position.set(x, 0, z);
-    tree.scale.setScalar(0.8 + Math.random() * 1.2);
-    scene.add(tree);
-  }
+  addScenery(scene);
 
   // Cannon: a wooden carriage with a barrel tilted slightly away so its muzzle sits at x = 0, z = 0.
   const cannon = new THREE.Group();
