@@ -234,6 +234,8 @@ export class Game {
   private saveTimer = 3;
   private shopTimer = 0;
   private chantTimer = 20;
+  /** Seconds toward the next once-a-second income tick. */
+  private incomeTimer = 0;
   /** Rebirth needs a second tap in the shop. */
   private rebirthArmed = false;
 
@@ -243,11 +245,16 @@ export class Game {
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.scene.background = this.sky;
-    this.scene.fog = new THREE.Fog(0x8fd3ff, 70, 320);
+    this.scene.fog = new THREE.Fog(0x8fd3ff, 90, 420);
     this.env = buildEnv(this.scene);
     this.base = new Base(this.scene);
     this.player = makePlayer();
+    this.player.group.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.castShadow = true;
+    });
     this.scene.add(this.player.group);
     this.fx = new Particles(this.scene);
     this.streaks = new Streaks(this.scene);
@@ -1283,10 +1290,16 @@ export class Game {
   // ---------------------------------------------------------------- economy and shop
 
   private updateEconomy(realDt: number): void {
+    // Coins land once a second, a whole second's income at a time, so each pad's counter ticks up visibly.
+    this.incomeTimer += realDt;
+    const ticks = Math.floor(this.incomeTimer);
+    this.incomeTimer -= ticks;
     for (const slot of this.save.pads) {
       if (!slot) continue;
-      const income = padIncome(this.save, slot);
-      slot.cash = Math.min(income * ECONOMY.padCapSeconds, slot.cash + income * realDt);
+      if (ticks > 0) {
+        const income = padIncome(this.save, slot);
+        slot.cash = Math.min(income * ECONOMY.padCapSeconds, slot.cash + income * ticks);
+      }
       if (gainXp(slot, realDt)) this.hud.toast(`${slot.name} can level up!`, 'good small');
     }
     this.sessionT += realDt;
@@ -1792,9 +1805,9 @@ export class Game {
     this.env.barrel.scale.set(1 + squash * 0.08, 1 - squash * 0.12, 1 + squash * 0.08);
 
     skyColorAt(Math.max(0, this.py), this.sky);
-    (this.scene.fog as THREE.Fog).color.copy(this.sky);
 
     this.updateCamera(realDt);
+    this.env.updateScenery(this.time, this.sky, this.scene.fog as THREE.Fog, this.camera.position);
     this.env.updateDecor(this.camera.position.y);
     this.streaks.update(this.py, inFlight ? this.vy : 0);
     this.sfx.wind(inFlight ? clamp(Math.abs(this.vy) / 50, 0, 1) * (this.chute === 'open' ? 0.3 : 1) : 0);

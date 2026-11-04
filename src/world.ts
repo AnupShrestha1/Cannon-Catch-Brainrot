@@ -1,7 +1,7 @@
 // Gray-box scene pieces: sky, ground, cannon, player, characters and birds.
 import * as THREE from 'three';
 import { ZONES, zoneIndexAt } from './config';
-import { addScenery } from './scenery';
+import { addScenery, makeSkyDome } from './scenery';
 
 export const flat = (color: number, extra: THREE.MeshLambertMaterialParameters = {}) =>
   new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
@@ -65,15 +65,28 @@ export interface Env {
   setBarrelColor(color: number): void;
   shadow: THREE.Mesh;
   updateDecor(cameraY: number): void;
+  /** Animates the scenery and recolours the sky dome and fog for the current height. */
+  updateScenery(t: number, sky: THREE.Color, fog: THREE.Fog, camera: THREE.Vector3): void;
 }
 
 export function buildEnv(scene: THREE.Scene): Env {
-  scene.add(new THREE.HemisphereLight(0xe4f4ff, 0x5a8f4a, 1.15));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.7);
-  sun.position.set(30, 80, 50);
-  scene.add(sun);
+  scene.add(new THREE.HemisphereLight(0xdcefff, 0x5f8a45, 1.05));
+  // A warm sun casting soft shadows over the base, the cannon and the trees around them.
+  const sun = new THREE.DirectionalLight(0xfff0d6, 1.9);
+  sun.target.position.set(-18, 0, 0);
+  sun.position.set(-18 + 30, 80, 50);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 45, bottom: -45, near: 10, far: 200 });
+  sun.shadow.bias = -0.0005;
+  sun.shadow.normalBias = 0.04;
+  scene.add(sun, sun.target);
 
-  addScenery(scene);
+  const scenery = addScenery(scene);
+  const dome = makeSkyDome();
+  scene.add(dome.mesh);
+  const horizon = new THREE.Color();
+  const white = new THREE.Color(0xffffff);
 
   // Cannon: a wooden carriage with a barrel tilted slightly away so its muzzle sits at x = 0, z = 0.
   const cannon = new THREE.Group();
@@ -98,6 +111,9 @@ export function buildEnv(scene: THREE.Scene): Env {
   lip.position.y = 3.2;
   barrel.add(tube, lip);
   cannon.add(carriage, barrel);
+  cannon.traverse((o) => {
+    if (o instanceof THREE.Mesh) o.castShadow = true;
+  });
   scene.add(cannon);
 
   const shadow = new THREE.Mesh(
@@ -136,6 +152,12 @@ export function buildEnv(scene: THREE.Scene): Env {
         while (cloud.position.y > cameraY + 120) cloud.position.y -= 240;
         cloud.visible = cloud.position.y > 22;
       }
+    },
+    updateScenery(t, sky, fog, camera) {
+      scenery.update(t);
+      horizon.copy(sky).lerp(white, 0.3);
+      fog.color.copy(horizon);
+      dome.update(sky, horizon, camera);
     },
   };
 }

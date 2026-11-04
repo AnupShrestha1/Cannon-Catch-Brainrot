@@ -23,6 +23,8 @@ interface PadView {
   label: Label;
   badge: Badge;
   shown: number;
+  /** 1 right after the pile grows, easing to 0: the label pops on each income tick. */
+  pop: number;
   badgeKey: string;
   seed: number;
 }
@@ -114,6 +116,9 @@ export class Base {
       this.paint(view, slot);
       if (!slot) return;
       const rig = makeCharacter(slot.rarity, slot.name);
+      rig.figure.traverse((o) => {
+        if (o instanceof THREE.Mesh) o.castShadow = true;
+      });
       rig.cloud.visible = false;
       rig.halo.scale.multiplyScalar(0.7);
       Base.padPosition(i, rig.group.position);
@@ -129,6 +134,11 @@ export class Base {
     save.pads.forEach((slot, i) => {
       const view = this.views[i];
       if (!view) return;
+      if (view.pop > 0) {
+        view.pop = Math.max(0, view.pop - realDt * 4);
+        const s = 0.6 * (1 + view.pop * 0.3);
+        view.label.sprite.scale.set(6 * s, 6 * (96 / 512) * s, 1);
+      }
       if (view.rig) {
         view.rig.animate(time + view.seed);
         view.rig.figure.position.y = Math.abs(Math.sin(time * 2 + view.seed)) * 0.06;
@@ -138,6 +148,7 @@ export class Base {
       this.drawBadge(view, slot);
       const cash = slot ? Math.floor(slot.cash) : 0;
       if (cash === view.shown) return;
+      if (cash > view.shown && view.shown > 0) view.pop = 1;
       view.shown = cash;
       view.label.sprite.visible = cash > 0;
       if (cash > 0) view.label.set(`+${formatCoins(cash)}`, '#ffd84a');
@@ -215,6 +226,7 @@ export class Base {
       label,
       badge,
       shown: -1,
+      pop: 0,
       badgeKey: '',
       seed: Math.random() * 10,
     });

@@ -149,7 +149,7 @@ hazards, a +1,000 coins button, and a full reset. **M** mutes. All first-pass nu
 | `src/base.ts` | The pad grid, characters on pads, and cash piles |
 | `src/characters.ts` | The 10 character models and their idle animations |
 | `src/world.ts` | Gray-box scene: sky, cannon, player, hazards, labels |
-| `src/scenery.ts` | Ground, hills, path, fence, trees, flowers, rocks and the pond |
+| `src/scenery.ts` | Sky dome, ground, hills, mountains, path, lanterns, fence and bunting, swaying trees, cottage, windmill, pond, butterflies |
 | `src/fx.ts` | Particle bursts and wind streaks |
 | `src/hud.ts` | HTML overlay: wallet, altitude, carry slots, meters, reveal, shop, gift, tuning panel |
 | `src/input.ts` | Mouse, keyboard and touch input |
