@@ -97,15 +97,6 @@ export class Base {
     return out.set(-7 - row * 3.4, PAD_TOP, 3.6 - col * 3.2);
   }
 
-  static rows(pads: number): number {
-    return Math.ceil(pads / ECONOMY.padStep);
-  }
-
-  /** Middle of the pad grid, for the home camera. */
-  static center(pads: number, out = new THREE.Vector3()): THREE.Vector3 {
-    return out.set(-7 - (Base.rows(pads) - 1) * 1.7, 0, 3.6 - 1.5 * 3.2);
-  }
-
   /** Matches pads, characters and rarity colours to the save. */
   sync(save: Save): void {
     while (this.views.length < save.pads.length) this.addPad(this.views.length);

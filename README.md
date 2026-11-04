@@ -29,7 +29,7 @@ the Network URL it prints.
 | Charge, then fire | Hold and release Space or the mouse | Hold and release anywhere |
 | Steer | Mouse position, or A/D or the arrow keys | Drag left and right |
 | Parachute | Space or click | PARACHUTE button |
-| At the base: walk, collect | WASD or arrows, or click a pad or the ground | Tap a pad or the ground |
+| At the base: walk, collect | WASD or arrows (relative to the camera), or click a pad or the ground | Tap a pad or the ground |
 | At the base: use the pad underfoot | E (place a carried catch, or open the pad) | Tap the pad you stand on |
 | At the base: choose a carried catch | 1–8, or click its card | Tap its card |
 | At the base: place a catch | Click an empty pad | Tap an empty pad |
@@ -61,6 +61,10 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   coins, up to level 10, and each level adds +25% income. The panel also sells the character (two
   taps).
 - Pads glow in the rarity colour of their character.
+- The base uses a third-person camera behind the player. It swings round behind them when they walk
+  forward (W or tap-to-walk); strafing with A/D or backing up with S keeps the view still.
+- The player has a walk cycle at the base, reaches up like Superman on the way up, flails spread-eagle
+  with a wobble in free fall, and hangs from the straps under the parachute.
 - Carry limit: 3 at the start, at most 8. Carry upgrades unlock once a run has reached Cloud Kingdom.
 - Session gifts unlock at 5, 10, 20 and 40 minutes of play, worth 2 minutes of income (at least 100).
 - Hints walk new players through collecting, the first cannon upgrade and the first base expansion.

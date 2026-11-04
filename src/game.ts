@@ -128,6 +128,8 @@ const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 /** Frame-rate independent smoothing factor. */
 const damp = (rate: number, dt: number) => 1 - Math.exp(-rate * dt);
+/** Eases angle a toward b the short way round. */
+const lerpAngle = (a: number, b: number, t: number) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t;
 
 /** Distance from (cx, cy) to the segment a→b, so fast frames can't skip past a pickup. */
 function segmentDistance(ax: number, ay: number, bx: number, by: number, cx: number, cy: number): number {
@@ -185,6 +187,11 @@ export class Game {
   private walking = false;
   /** Walking under keyboard control this frame. */
   private stepping = false;
+  /** Walking forward (W or tap-to-walk), which swings the base camera round behind the player. */
+  private followCam = false;
+  /** Base camera heading: it looks along (-sin, -cos) of this, from behind the player. */
+  private camYaw = 0;
+  private walkPhase = 0;
   private walkTarget = new THREE.Vector3();
 
   private chargeT = 0;
@@ -375,8 +382,11 @@ export class Game {
   }
 
   private resize(): void {
-    this.renderer.setSize(window.innerWidth, window.innerHeight, false);
-    this.camera.aspect = window.innerWidth / window.innerHeight;
+    // A hidden or collapsed frame reports 0 × 0; a 0/0 aspect would poison the camera with NaN.
+    const w = Math.max(1, window.innerWidth);
+    const h = Math.max(1, window.innerHeight);
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }
 
@@ -1034,6 +1044,7 @@ export class Game {
   }
 
   private walkTo(target: THREE.Vector3, then: (() => void) | null = null): void {
+    this.followCam = true;
     this.walkTarget.copy(target);
     this.walking = true;
     this.arrive = then;
@@ -1085,16 +1096,22 @@ export class Game {
 
   /** WASD or the arrows walk (the camera looks along -z), E uses the pad underfoot, 1-8 choose a carried catch. */
   private keyboardAtBase(dt: number): void {
-    const kx = this.input.axis;
-    const kz = -this.input.axisY;
-    if (kx || kz) {
+    const right = this.input.axis;
+    const forward = this.input.axisY;
+    if (right || forward) {
       this.walking = false;
       this.arrive = null;
       this.stepping = true;
-      const len = Math.hypot(kx, kz);
-      this.px = clamp(this.px + (kx / len) * WALK_SPEED * dt, -45, 12);
-      this.pz = clamp(this.pz + (kz / len) * WALK_SPEED * dt, -12, 12);
-      this.facing = Math.atan2(-kx, -kz);
+      // Relative to the camera: its forward is (-sin, -cos) of camYaw and its right is (cos, -sin).
+      const sin = Math.sin(this.camYaw);
+      const cos = Math.cos(this.camYaw);
+      const mx = -sin * forward + cos * right;
+      const mz = -cos * forward - sin * right;
+      const len = Math.hypot(mx, mz);
+      this.px = clamp(this.px + (mx / len) * WALK_SPEED * dt, -45, 12);
+      this.pz = clamp(this.pz + (mz / len) * WALK_SPEED * dt, -12, 12);
+      this.facing = Math.atan2(-mx, -mz);
+      this.followCam = forward > 0;
     }
     for (let n = 1; n <= 8; n++) if (this.input.consumeKey(`Digit${n}`)) this.selectCarried(n - 1);
     if (this.input.consumeKey('KeyE') || this.input.consumeKey('Enter')) this.usePadUnderfoot();
@@ -1718,6 +1735,7 @@ export class Game {
     body.position.y = lerp(body.position.y, lying ? 0.35 : 0.9, damp(10, dt));
     if (atBase && (this.walking || this.stepping)) body.position.y = 0.9 + Math.abs(Math.sin(this.time * 14)) * 0.08;
     body.visible = this.invuln <= 0 || Math.floor(this.time * 20) % 2 === 0;
+    this.animateLimbs(dt, atBase);
 
     const chuteTarget = !inFlight ? 0 : this.chute === 'open' ? 1 : this.chute === 'tangled' ? 0.5 : 0;
     this.chuteScale = lerp(this.chuteScale, chuteTarget, damp(this.chuteScale < chuteTarget ? 14 : 6, realDt));
@@ -1779,6 +1797,60 @@ export class Game {
   }
 
   /**
+   * Arm and leg poses for each state, eased so they blend: a walk cycle, Superman arms on the way up,
+   * a flailing spread-eagle skydive with a wobble, and hanging from the straps under the parachute.
+   */
+  private animateLimbs(dt: number, atBase: boolean): void {
+    const { arms, legs, body } = this.player;
+    const t = this.time;
+    const moving = atBase && (this.walking || this.stepping);
+    if (moving) this.walkPhase += dt * 11;
+    const freefall = this.state === 'fall' && this.chute === 'closed';
+    let armOut = 0.25 + Math.sin(t * 2) * 0.04;
+    let armSwing = 0;
+    let legSwing = 0;
+    let legSpread = 0;
+    let flail = 0;
+    let wobble = 0;
+    if (moving) {
+      armOut = 0.15;
+      armSwing = Math.sin(this.walkPhase) * 0.7;
+      legSwing = Math.sin(this.walkPhase) * 0.8;
+    } else if (this.state === 'ascent') {
+      armOut = 2.9;
+      legSwing = 0.15;
+    } else if (freefall) {
+      armOut = 1.7;
+      flail = 0.35;
+      legSpread = 0.35;
+      wobble = Math.sin(t * 3.3) * 0.3;
+    } else if (this.state === 'fall') {
+      armOut = 2.75;
+      legSwing = Math.sin(t * 2) * 0.25;
+    } else if (this.state === 'charging') {
+      armOut = 0.05;
+    } else if (this.state === 'landed' && this.chute !== 'open') {
+      armOut = 1.5;
+      legSpread = 0.4;
+    }
+    const k = damp(14, dt);
+    arms.forEach((arm, i) => {
+      const side = i === 0 ? -1 : 1;
+      const flap = flail * Math.sin(t * 14 + i * Math.PI);
+      arm.rotation.z = lerp(arm.rotation.z, side * (armOut + flap), k);
+      // Arms swing opposite the leg on the same side.
+      arm.rotation.x = lerp(arm.rotation.x, -side * armSwing, k);
+    });
+    legs.forEach((leg, i) => {
+      const side = i === 0 ? -1 : 1;
+      const kick = flail ? Math.sin(t * 11 + i * Math.PI) * 0.6 : 0;
+      leg.rotation.x = lerp(leg.rotation.x, side * legSwing + kick, k);
+      leg.rotation.z = lerp(leg.rotation.z, side * legSpread, k);
+    });
+    body.rotation.y = lerp(body.rotation.y, wobble, damp(6, dt));
+  }
+
+  /**
    * Each state wants the camera at some position and looking at some point. The camera eases toward
    * them as offsets from the player rather than as absolute positions, so a fast flight doesn't lag.
    */
@@ -1824,16 +1896,26 @@ export class Game {
         break;
       case 'home':
       case 'boarding': {
-        // Above and in front of the pad grid, pulling back as the base grows.
-        const center = Base.center(this.save.pads.length, look);
-        const scale = (1 + (Base.rows(this.save.pads.length) - 1) * 0.12) * (1 + portrait * 0.7);
-        pos.set(center.x + 3 * scale, 14 * scale, center.z + 15 * scale);
-        rate = 2.5;
+        // Third person: behind and above the player, swinging round behind them as they walk forward.
+        const moving = this.walking || this.stepping;
+        if (moving && this.followCam) this.camYaw = lerpAngle(this.camYaw, this.facing, damp(2.2, realDt));
+        const dist = 7.5 * (1 + portrait * 0.4);
+        const sin = Math.sin(this.camYaw);
+        const cos = Math.cos(this.camYaw);
+        pos.set(this.px + sin * dist, 3.6, this.pz + cos * dist);
+        look.set(this.px - sin * 3, 1.3, this.pz - cos * 3);
+        rate = 6;
         break;
       }
     }
 
     const player = this.player3.set(this.px, this.py, this.pz);
+    // Never let a bad frame leave the camera stuck on NaN.
+    if (!Number.isFinite(this.camOff.lengthSq()) || !Number.isFinite(this.camLook.lengthSq())) {
+      this.camOff.set(0, 3, 8);
+      this.camLook.set(0, 1, 0);
+    }
+    if (!Number.isFinite(this.camera.fov)) this.camera.fov = 60;
     const k = damp(rate, realDt);
     this.camOff.lerp(pos.sub(player), k);
     this.camLook.lerp(look.sub(player), k);
@@ -1847,7 +1929,7 @@ export class Game {
 
     let fov = 60 + Math.min(18, speed * 0.12);
     if (this.state === 'charging') fov = 56 - this.charge * 4;
-    if (this.state === 'home' || this.state === 'boarding') fov = 50;
+    if (this.state === 'home' || this.state === 'boarding') fov = 58;
     fov += portrait * 6;
     this.camera.fov = lerp(this.camera.fov, fov, damp(4, realDt));
     this.camera.updateProjectionMatrix();

@@ -165,6 +165,9 @@ export interface PlayerRig {
   group: THREE.Group;
   body: THREE.Group;
   chute: THREE.Group;
+  /** Shoulder and hip joints, left then right. Arms hang down at rotation 0 and raise outward with side × z. */
+  arms: THREE.Group[];
+  legs: THREE.Group[];
 }
 
 /** The player faces away from the camera (-z), so the camera sees their back and the stack on it. */
@@ -186,13 +189,22 @@ export function makePlayer(): PlayerRig {
   const limbMat = flat(0x3a3f58);
   const legGeo = new THREE.BoxGeometry(0.28, 0.55, 0.3);
   const armGeo = new THREE.BoxGeometry(0.22, 0.7, 0.22);
+  const arms: THREE.Group[] = [];
+  const legs: THREE.Group[] = [];
   for (const side of [-1, 1]) {
+    const hip = new THREE.Group();
+    hip.position.set(side * 0.2, -0.38, 0);
     const leg = new THREE.Mesh(legGeo, limbMat);
-    leg.position.set(side * 0.2, -0.65, 0);
+    leg.position.y = -0.28;
+    hip.add(leg);
+    const shoulder = new THREE.Group();
+    shoulder.position.set(side * 0.47, 0.4, 0);
     const arm = new THREE.Mesh(armGeo, suit);
-    arm.position.set(side * 0.58, 0.32, 0);
-    arm.rotation.z = side * 0.55;
-    body.add(leg, arm);
+    arm.position.y = -0.32;
+    shoulder.add(arm);
+    body.add(hip, shoulder);
+    legs.push(hip);
+    arms.push(shoulder);
   }
   body.add(torso, head, helmet, pack);
 
@@ -218,7 +230,7 @@ export function makePlayer(): PlayerRig {
   chute.visible = false;
   group.add(chute);
 
-  return { group, body, chute };
+  return { group, body, chute, arms, legs };
 }
 
 export interface BirdRig {
