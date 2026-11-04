@@ -1,9 +1,9 @@
-// Gray-box character models: primitive shapes per roster character, each with an idle animation.
-// Every model faces +z (the camera), stands on y = 0 and is about 1.2 m tall.
-// Geometries and materials are cached, so building and dropping rigs every run leaks nothing.
+// Character models: primitive shapes per roster character, each with an idle animation, drawn cel-shaded
+// with a dark outline, round cartoon eyes and a smile. Every model faces +z, stands on y = 0 and is about
+// 1.2 m tall. Geometries and materials are cached, so building and dropping rigs leaks nothing.
 import * as THREE from 'three';
 import { RARITIES } from './config';
-import { flat, makeCloud, softTexture } from './world';
+import { makeCloud, softTexture } from './world';
 
 export interface CharacterRig {
   group: THREE.Group;
@@ -14,7 +14,22 @@ export interface CharacterRig {
 }
 
 const geoCache = new Map<string, THREE.BufferGeometry>();
-const matCache = new Map<number, THREE.MeshLambertMaterial>();
+const matCache = new Map<number, THREE.MeshToonMaterial>();
+
+/** Three flat bands of light: the cartoon look. */
+const toonRamp = (() => {
+  const tex = new THREE.DataTexture(new Uint8Array([90, 170, 255]), 3, 1, THREE.RedFormat);
+  tex.minFilter = tex.magFilter = THREE.NearestFilter;
+  tex.needsUpdate = true;
+  return tex;
+})();
+
+function toon(color: number, extra: THREE.MeshToonMaterialParameters = {}): THREE.MeshToonMaterial {
+  return new THREE.MeshToonMaterial({ color, gradientMap: toonRamp, ...extra });
+}
+
+/** Back faces in ink, a little larger than each part: an outline that works for any shape. */
+const outlineMat = new THREE.MeshBasicMaterial({ color: 0x1d2340, side: THREE.BackSide });
 
 function cached(key: string, make: () => THREE.BufferGeometry): THREE.BufferGeometry {
   let geo = geoCache.get(key);
@@ -25,10 +40,10 @@ function cached(key: string, make: () => THREE.BufferGeometry): THREE.BufferGeom
   return geo;
 }
 
-function mat(color: number): THREE.MeshLambertMaterial {
+function mat(color: number): THREE.MeshToonMaterial {
   let m = matCache.get(color);
   if (!m) {
-    m = flat(color);
+    m = toon(color);
     matCache.set(color, m);
   }
   return m;
@@ -51,17 +66,49 @@ const ring = (r: number, tube: number, m: THREE.Material) =>
 
 const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const pupilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+const mouthMat = new THREE.MeshBasicMaterial({ color: 0x3a1020 });
+/** Parts that never get an outline: eyes, mouths, glows and see-through bits. */
+const NO_OUTLINE = new Set<THREE.Material>([eyeMat, pupilMat, mouthMat, outlineMat]);
 
-/** Two square cartoon eyes on a face at depth z, centred on x. */
+/** Two big round cartoon eyes with pupils and a shine, on a face at depth z, centred on x. */
 function eyes(parent: THREE.Object3D, x: number, y: number, z: number, spread = 0.11): void {
+  const r = Math.min(0.12, Math.max(0.065, spread * 0.8));
   for (const side of [-1, 1]) {
-    parent.add(at(box(0.15, 0.15, 0.04, eyeMat), x + side * spread, y, z));
-    parent.add(at(box(0.07, 0.07, 0.04, pupilMat), x + side * spread, y - 0.02, z + 0.03));
+    const white = at(ball(r, eyeMat, 2), x + side * spread, y, z);
+    white.scale.z = 0.55;
+    const pupil = at(ball(r * 0.55, pupilMat, 1), x + side * spread + side * r * 0.12, y - r * 0.1, z + r * 0.42);
+    pupil.scale.z = 0.5;
+    const shine = at(ball(r * 0.2, eyeMat, 0), x + side * spread - r * 0.2, y + r * 0.25, z + r * 0.62);
+    parent.add(white, pupil, shine);
   }
+}
+
+/** A curved smile at depth z. */
+function smile(parent: THREE.Object3D, x: number, y: number, z: number, w = 0.12): void {
+  const mouth = new THREE.Mesh(
+    cached(`smile${w}`, () => new THREE.TorusGeometry(w, w * 0.22, 4, 10, Math.PI)),
+    mouthMat,
+  );
+  mouth.rotation.z = Math.PI;
+  parent.add(at(mouth, x, y, z));
 }
 
 const smokeMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 });
 const bulbMat = new THREE.MeshLambertMaterial({ color: 0xfff3a6, emissive: 0xffd84a, emissiveIntensity: 1 });
+NO_OUTLINE.add(smokeMat).add(bulbMat);
+
+/** Adds an ink outline to every solid part of a model. */
+function outline(figure: THREE.Object3D): void {
+  const parts: THREE.Mesh[] = [];
+  figure.traverse((o) => {
+    if (o instanceof THREE.Mesh && !NO_OUTLINE.has(o.material as THREE.Material)) parts.push(o);
+  });
+  for (const part of parts) {
+    const shell = new THREE.Mesh(part.geometry, outlineMat);
+    shell.scale.setScalar(1.09);
+    part.add(shell);
+  }
+}
 const shadowMat = new THREE.MeshBasicMaterial({ color: 0x150f2c });
 
 const CHROME = 0xc9ced6;
@@ -106,6 +153,7 @@ const MODELS: Record<string, Model> = {
     const toast = at(box(0.36, 0.4, 0.07, mat(WAFFLE)), 0, 0.6, -0.08);
     f.add(body, toast, at(box(0.42, 0.03, 0.1, dark), 0, 0.735, -0.08), at(box(0.42, 0.03, 0.1, dark), 0, 0.735, 0.1));
     f.add(at(box(0.08, 0.16, 0.08, accent), 0.49, 0.45, 0));
+    smile(f, 0, 0.36, 0.29, 0.1);
     const wings: THREE.Group[] = [];
     for (const side of [-1, 1]) {
       const pivot = at(new THREE.Group(), side * 0.45, 0.58, 0);
@@ -132,6 +180,7 @@ const MODELS: Record<string, Model> = {
       f.add(at(ball(0.08, eyeMat, 0), x, 0.9, 0.1), at(ball(0.04, pupilMat, 0), x, 0.89, 0.17));
     }
     f.add(at(cyl(0.16, 0.2, 0.2, accent), -0.12, 0.34, 0), at(ball(0.36, bulbMat, 2), -0.12, 0.74, 0));
+    smile(f, 0.48, 0.36, 0.19, 0.08);
     return () => {};
   },
 
@@ -167,6 +216,7 @@ const MODELS: Record<string, Model> = {
     cone_.rotation.x = Math.PI;
     pivot.add(cone_, at(ball(0.24, mat(0xff9ec7)), 0, 0.72, 0));
     eyes(pivot, 0, 0.74, 0.22, 0.09);
+    smile(pivot, 0, 0.62, 0.22, 0.07);
     f.add(pivot);
     return (t) => {
       const p = (t % 3.2) / 3.2;
@@ -211,6 +261,7 @@ const MODELS_STORM: Record<string, Model> = {
     hover.add(shell, cage, blades, at(ball(0.2, skin), 0, 0.42, 0.5));
     for (const side of [-1, 1]) hover.add(at(box(0.16, 0.1, 0.22, skin), side * 0.42, 0.3, 0.15));
     eyes(hover, 0, 0.48, 0.68, 0.07);
+    smile(hover, 0, 0.36, 0.66, 0.06);
     f.add(hover);
     return (t) => {
       blades.rotation.y = t * 18;
@@ -229,6 +280,7 @@ const MODELS_STORM: Record<string, Model> = {
     const star = at(box(0.12, 0.12, 0.12, mat(0xffffff)), 0.4, 0.75, 0.2);
     f.add(cup, foam, mask, handle, tail, star);
     eyes(f, 0, 0.53, 0.37, 0.11);
+    smile(f, 0, 0.3, 0.36, 0.1);
     return (t) => {
       const p = (t * 0.8) % 1;
       star.position.set(0.4 + p * 1.2, 0.75 + Math.sin(p * Math.PI) * 0.4, 0.2);
@@ -253,6 +305,7 @@ const MODELS_STORM: Record<string, Model> = {
     rotor.add(box(1.6, 0.04, 0.12, accent), box(0.12, 0.04, 1.6, accent));
     lift.add(rotor);
     eyes(lift, 0, 0.98, 0.42, 0.14);
+    smile(lift, 0, 0.56, 0.64, 0.12);
     f.add(lift);
     return (t) => {
       rotor.rotation.y = t * 22;
@@ -295,18 +348,19 @@ Object.assign(MODELS, MODELS_STORM);
 const cubeModel: Model = (f, accent) => {
   f.add(at(box(0.9, 0.9, 0.9, accent), 0, 0.6, 0));
   eyes(f, 0, 0.72, 0.46, 0.17);
+  smile(f, 0, 0.45, 0.46, 0.14);
   return () => {};
 };
 
-const rarityMats = new Map<number, THREE.MeshLambertMaterial>();
+const rarityMats = new Map<number, THREE.MeshToonMaterial>();
 const haloMats = new Map<number, THREE.SpriteMaterial>();
 
 /** Shared per rarity; the Secret one is recoloured every frame for its rainbow. */
-export function rarityMaterial(rarity: number): THREE.MeshLambertMaterial {
+export function rarityMaterial(rarity: number): THREE.MeshToonMaterial {
   let m = rarityMats.get(rarity);
   if (!m) {
     const color = RARITIES[rarity].color;
-    m = new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.3, flatShading: true });
+    m = toon(color, { emissive: color, emissiveIntensity: 0.3 });
     rarityMats.set(rarity, m);
   }
   return m;
@@ -332,6 +386,7 @@ export function makeCharacter(rarity: number, name: string): CharacterRig {
   const figure = new THREE.Group();
   group.add(figure);
   const animate = (MODELS[name] ?? cubeModel)(figure, rarityMaterial(rarity));
+  outline(figure);
   const cloud = makeCloud(0.75, 3);
   group.add(cloud);
   const halo = new THREE.Sprite(haloMaterial(rarity));

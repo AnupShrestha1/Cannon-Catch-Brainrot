@@ -1,14 +1,9 @@
 // HTML overlay on top of the 3D canvas.
-import { CHARGE, ECONOMY, RARITIES, UPGRADES, launchHeight, type Track } from './config';
+import { CHARGE, RARITIES, UPGRADES, launchHeight, type Track } from './config';
 import { formatCoins } from './economy';
 import type { HazardMode, Save } from './store';
 
 const byId = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-
-export interface RevealCard {
-  name: string;
-  rarity: number;
-}
 
 export type ShopItem = Track | 'pads' | 'rebirth';
 
@@ -27,6 +22,7 @@ export interface ShopRow {
 export interface TuningHooks {
   changed(): void;
   addCoins(amount: number): void;
+  addGems(amount: number): void;
   resetAll(): void;
 }
 
@@ -37,16 +33,17 @@ export class Hud {
   readonly tuneBtn = byId<HTMLButtonElement>('tuneBtn');
   readonly upgradesBtn = byId<HTMLButtonElement>('upgradesBtn');
   readonly bookBtn = byId<HTMLButtonElement>('bookBtn');
+  readonly backpackBtn = byId<HTMLButtonElement>('backpackBtn');
   readonly launchBtn = byId<HTMLButtonElement>('launchBtn');
   readonly giftBtn = byId<HTMLButtonElement>('giftBtn');
   readonly tunePanel = byId('tune');
   onBuy: (item: ShopItem) => void = () => {};
-  onCarryNext: () => void = () => {};
   onAction: () => void = () => {};
-  onCarrySell: (index: number) => void = () => {};
 
   private coins = byId('coins');
   private income = byId('income');
+  private gemCount = byId('gemCount');
+  private backpackCount = byId('backpackCount');
   private alt = byId('alt');
   private altNum = byId('altNum');
   private zone = byId('zone');
@@ -68,17 +65,15 @@ export class Hud {
   private shop = byId('shop');
   private shopRows = byId('shopRows');
   private flight = byId('flightNo');
-  private carry = byId('carry');
   private stick = byId('stick');
   private actionBtn = byId<HTMLButtonElement>('actionBtn');
   private actionKey = '';
   private stickKnob = this.stick.querySelector<HTMLElement>('.knob')!;
-  private carryKey = '';
   private modal = byId('modal');
   private modalTitle = byId('modalTitle');
   private modalBody = byId('modalBody');
   private modalButtons = byId('modalButtons');
-  private last = { alt: -1, zone: '', best: -1, stack: '', prompt: '', coins: '', income: -1, gift: '', shop: '' };
+  private last = { alt: -1, zone: '', best: -1, stack: '', prompt: '', coins: '', income: -1, gems: '', pack: -1, gift: '', shop: '' };
 
   constructor() {
     // Modals answer the keyboard and the backdrop too, so there's always a way out. Capture phase and
@@ -123,7 +118,12 @@ export class Hud {
     });
   }
 
-  setWallet(coins: number, income: number): void {
+  setWallet(coins: number, income: number, gems: number): void {
+    const gemText = formatCoins(gems);
+    if (gemText !== this.last.gems) {
+      this.last.gems = gemText;
+      this.gemCount.textContent = gemText;
+    }
     const text = formatCoins(coins);
     if (text !== this.last.coins) {
       this.last.coins = text;
@@ -154,26 +154,28 @@ export class Hud {
     }
   }
 
-  setStack(rarities: number[], limit: number, visible: boolean): void {
-    const key = visible ? `${rarities.join(',')}/${limit}` : '';
+  /** The gems collected this run, shown at the top during a flight; null hides it. */
+  setRunGems(gems: number | null): void {
+    const key = gems === null ? '' : String(gems);
     if (key === this.last.stack) return;
+    const grew = gems !== null && Number(this.last.stack) < gems;
     this.last.stack = key;
-    if (!visible) {
-      this.stack.replaceChildren();
-      return;
+    this.stack.classList.toggle('on', gems !== null);
+    if (gems === null) return;
+    this.stack.innerHTML = '<span class="gem-icon"></span>';
+    this.stack.append(String(gems));
+    if (grew) {
+      this.stack.classList.remove('bump');
+      void this.stack.offsetWidth;
+      this.stack.classList.add('bump');
     }
-    const slots = Array.from({ length: limit }, (_, i) => {
-      const slot = document.createElement('div');
-      slot.className = 'slot';
-      const rarity = rarities[i];
-      if (rarity !== undefined) {
-        slot.classList.add('filled');
-        slot.style.setProperty('--c', RARITIES[rarity].css);
-        if (rarity === RARITIES.length - 1) slot.classList.add('secret');
-      }
-      return slot;
-    });
-    this.stack.replaceChildren(...slots);
+  }
+
+  /** How many brainrots wait in the backpack, as a badge on its button. */
+  setBackpack(count: number): void {
+    if (count === this.last.pack) return;
+    this.last.pack = count;
+    this.backpackCount.textContent = count > 0 ? String(count) : '';
   }
 
   prompt(text: string, pulse = false): void {
@@ -231,6 +233,7 @@ export class Hud {
   }
 
   showBaseButtons(upgrades: boolean, launch: boolean, pulseUpgrades = false, pulseLaunch = false, pulseBook = false): void {
+    this.backpackBtn.classList.toggle('on', upgrades);
     this.bookBtn.classList.toggle('on', upgrades);
     this.bookBtn.classList.toggle('pulse', upgrades && pulseBook);
     this.upgradesBtn.classList.toggle('on', upgrades);
@@ -262,70 +265,23 @@ export class Hud {
     this.soundBtn.textContent = on ? 'Sound on' : 'Sound off';
   }
 
-  showReveal(cards: RevealCard[], summary: string, button: string): void {
-    this.revealTitle.textContent = cards.length ? `Caught ${cards.length}!` : 'Nothing caught';
-    this.cards.replaceChildren(
-      ...cards.map((c, i) => {
-        const r = RARITIES[c.rarity];
-        const card = document.createElement('div');
-        card.className = 'card';
-        if (c.rarity >= 2) card.classList.add('rare');
-        if (c.rarity === RARITIES.length - 1) card.classList.add('secret');
-        card.style.setProperty('--c', r.css);
-        card.style.animationDelay = `${0.25 + i * 0.32}s`;
-        const swatch = document.createElement('div');
-        swatch.className = 'swatch';
-        const name = document.createElement('div');
-        name.className = 'name';
-        name.textContent = c.name;
-        const rarity = document.createElement('div');
-        rarity.className = 'rarity';
-        rarity.textContent = r.name;
-        const income = document.createElement('div');
-        income.className = 'income';
-        income.textContent = `+${r.income.toLocaleString()} coins/s`;
-        card.append(swatch, name, rarity, income);
-        return card;
-      }),
-    );
+  /** After landing: the gems this run brought home, and the new total. */
+  showRunResult(gems: number, total: number, summary: string): void {
+    this.revealTitle.textContent = gems > 0 ? `+${formatCoins(gems)} gems!` : 'No gems this time';
+    const big = document.createElement('div');
+    big.className = 'run-gems';
+    big.innerHTML = '<span class="gem-icon big"></span>';
+    const line = document.createElement('div');
+    line.className = 'run-total';
+    line.textContent = `You have ${formatCoins(total)} gems`;
+    this.cards.replaceChildren(big, line);
     this.summary.textContent = summary;
-    this.againBtn.textContent = button;
+    this.againBtn.textContent = 'Back to base';
     this.reveal.classList.remove('hidden');
   }
 
   hideReveal(): void {
     this.reveal.classList.add('hidden');
-  }
-
-  /** The tray of carried catches at the base: tap a card to choose it, or sell it outright. */
-  renderCarry(items: { name: string; rarity: number; sell: number }[], selected: number): void {
-    const key = JSON.stringify([items, selected]);
-    if (key === this.carryKey) return;
-    this.carryKey = key;
-    this.carry.replaceChildren(
-      ...items.map((item, i) => {
-        const card = this.characterCard(item.name, item.rarity);
-        card.classList.add('carry-card');
-        if (i === selected) card.classList.add('selected');
-        const sell = document.createElement('button');
-        sell.type = 'button';
-        sell.textContent = `Sell ${formatCoins(item.sell)}`;
-        sell.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.onCarrySell(i);
-        });
-        card.append(sell);
-        return card;
-      }),
-    );
-    if (items.length > 1) {
-      const next = document.createElement('button');
-      next.type = 'button';
-      next.className = 'carry-next';
-      next.textContent = this.isTouchLike ? 'Next' : 'Next (Q)';
-      next.addEventListener('click', () => this.onCarryNext());
-      this.carry.append(next);
-    }
   }
 
   /** Whether the device has no hover, i.e. a phone or tablet: key hints are left off there. */
@@ -350,10 +306,6 @@ export class Hud {
     this.stick.style.left = `${stick.originX}px`;
     this.stick.style.top = `${stick.originY}px`;
     this.stickKnob.style.transform = `translate(${stick.x * 44}px, ${-stick.y * 44}px)`;
-  }
-
-  setCarryVisible(on: boolean): void {
-    this.carry.classList.toggle('on', on);
   }
 
   get modalOpen(): boolean {
@@ -449,16 +401,12 @@ export class Hud {
   /** The dev tuning panel. It edits the save directly, so it can skip past upgrade costs. */
   bindTuning(save: Save, hooks: TuningHooks): void {
     const level = byId<HTMLInputElement>('levelIn');
-    const carry = byId<HTMLInputElement>('carryIn');
     const hazards = byId<HTMLSelectElement>('hazIn');
     level.max = String(UPGRADES.cannon.max + 1);
-    carry.max = String(UPGRADES.carry.max);
     const show = () => {
       level.value = String(save.cannon);
-      carry.value = String(save.carryLevel);
       hazards.value = save.hazards;
       byId('levelVal').textContent = String(save.cannon);
-      byId('carryVal').textContent = String(ECONOMY.startCarry + save.carryLevel);
       const h = launchHeight(save.cannon);
       byId('heightVal').textContent =
         `Apex ${Math.round(h)} m · green ${Math.round(h * (1 + CHARGE.greenBonus))} m · ` +
@@ -469,13 +417,8 @@ export class Hud {
       show();
       hooks.changed();
     });
-    carry.addEventListener('input', () => {
-      save.carryLevel = Number(carry.value);
-      show();
-      hooks.changed();
-    });
     // Drop focus so Space and the arrow keys go back to the game.
-    for (const el of [level, carry]) el.addEventListener('change', () => el.blur());
+    level.addEventListener('change', () => level.blur());
     hazards.addEventListener('change', () => {
       save.hazards = hazards.value as HazardMode;
       hooks.changed();
@@ -484,6 +427,12 @@ export class Hud {
     for (const btn of this.tunePanel.querySelectorAll<HTMLButtonElement>('[data-coins]')) {
       btn.addEventListener('click', () => {
         hooks.addCoins(Number(btn.dataset.coins));
+        btn.blur();
+      });
+    }
+    for (const btn of this.tunePanel.querySelectorAll<HTMLButtonElement>('[data-gems]')) {
+      btn.addEventListener('click', () => {
+        hooks.addGems(Number(btn.dataset.gems));
         btn.blur();
       });
     }

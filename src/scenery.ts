@@ -136,7 +136,7 @@ export function addScenery(scene: THREE.Scene): Scenery {
   groundMesh.receiveShadow = true;
   scene.add(groundMesh);
 
-  // Sandy path: cannon to the base, then along the front of the pads, edged with pebbles.
+  // Sandy path from the cannon to the showcase entrance.
   const sand = lambert(0xe2c98f);
   const path = (x: number, z: number, w: number, d: number, turn = 0) => {
     const tile = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, d), sand);
@@ -145,35 +145,25 @@ export function addScenery(scene: THREE.Scene): Scenery {
     tile.receiveShadow = true;
     scene.add(tile);
   };
-  path(-2.2, 4.6, 2.4, 5.5, -0.75);
-  path(-23, 6.6, 42, 2.4);
-  const pebbles = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.18, 0), lambert(0xffffff), 90);
+  path(-4.5, 0.65, 9.8, 2.6, -0.35);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const up = new THREE.Vector3(0, 1, 0);
-  for (let i = 0; i < 90; i++) {
-    const x = -44 + (i / 45) * 42 + range(-0.3, 0.3);
-    const z = 6.6 + (i % 2 ? 1.35 : -1.35) + range(-0.1, 0.1);
-    const s = range(0.7, 1.3);
-    q.setFromAxisAngle(up, rand() * 6);
-    m.compose(new THREE.Vector3(x, 0.05, z), q, new THREE.Vector3(s, s * 0.6, s));
-    pebbles.setMatrixAt(i, m);
-    pebbles.setColorAt(i, c.setHex(pick([0xcfc6b8, 0xb9b2a6, 0xe0d8ca])));
-  }
-  scene.add(pebbles);
 
-  // Lanterns along the far side of the path, with a warm glow.
+  // Lanterns along both long sides of the showcase, with a warm glow.
   const wood = lambert(0x9a6a3c);
   const darkWood = lambert(0x6e4526);
   const lampMat = new THREE.MeshLambertMaterial({ color: 0xffe9a8, emissive: 0xffc94d, emissiveIntensity: 0.9 });
   const postGeo = new THREE.CylinderGeometry(0.09, 0.12, 2.2, 6).translate(0, 1.1, 0);
   const lampGeo = new THREE.BoxGeometry(0.42, 0.5, 0.42).translate(0, 2.35, 0);
   const capGeo = new THREE.ConeGeometry(0.4, 0.3, 4).rotateY(Math.PI / 4).translate(0, 2.75, 0);
-  for (let x = -42; x <= -6; x += 9) {
-    const lamp = new THREE.Group();
-    lamp.add(new THREE.Mesh(postGeo, darkWood), new THREE.Mesh(lampGeo, lampMat), new THREE.Mesh(capGeo, darkWood));
-    lamp.position.set(x, 0, 8.6);
-    scene.add(casts(lamp));
+  for (let x = -12; x >= -34; x -= 7) {
+    for (const z of [7.6, -8.1]) {
+      const lamp = new THREE.Group();
+      lamp.add(new THREE.Mesh(postGeo, darkWood), new THREE.Mesh(lampGeo, lampMat), new THREE.Mesh(capGeo, darkWood));
+      lamp.position.set(x, 0, z);
+      scene.add(casts(lamp));
+    }
   }
 
   // Wooden fence behind the base and along its far end, hung with bunting.
@@ -445,18 +435,18 @@ export function addScenery(scene: THREE.Scene): Scenery {
     return { y: 0.5 * s, scale: new THREE.Vector3(s * 1.2, s, s), color: pick([0x3e9a4e, 0x47a84f, 0x358a49]) };
   }, true);
 
-  // Flower beds behind the lanterns, right where the player walks.
-  const bed = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.2, 0), lambert(0xffffff), 160);
-  for (let i = 0; i < 160; i++) {
-    const x = -44 + rand() * 40;
-    const z = range(9.3, 10.6);
+  // A flower bed along the front of the showcase.
+  const bed = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.2, 0), lambert(0xffffff), 140);
+  for (let i = 0; i < 140; i++) {
+    const x = -35 + rand() * 25;
+    const z = range(5.7, 6.7);
     m.compose(new THREE.Vector3(x, 0.3, z), q.identity(), new THREE.Vector3(1, 1, 1));
     bed.setMatrixAt(i, m);
     bed.setColorAt(i, c.setHex(pick(flowerColors)));
   }
   scene.add(bed);
-  const soil = new THREE.Mesh(new THREE.BoxGeometry(40, 0.35, 1.6), lambert(0x6b4a2e));
-  soil.position.set(-24, 0.12, 9.95);
+  const soil = new THREE.Mesh(new THREE.BoxGeometry(25.5, 0.35, 1.4), lambert(0x6b4a2e));
+  soil.position.set(-22.5, 0.12, 6.2);
   scene.add(soil);
 
   // Distant hills, then snowy mountains ringing the horizon. The mountains skip fog and carry their own

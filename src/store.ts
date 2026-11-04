@@ -14,20 +14,32 @@ export interface PadSlot {
   xp?: number;
 }
 
+/** A brainrot in the backpack: pulled or stored, not on a showcase slot. */
+export interface Owned {
+  name: string;
+  rarity: number;
+}
+
 export interface Save {
   flightNo: number;
   best: number;
   /** Cannon level, from 1. */
   cannon: number;
-  /** Carry upgrades bought; the limit is ECONOMY.startCarry plus this. */
-  carryLevel: number;
-  /** Grab magnet, steering and parachute upgrades bought. */
+  /** Gem finder, gem magnet, steering and parachute upgrades bought. */
+  finder: number;
   magnet: number;
   steering: number;
   chute: number;
   rebirths: number;
   coins: number;
+  /** The gacha currency, collected in the sky. */
+  gems: number;
+  /** Gacha pulls made, for the guaranteed first pull. */
+  pulls: number;
+  /** Showcase slots that are open; locked ones aren't in the array. */
   pads: (PadSlot | null)[];
+  /** Brainrots owned but not on a slot. */
+  inventory: Owned[];
   hazards: HazardMode;
   muted: boolean;
   /** Tutorial hints already completed. */
@@ -39,10 +51,8 @@ export interface Save {
   lastDaily: string;
   /** Names of every character ever caught, for the collection book. */
   collected: string[];
-  /** Book pages (zone indexes) whose completion reward was claimed. */
+  /** Book pages whose completion reward was claimed. */
   bookClaimed: number[];
-  /** Caught characters the player is carrying at the base, not yet placed or sold. */
-  carrying: { name: string; rarity: number }[];
 }
 
 const KEY = 'ccb-slice-v1';
@@ -62,13 +72,16 @@ export function defaultSave(): Save {
     flightNo: 0,
     best: 0,
     cannon: 1,
-    carryLevel: 0,
+    finder: 0,
     magnet: 0,
     steering: 0,
     chute: 0,
     rebirths: 0,
     coins: 0,
+    gems: 0,
+    pulls: 0,
     pads: Array.from({ length: ECONOMY.startPads }, () => null),
+    inventory: [],
     hazards: 'auto',
     muted: false,
     hints: [],
@@ -77,7 +90,6 @@ export function defaultSave(): Save {
     lastDaily: '',
     collected: [],
     bookClaimed: [],
-    carrying: [],
   };
 }
 
@@ -86,13 +98,21 @@ export function loadSave(): Save {
   if (ephemeral) return save;
   try {
     const raw = (backend ?? localStorage).getItem(KEY);
-    if (raw) Object.assign(save, JSON.parse(raw) as Partial<Save>);
+    if (raw) {
+      const old = JSON.parse(raw) as Partial<Save> & { carrying?: Owned[]; carryLevel?: number };
+      // Saves from before the gacha: catches still carried go to the backpack.
+      if (Array.isArray(old.carrying)) save.inventory.push(...old.carrying);
+      delete old.carrying;
+      delete old.carryLevel;
+      Object.assign(save, old);
+    }
   } catch {
     // fall through to defaults
   }
-  while (save.pads.length < ECONOMY.startPads) save.pads.push(null);
-  // Older saves could carry up to 15; the cap is now 8.
-  save.carryLevel = Math.min(save.carryLevel, UPGRADES.carry.max);
+  // The showcase holds at most 10, in pairs; older bases could have 40 pads, whose extras go to the backpack.
+  for (const slot of save.pads.splice(ECONOMY.maxPads)) if (slot) save.inventory.push({ name: slot.name, rarity: slot.rarity });
+  while (save.pads.length < ECONOMY.startPads || save.pads.length % ECONOMY.padStep) save.pads.push(null);
+  save.finder = Math.min(save.finder, UPGRADES.finder.max);
   return save;
 }
 

@@ -17,7 +17,7 @@ export const RARITIES: RarityDef[] = [
   { name: 'Secret', color: 0xffffff, css: '#ffffff', income: 1500 },
 ];
 
-/** Grabs at this rarity and above get slow-mo and a bigger reveal. */
+/** Pulls at this rarity and above get a bigger reveal. */
 export const RARE = 2;
 
 // Basic Launch roster: 10 of the design doc's 21 characters, up to Legendary. It skips the three
@@ -36,17 +36,18 @@ export interface Zone {
   name: string;
   from: number;
   sky: number;
-  /** [rarity index, chance] pairs that sum to 1. */
-  spawns: [number, number][];
+  /** Gems each pickup in this zone is worth, and its colour. */
+  gems: number;
+  gemColor: number;
   hazard: number;
 }
 
 export const ZONES: Zone[] = [
-  { name: 'Low Sky', from: 0, sky: 0x8fd3ff, spawns: [[0, 0.7], [1, 0.3]], hazard: 0x3b3b46 },
-  { name: 'Cloud Kingdom', from: 150, sky: 0xffc98a, spawns: [[2, 0.6], [3, 0.4]], hazard: 0x8a4b2a },
-  { name: 'Storm Layer', from: 400, sky: 0x5b3f8f, spawns: [[3, 0.8], [4, 0.2]], hazard: 0x1e1e2c },
-  { name: 'Edge of Space', from: 800, sky: 0x16224d, spawns: [[4, 0.65], [5, 0.35]], hazard: 0xb8c0cc },
-  { name: 'Cosmic', from: 1500, sky: 0x2a0d45, spawns: [[5, 0.85], [6, 0.15]], hazard: 0xff7a3d },
+  { name: 'Low Sky', from: 0, sky: 0x8fd3ff, gems: 1, gemColor: 0x3fc8ff, hazard: 0x3b3b46 },
+  { name: 'Cloud Kingdom', from: 150, sky: 0xffc98a, gems: 3, gemColor: 0xff5fb4, hazard: 0x8a4b2a },
+  { name: 'Storm Layer', from: 400, sky: 0x5b3f8f, gems: 8, gemColor: 0xb57bff, hazard: 0x1e1e2c },
+  { name: 'Edge of Space', from: 800, sky: 0x16224d, gems: 20, gemColor: 0x7dffd8, hazard: 0xb8c0cc },
+  { name: 'Cosmic', from: 1500, sky: 0x2a0d45, gems: 50, gemColor: 0xffffff, hazard: 0xff7a3d },
 ];
 
 /** Basic Launch has Low Sky, Cloud Kingdom and Storm Layer. */
@@ -58,19 +59,45 @@ export function zoneIndexAt(y: number): number {
   return index;
 }
 
-export function rollRarity(y: number): number {
-  const spawns = ZONES[Math.min(zoneIndexAt(y), MAX_ZONE)].spawns;
+/** Gems in the sky: each pickup pays its zone's `gems`, and now and then a big one pays `bigMultiplier` times that. */
+export const GEMS = {
+  bigChance: 0.1,
+  bigMultiplier: 5,
+  /** Share of the run's gems a hazard hit knocks loose. */
+  hitLoss: 0.15,
+  /** Flight 1 is a straight line of this many gems, enough for the first pull. */
+  tutorialLine: 12,
+};
+
+export interface GachaTier {
+  id: 'basic' | 'super';
+  name: string;
+  cost: number;
+  /** [rarity, chance] pairs that sum to 1. */
+  odds: [number, number][];
+  /** The best height a run must have reached to unlock this tier. */
+  unlockBest: number;
+}
+
+/** The gacha machine at the end of the showcase carpet. */
+export const GACHA: GachaTier[] = [
+  { id: 'basic', name: 'Basic pull', cost: 10, odds: [[0, 0.62], [1, 0.28], [2, 0.08], [3, 0.018], [4, 0.002]], unlockBest: 0 },
+  { id: 'super', name: 'Super pull', cost: 100, odds: [[1, 0.35], [2, 0.4], [3, 0.18], [4, 0.07]], unlockBest: 150 },
+];
+
+/** The very first pull is at least this rarity, so a new player's first brainrot feels good. */
+export const FIRST_PULL_RARITY = 1;
+
+/** Merging: this many of a rarity make one random character of the next rarity up. Legendary is the top for now. */
+export const MERGE: Record<number, number> = { 0: 10, 1: 8, 2: 6, 3: 4 };
+
+export function rollTier(tier: GachaTier): number {
   let roll = Math.random();
-  for (const [rarity, chance] of spawns) {
+  for (const [rarity, chance] of tier.odds) {
     roll -= chance;
     if (roll < 0) return rarity;
   }
-  return spawns[spawns.length - 1][0];
-}
-
-export function pickName(rarity: number): string {
-  const names = ROSTER[rarity];
-  return names[Math.floor(Math.random() * names.length)];
+  return tier.odds[tier.odds.length - 1][0];
 }
 
 // Normal-launch apex per cannon level, log-linear between these anchors, so each zone's level
@@ -123,9 +150,9 @@ export const FLIGHT = {
   playerRadius: 0.8,
   pickupRadius: 1.1,
   hazardRadius: 1.0,
-  /** Seconds of ascent between pickup rows, and the smallest height gap between them. */
-  pickupStep: 0.5,
-  pickupMinGap: 4.5,
+  /** Seconds of ascent between gem rows, and the smallest height gap between them. */
+  pickupStep: 0.45,
+  pickupMinGap: 4,
 };
 
 export const CHUTE = {
@@ -149,16 +176,16 @@ export const TUTORIAL = {
   hazardFromFlight: 3,
   noDropFlights: 3,
   wideChuteFlights: 2,
-  guaranteedRareFlight: 3,
   /** From this flight, the apex shows the next locked zone and the cannon level it needs. */
   goalFromFlight: 4,
 };
 
+/** Share of the run's gems lost in a crash. */
 export const CRASH_DROP = { tangled: 0.3, noChute: 0.5 };
 
-export type Track = 'cannon' | 'carry' | 'magnet' | 'steering' | 'chute';
+export type Track = 'cannon' | 'finder' | 'magnet' | 'steering' | 'chute';
 
-export const TRACKS: Track[] = ['cannon', 'carry', 'magnet', 'steering', 'chute'];
+export const TRACKS: Track[] = ['cannon', 'finder', 'magnet', 'steering', 'chute'];
 
 /**
  * Cost of the k-th purchase is base × growth^(k−1). `max` counts purchases; `effect` is the gain per
@@ -168,15 +195,11 @@ export const UPGRADES: Record<Track, { name: string; base: number; growth: numbe
   // Basic Launch stops at cannon level 37, whose perfect launch stays inside the Storm Layer. The doc goes to 60.
   // Retuned with `npm run sim` from the doc's 50 × 1.18: rebirth now unlocks after about 63 minutes, not 8.
   cannon: { name: 'Cannon power', base: 25, growth: 1.5, max: 36, effect: 0 },
-  // At most 8 carried (3 + 5), and only once the player has reached Cloud Kingdom: see CARRY_UNLOCK_HEIGHT.
-  carry: { name: 'Carry limit', base: 200, growth: 1.9, max: 5, effect: 0 },
-  magnet: { name: 'Grab magnet', base: 120, growth: 1.25, max: 25, effect: 0.1 },
+  finder: { name: 'Gem finder', base: 150, growth: 1.45, max: 20, effect: 0.1 },
+  magnet: { name: 'Gem magnet', base: 120, growth: 1.25, max: 25, effect: 0.1 },
   steering: { name: 'Steering', base: 100, growth: 1.22, max: 25, effect: 0.06 },
   chute: { name: 'Parachute', base: 150, growth: 1.28, max: 20, effect: 0.05 },
 };
-
-/** Carry upgrades unlock mid game, once a run has reached this height (Cloud Kingdom). */
-export const CARRY_UNLOCK_HEIGHT = 150;
 
 export const REBIRTH = {
   /** Rebirth unlocks at the cannon level whose normal launch reaches the Storm Layer. */
@@ -188,10 +211,10 @@ export const REBIRTH = {
 };
 
 export const ECONOMY = {
-  startCarry: 3,
+  /** The showcase: two rows of 5 slots either side of the carpet, 4 open at the start, 2 more per expansion. */
   startPads: 4,
-  padStep: 4,
-  maxPads: 40,
+  padStep: 2,
+  maxPads: 10,
   // Retuned with `npm run sim` from the doc's 400 × 3, which let income outrun every cost.
   firstExpansion: 1000,
   expansionGrowth: 5,

@@ -1,8 +1,8 @@
 // One input layer for mouse, keyboard and touch.
 // Desktop: hold Space or the mouse to charge, steer with the mouse or A/D, Space or click opens the chute.
 // Touch: hold anywhere to charge, drag to steer, the on-screen button opens the chute.
-// At the base: WASD or the arrows walk, dragging the mouse turns the camera, E uses the pad underfoot, Q/Tab
-// or 1-8 choose a carried character and Space heads to the cannon. On touch, a drag that starts on the left of
+// At the base: WASD or the arrows walk, dragging the mouse turns the camera, E uses the slot underfoot or
+// the gacha machine, B opens the backpack and Space heads to the cannon. On touch, a drag that starts on the left of
 // the screen is a joystick and a drag on the right turns the camera; on-screen buttons do the rest.
 
 export type SteerMode = 'mouse' | 'keys' | 'touch';

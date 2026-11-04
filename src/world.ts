@@ -1,6 +1,7 @@
 // Gray-box scene pieces: sky, ground, cannon, player, characters and birds.
 import * as THREE from 'three';
 import { ZONES, zoneIndexAt } from './config';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { addScenery, makeSkyDome } from './scenery';
 
 export const flat = (color: number, extra: THREE.MeshLambertMaterialParameters = {}) =>
@@ -171,43 +172,95 @@ export interface PlayerRig {
   legs: THREE.Group[];
 }
 
-/** The player faces away from the camera (-z), so the camera sees their back and the stack on it. */
+/** A simple cartoon face drawn on a canvas: two tall eyes and a smile. */
+function faceTexture(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const g = canvas.getContext('2d')!;
+  g.fillStyle = '#1d1d24';
+  for (const x of [44, 84]) {
+    g.beginPath();
+    g.ellipse(x, 52, 8, 13, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.fillStyle = '#ffffff';
+  for (const x of [41, 81]) {
+    g.beginPath();
+    g.arc(x, 46, 3.5, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.strokeStyle = '#1d1d24';
+  g.lineWidth = 7;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.arc(64, 74, 22, 0.15 * Math.PI, 0.85 * Math.PI);
+  g.stroke();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/**
+ * A blocky avatar with rounded edges: square head with a drawn face, a cap, a T-shirt, jeans and sneakers.
+ * The player faces away from the camera (-z), so the camera sees their back and the parachute pack.
+ */
 export function makePlayer(): PlayerRig {
   const group = new THREE.Group();
   const body = new THREE.Group();
   body.position.y = 0.9;
   group.add(body);
 
-  const suit = flat(0xff7a1a);
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.9, 0.5), suit);
-  torso.position.y = 0.05;
-  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 1), flat(0xffd2a1));
-  head.position.y = 0.75;
-  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.37, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), flat(0xe63946));
-  helmet.position.y = 0.8;
-  const pack = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.7, 0.28), flat(0x2b6cb0));
-  pack.position.set(0, 0.08, 0.38);
-  const limbMat = flat(0x3a3f58);
-  const legGeo = new THREE.BoxGeometry(0.28, 0.55, 0.3);
-  const armGeo = new THREE.BoxGeometry(0.22, 0.7, 0.22);
+  const rounded = (w: number, h: number, d: number, r = 0.07) => new RoundedBoxGeometry(w, h, d, 2, r);
+  const skin = new THREE.MeshLambertMaterial({ color: 0xf7c873 });
+  const shirt = new THREE.MeshLambertMaterial({ color: 0xff7a1a });
+  const pants = new THREE.MeshLambertMaterial({ color: 0x2f5fc4 });
+  const shoe = new THREE.MeshLambertMaterial({ color: 0x24263a });
+  const cap = new THREE.MeshLambertMaterial({ color: 0xe63946 });
+
+  const torso = new THREE.Mesh(rounded(0.82, 0.72, 0.42), shirt);
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.83, 0.12, 0.43), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+  stripe.position.y = 0.1;
+  const head = new THREE.Mesh(rounded(0.6, 0.6, 0.6, 0.15), skin);
+  head.position.y = 0.68;
+  const face = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.5, 0.5),
+    new THREE.MeshBasicMaterial({ map: faceTexture(), transparent: true }),
+  );
+  face.rotation.y = Math.PI;
+  face.position.set(0, 0.66, -0.306);
+  const crown = new THREE.Mesh(rounded(0.64, 0.22, 0.64, 0.08), cap);
+  crown.position.y = 0.95;
+  const brim = new THREE.Mesh(rounded(0.52, 0.05, 0.32, 0.02), cap);
+  brim.position.set(0, 0.86, -0.42);
+  const pack = new THREE.Mesh(rounded(0.6, 0.62, 0.24), new THREE.MeshLambertMaterial({ color: 0x2b6cb0 }));
+  pack.position.set(0, 0.04, 0.32);
+
   const arms: THREE.Group[] = [];
   const legs: THREE.Group[] = [];
+  const armGeo = rounded(0.34, 0.72, 0.38);
+  const sleeveGeo = rounded(0.37, 0.26, 0.41);
+  const legGeo = rounded(0.38, 0.5, 0.4);
+  const shoeGeo = rounded(0.4, 0.14, 0.48, 0.05);
   for (const side of [-1, 1]) {
-    const hip = new THREE.Group();
-    hip.position.set(side * 0.2, -0.38, 0);
-    const leg = new THREE.Mesh(legGeo, limbMat);
-    leg.position.y = -0.28;
-    hip.add(leg);
     const shoulder = new THREE.Group();
-    shoulder.position.set(side * 0.47, 0.4, 0);
-    const arm = new THREE.Mesh(armGeo, suit);
-    arm.position.y = -0.32;
-    shoulder.add(arm);
-    body.add(hip, shoulder);
-    legs.push(hip);
+    shoulder.position.set(side * 0.6, 0.3, 0);
+    const arm = new THREE.Mesh(armGeo, skin);
+    arm.position.y = -0.3;
+    const sleeve = new THREE.Mesh(sleeveGeo, shirt);
+    sleeve.position.y = -0.08;
+    shoulder.add(arm, sleeve);
+    const hip = new THREE.Group();
+    hip.position.set(side * 0.2, -0.36, 0);
+    const leg = new THREE.Mesh(legGeo, pants);
+    leg.position.y = -0.25;
+    const foot = new THREE.Mesh(shoeGeo, shoe);
+    foot.position.set(0, -0.48, -0.04);
+    hip.add(leg, foot);
+    body.add(shoulder, hip);
     arms.push(shoulder);
+    legs.push(hip);
   }
-  body.add(torso, head, helmet, pack);
+  body.add(torso, stripe, head, face, crown, brim, pack);
 
   // Parachute, scaled from 0 when it opens.
   const chute = new THREE.Group();
@@ -359,4 +412,86 @@ export function makeLabel(): Label {
       texture.needsUpdate = true;
     },
   };
+}
+
+export interface GemRig {
+  group: THREE.Group;
+  gem: THREE.Mesh;
+}
+
+/** How large gems float in the sky, so they read from the chase camera. */
+export const GEM_SCALE = { small: 1.5, big: 2.4 };
+const gemGeo = new THREE.OctahedronGeometry(0.42, 0);
+const gemMats = new Map<number, THREE.MeshLambertMaterial>();
+const gemHaloMats = new Map<number, THREE.SpriteMaterial>();
+const gemOutline = new THREE.MeshBasicMaterial({ color: 0x1d2340, side: THREE.BackSide });
+
+/** A faceted gem with a soft glow, in its zone's colour; big ones are larger and gold-rimmed. */
+export function makeGem(color: number, big: boolean): GemRig {
+  let mat = gemMats.get(color);
+  if (!mat) {
+    mat = new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.45, flatShading: true });
+    gemMats.set(color, mat);
+  }
+  let halo = gemHaloMats.get(color);
+  if (!halo) {
+    halo = new THREE.SpriteMaterial({ map: softTexture(), color, transparent: true, depthWrite: false, opacity: 0.7 });
+    gemHaloMats.set(color, halo);
+  }
+  const group = new THREE.Group();
+  const gem = new THREE.Mesh(gemGeo, mat);
+  gem.scale.set(1, 1.35, 1);
+  const shell = new THREE.Mesh(gemGeo, gemOutline);
+  shell.scale.setScalar(1.1);
+  gem.add(shell);
+  const glow = new THREE.Sprite(halo);
+  glow.scale.setScalar(big ? 3.2 : 2);
+  group.add(glow, gem);
+  group.scale.setScalar(big ? GEM_SCALE.big : GEM_SCALE.small);
+  return { group, gem };
+}
+
+export interface GuideRig {
+  /** Hovers over the objective, pointing down at it. */
+  marker: THREE.Group;
+  /** Lies on the ground by the player, pointing toward the objective. */
+  ground: THREE.Mesh;
+}
+
+/** The tutorial's green arrows. */
+export function makeGuide(): GuideRig {
+  const green = new THREE.MeshLambertMaterial({ color: 0x3ccf5a, emissive: 0x1f8a35, emissiveIntensity: 0.8 });
+  const ink = new THREE.MeshBasicMaterial({ color: 0x1d2340, side: THREE.BackSide });
+  const marker = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.9, 0.42), green);
+  shaft.position.y = 0.95;
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.75, 0.95, 4), green);
+  head.rotation.x = Math.PI;
+  head.rotation.y = Math.PI / 4;
+  head.position.y = 0.05;
+  for (const part of [shaft, head]) {
+    const shell = new THREE.Mesh(part.geometry, ink);
+    shell.scale.setScalar(1.12);
+    part.add(shell);
+  }
+  marker.add(shaft, head);
+  marker.visible = false;
+
+  const shape = new THREE.Shape();
+  shape.moveTo(-0.28, -0.7);
+  shape.lineTo(0.28, -0.7);
+  shape.lineTo(0.28, 0.1);
+  shape.lineTo(0.65, 0.1);
+  shape.lineTo(0, 0.85);
+  shape.lineTo(-0.65, 0.1);
+  shape.lineTo(-0.28, 0.1);
+  shape.closePath();
+  const geo = new THREE.ShapeGeometry(shape);
+  geo.rotateX(-Math.PI / 2);
+  const ground = new THREE.Mesh(
+    geo,
+    new THREE.MeshBasicMaterial({ color: 0x3ccf5a, transparent: true, opacity: 0.9, depthWrite: false }),
+  );
+  ground.visible = false;
+  return { marker, ground };
 }

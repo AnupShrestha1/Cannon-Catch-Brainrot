@@ -12,13 +12,14 @@
     <div id="hud">
       <div id="topLeft">
         <div id="wallet" class="outline"><span class="coin"></span><span id="coins">0</span><span id="income"></span></div>
+        <div id="gemWallet" class="outline"><span class="gem-icon"></span><span id="gemCount">0</span></div>
         <div id="alt" class="outline">
           <div><span id="altNum">0</span><span class="unit">m</span></div>
           <div id="zone">Low Sky</div>
           <div id="best"></div>
         </div>
       </div>
-      <div id="stack"></div>
+      <div id="stack" class="outline"></div>
       <div id="corner">
         <button id="soundBtn" type="button">Sound on</button>
         <button id="tuneBtn" type="button">Tune</button>
@@ -39,8 +40,8 @@
       <button id="chuteBtn" type="button">PARA<br />CHUTE<span class="key">Space</span></button>
       <button id="upgradesBtn" type="button">Upgrades</button>
       <button id="bookBtn" type="button">Book</button>
+      <button id="backpackBtn" type="button">Backpack<span id="backpackCount"></span></button>
       <button id="launchBtn" type="button">Launch!<span class="key">Space</span></button>
-      <div id="carry"></div>
       <div id="stick"><div class="knob"></div></div>
       <button id="actionBtn" type="button"></button>
       <div id="flightNo" class="outline"></div>
@@ -51,7 +52,7 @@
         <h2 id="revealTitle"></h2>
         <div id="cards"></div>
         <p id="summary"></p>
-        <button id="againBtn" type="button">Take them home</button>
+        <button id="againBtn" type="button">Back to base</button>
         <div class="hint">or press Space</div>
       </div>
     </div>
@@ -78,7 +79,6 @@
       <h3>Tuning</h3>
       <label>Cannon level <b id="levelVal"></b><input id="levelIn" type="range" min="1" max="20" step="1" /></label>
       <div id="heightVal" class="sub"></div>
-      <label>Carry limit <b id="carryVal"></b><input id="carryIn" type="range" min="0" max="12" step="1" /></label>
       <label>Hazards
         <select id="hazIn">
           <option value="auto">From flight 3 (tutorial)</option>
@@ -91,6 +91,12 @@
         <button type="button" data-coins="100000">+100K</button>
         <button type="button" data-coins="10000000">+10M</button>
         <button type="button" data-coins="1000000000">+1B</button>
+      </div>
+      <div class="tune-money gems">
+        <button type="button" data-gems="10">+10 💎</button>
+        <button type="button" data-gems="100">+100 💎</button>
+        <button type="button" data-gems="1000">+1K 💎</button>
+        <button type="button" data-gems="10000">+10K 💎</button>
       </div>
       <button id="resetBtn" type="button">Reset everything</button>
       <p class="sub">T toggles this panel. M mutes.</p>

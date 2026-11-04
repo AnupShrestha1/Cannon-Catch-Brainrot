@@ -1055,81 +1055,6 @@ button:active {
   margin: 0 auto;
 }
 
-/* Carried catches at the base */
-/* At the top: the flight's carry slots are hidden at the base, and the player stands near the bottom. */
-#carry {
-  position: absolute;
-  left: 50%;
-  top: 14px;
-  transform: translateX(-50%);
-  display: none;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  width: max-content;
-  max-width: 94vw;
-  pointer-events: auto;
-}
-
-#carry.on {
-  display: flex;
-}
-
-.carry-card {
-  width: 96px;
-  padding: 6px 4px;
-  color: var(--ink);
-  cursor: pointer;
-  animation: none;
-}
-
-.carry-card .swatch {
-  width: 36px;
-  height: 36px;
-  margin-bottom: 4px;
-}
-
-.carry-card .swatch::before,
-.carry-card .swatch::after {
-  top: 8px;
-  width: 8px;
-  height: 8px;
-}
-
-.carry-card .swatch::before {
-  left: 6px;
-}
-
-.carry-card .swatch::after {
-  right: 6px;
-}
-
-.carry-card .name {
-  min-height: 0;
-  font-size: 11px;
-}
-
-.carry-card.selected {
-  box-shadow: 0 0 0 4px var(--gold), 0 0 16px var(--gold);
-  transform: translateY(-6px);
-}
-
-.carry-card button {
-  margin-top: 4px;
-  padding: 3px 6px;
-  font-size: 11px;
-}
-
-@media (max-width: 640px) {
-  #carry {
-    top: 96px;
-  }
-
-  .carry-card {
-    width: 82px;
-  }
-}
-
 /* Touch joystick at the base */
 #stick {
   position: absolute;
@@ -1180,19 +1105,281 @@ button:active {
   transform: translateX(-50%) translateY(2px);
 }
 
-.carry-next {
-  align-self: center;
-  padding: 8px 12px;
-  font-size: 13px;
-}
-
-.carry-card {
-  cursor: default;
-}
-
 @media (max-width: 640px) {
   #actionBtn {
     bottom: 104px;
     font-size: 17px;
   }
+}
+
+/* Gems: the wallet line, the flight counter and the run result */
+.gem-icon {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  margin: 0 4px 0 3px;
+  border: 3px solid var(--ink);
+  border-radius: 4px;
+  background: linear-gradient(135deg, #c8f4ff, #3fc8ff 55%, #1f7fd6);
+  transform: rotate(45deg);
+  flex: none;
+}
+
+.gem-icon.big {
+  width: 64px;
+  height: 64px;
+  border-width: 5px;
+  border-radius: 10px;
+  animation: gem-spin 1.6s ease-in-out infinite;
+}
+
+#gemWallet {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -4px 0 10px;
+  font-size: 22px;
+  font-weight: 900;
+  color: #c8f4ff;
+}
+
+#stack {
+  display: none;
+  align-items: center;
+  max-width: none;
+  font-size: 30px;
+  font-weight: 900;
+  color: #c8f4ff;
+}
+
+#stack.on {
+  display: flex;
+}
+
+#stack.bump {
+  animation: gem-bump 0.25s ease-out;
+}
+
+.run-gems {
+  display: flex;
+  justify-content: center;
+  padding: 18px 0 10px;
+}
+
+.run-total {
+  width: 100%;
+  font-size: 18px;
+  font-weight: 900;
+  color: #1f7fd6;
+}
+
+.float.gem {
+  font-size: 22px;
+  color: #c8f4ff;
+}
+
+@keyframes gem-bump {
+  50% {
+    transform: translateX(-50%) scale(1.25);
+  }
+}
+
+@keyframes gem-spin {
+  0%,
+  100% {
+    transform: rotate(45deg) scale(1);
+  }
+  50% {
+    transform: rotate(45deg) scale(1.12);
+  }
+}
+
+/* Backpack button beside Book */
+#backpackBtn {
+  position: absolute;
+  left: 245px;
+  bottom: max(40px, env(safe-area-inset-bottom));
+  display: none;
+  padding: 12px 18px;
+  font-size: 20px;
+  background: #ffb3d1;
+}
+
+#backpackBtn.on {
+  display: block;
+}
+
+#backpackCount:not(:empty) {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  min-width: 26px;
+  padding: 3px 6px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: var(--red);
+  color: #fff;
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  #backpackBtn {
+    left: 208px;
+    font-size: 16px;
+  }
+}
+
+#modalButtons {
+  flex-wrap: wrap;
+}
+
+#modalBody .sub {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+#modalBody .sub:empty {
+  display: none;
+}
+
+/* Gacha panel */
+.gem-line {
+  font-size: 18px;
+  font-weight: 900;
+  color: #1f7fd6;
+}
+
+.gacha-tier {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: #f6f7fb;
+  text-align: left;
+}
+
+.gacha-tier.locked {
+  opacity: 0.55;
+}
+
+.gacha-tier h3 {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+
+.gacha-tier .cost {
+  color: #1f7fd6;
+}
+
+.gacha-tier p {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+.odds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.odds span {
+  padding: 3px 8px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: var(--c);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  text-shadow: 0 1px 0 var(--ink);
+}
+
+.card.pulled {
+  transform-origin: center;
+  animation: pull-in 0.6s cubic-bezier(0.2, 1.6, 0.4, 1) backwards;
+  box-shadow: 0 0 0 3px #fff, 0 0 26px var(--c);
+}
+
+@keyframes pull-in {
+  from {
+    opacity: 0;
+    transform: scale(0.2) rotate(-25deg);
+  }
+}
+
+/* Backpack */
+.inv-group {
+  margin-top: 12px;
+  padding: 8px;
+  border: 3px solid var(--c);
+  border-radius: 14px;
+  text-align: left;
+}
+
+.inv-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.inv-head b {
+  flex: 1;
+  color: var(--c);
+  font-size: 17px;
+  text-shadow: 0 1px 0 var(--ink);
+}
+
+.inv-head button,
+.inv-actions button {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.inv-head button:first-of-type {
+  background: var(--gold);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.inv-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inv-card {
+  position: relative;
+  width: 112px;
+  animation: none;
+}
+
+.inv-card .count {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.inv-actions {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.inv-actions button:first-child {
+  background: var(--green);
+  color: #fff;
+}
+
+.tune-money.gems button {
+  background: #9de6ff;
 }

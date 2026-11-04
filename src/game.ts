@@ -1,16 +1,18 @@
-// The game loop. A run goes charge → launch → ascent → apex → fall → parachute → landing → reveal,
-// then home to the base, where catches earn coins on pads and the shop sells upgrades.
-// The flight is scripted rather than simulated, so the apex hits launchHeight() exactly.
+// The game loop. A run goes charge → launch → ascent → apex → fall → parachute → landing → result, then
+// home to the showcase, where gems from the sky buy gacha pulls, brainrots on display earn coins, and coins
+// buy upgrades. The flight is scripted rather than simulated, so the apex hits launchHeight() exactly.
 import * as THREE from 'three';
 import { Sfx } from './audio';
-import { Base } from './base';
-import { animateShared, makeCharacter, makeSilhouette, type CharacterRig } from './characters';
+import { Base, CARPET_Z, MACHINE_FRONT } from './base';
+import { animateShared } from './characters';
 import {
   CHARGE,
   CHUTE,
   CRASH_DROP,
   ECONOMY,
   FLIGHT,
+  GACHA,
+  GEMS,
   GIFTS,
   HAZARD_SPACING,
   LEVELS,
@@ -24,13 +26,11 @@ import {
   ZONES,
   launchHeight,
   levelToReach,
-  pickName,
-  rollRarity,
   zoneIndexAt,
+  type GachaTier,
 } from './config';
 import {
   buyUpgrade,
-  carryLimit,
   expansionCost,
   formatCoins,
   incomeMultiplier,
@@ -38,12 +38,16 @@ import {
   incomePerSecond,
   levelCost,
   levelReady,
+  merge,
+  mergeNeed,
   xpNeeded,
   padIncome,
-  placeCatches,
+  pickName,
+  pull,
   sellValue,
+  takeFromBackpack,
+  tierUnlocked,
   trackBoost,
-  trackUnlocked,
   upgradeCost,
 } from './economy';
 import { Particles, Streaks } from './fx';
@@ -51,10 +55,13 @@ import { Hud, type ShopItem, type ShopRow } from './hud';
 import { Input } from './input';
 import { BOOK_ZONES, DAILY, bookEntries, dailyCoins, dailyStatus, dayKey, offlineEarnings, zoneComplete } from './meta';
 import { platform } from './platform';
-import { clearSave, loadSave, writeSave, type PadSlot, type Save } from './store';
+import { clearSave, loadSave, writeSave, type Owned, type Save } from './store';
 import {
   buildEnv,
   makeBird,
+  GEM_SCALE,
+  makeGem,
+  makeGuide,
   makeLabel,
   makePlane,
   makeStormCloud,
@@ -62,6 +69,8 @@ import {
   skyColorAt,
   type BirdRig,
   type Env,
+  type GemRig,
+  type GuideRig,
   type Label,
   type PlayerRig,
 } from './world';
@@ -69,20 +78,17 @@ import {
 type State = 'aim' | 'charging' | 'ascent' | 'fall' | 'landed' | 'reveal' | 'home' | 'boarding';
 type Chute = 'closed' | 'open' | 'tangled';
 
-interface Pickup {
-  rarity: number;
-  name: string;
-  rig: CharacterRig;
+interface Gem {
+  /** Gems it pays, before the gem finder bonus. */
+  value: number;
+  big: boolean;
+  color: number;
+  rig: GemRig;
   x: number;
   y: number;
-  z: number;
-  vx: number;
-  vy: number;
-  state: 'floating' | 'held' | 'tumbling' | 'lost' | 'gone';
-  /** Seconds until a tumbling character can be grabbed again. */
-  cooldown: number;
-  /** Already passed by while the stack was full, so the FULL toast doesn't repeat. */
-  passed: boolean;
+  state: 'floating' | 'taken';
+  /** Progress of a collected gem's zip into the player, 0 to 1. */
+  t: number;
   seed: number;
 }
 
@@ -110,21 +116,22 @@ interface Bird {
 const MUZZLE_Y = 3.2;
 /** Height of the player's collision centre above their feet. */
 const BODY_MID = 0.95;
-const STACK_BASE = 2.15;
-const STACK_STEP = 0.6;
 /** Depth the player drifts to while landing, clear of the cannon at z = 0. */
 const LANDING_Z = 3.5;
-/** Where the player waits at the base, and where they climb into the cannon. */
-const HOME_SPOT = new THREE.Vector3(-3.6, 0, 6.4);
+/** Where the player waits in the showcase, just inside the entrance, and where they climb into the cannon. */
+const HOME_SPOT = new THREE.Vector3(-13, 0, CARPET_Z);
 const CANNON_FOOT = new THREE.Vector3(0, 0, 2.3);
+/** The base camera looks down the carpet toward the gacha machine. */
+const HOME_YAW = Math.PI / 2;
 const WALK_SPEED = 9;
-/** Walking within this distance of a pad's centre collects its coins. */
+/** Walking within this distance of a slot's centre collects its coins. */
 const COLLECT_RADIUS = 1.7;
+/** How close to the machine's front the player must stand to use it. */
+const MACHINE_REACH = 2.6;
 /** Radians the base camera turns per pixel dragged. */
 const ORBIT_SPEED = 0.006;
-/** Characters float larger than life in the sky so they read from the chase camera; held ones shrink. */
-const SKY_SCALE = 1.35;
-const HELD_SCALE = 0.55;
+/** Seconds the machine shakes before a pull's result shows. */
+const PULL_TIME = 1.1;
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
@@ -159,6 +166,7 @@ export class Game {
   private recordLine = new THREE.Group();
   private recordLabel: Label;
   private goal = new THREE.Group();
+  private goalGem = new THREE.Group();
   private goalLabel: Label;
   private sky = new THREE.Color(0x8fd3ff);
   private tmp = new THREE.Vector3();
@@ -207,15 +215,19 @@ export class Game {
   private chuteScale = 0;
   private landing = '';
   private recordPassed = false;
-  private knocked = 0;
-  private dropped = 0;
+  /** Gems picked up this run, and gems knocked loose by hazards or lost in a crash. */
+  private runGems = 0;
+  private gemsLost = 0;
 
-  private stack: Pickup[] = [];
-  private pickups: Pickup[] = [];
+  private gems: Gem[] = [];
   private birds: Bird[] = [];
-  /** Rigs of the characters carried at the base, matching save.carrying. */
-  private carried: CharacterRig[] = [];
-  private carrySel = 0;
+  /** The tutorial's green arrows, and the place they point at (null hides them). */
+  private guide: GuideRig;
+  private guideTarget: THREE.Vector3 | null = null;
+  private objTarget = new THREE.Vector3();
+  /** Seconds left of the machine's shake before the pending pull's result shows. */
+  private pulling = 0;
+  private pendingPull: { got: Owned; tier: GachaTier; isNew: boolean } | null = null;
   /** What to do when the current walk arrives. */
   private arrive: (() => void) | null = null;
 
@@ -223,7 +235,6 @@ export class Game {
   private shake = 0;
   private stun = 0;
   private invuln = 0;
-  private fullCooldown = 0;
   private landedT = 0;
   private revealT = 0;
   private bounceVy = 0;
@@ -272,15 +283,16 @@ export class Game {
     this.recordLine.visible = false;
     this.scene.add(this.recordLine);
 
-    // The goal in the sky: what the next locked zone holds, and the cannon level that reaches it.
-    const silhouette = makeSilhouette(3, 'Pizzarotto Pellicano');
-    silhouette.scale.setScalar(1.8);
+    // The goal in the sky: the next zone's bigger gems, and the cannon level that reaches them.
     this.goalLabel = makeLabel();
     this.goalLabel.sprite.position.y = 4.4;
     this.goalLabel.sprite.scale.multiplyScalar(1.5);
-    this.goal.add(silhouette, this.goalLabel.sprite);
+    this.goal.add(this.goalGem, this.goalLabel.sprite);
     this.goal.visible = false;
     this.scene.add(this.goal);
+
+    this.guide = makeGuide();
+    this.scene.add(this.guide.marker, this.guide.ground);
 
     this.paintCannon();
     platform.onSettingsChange(() => this.applyMute());
@@ -289,12 +301,12 @@ export class Game {
     this.resize();
 
     this.base.sync(this.save);
-    this.buildCarried();
-    if (this.save.pads.some(Boolean) || this.save.carrying.length) {
-      // Returning players start at the base, where their pads have been waiting.
+    if (this.save.flightNo > 0) {
+      // Returning players start in the showcase, where their brainrots have been earning.
       this.px = HOME_SPOT.x;
       this.py = this.prevY = 0;
       this.pz = HOME_SPOT.z;
+      this.camYaw = HOME_YAW;
       this.state = 'home';
     } else {
       this.boardCannon();
@@ -307,14 +319,14 @@ export class Game {
   }
 
   /** Dev-only: advance the game by fixed 60 fps steps and render once, for testing in throttled tabs. */
-  debugStep(seconds: number): { state: State; y: number; vy: number; stack: number; coins: number } {
+  debugStep(seconds: number): { state: State; y: number; vy: number; gems: number; coins: number } {
     for (let t = 0; t < seconds; t += 1 / 60) this.update(1 / 60);
     this.renderer.render(this.scene, this.camera);
     return {
       state: this.state,
       y: Math.round(this.py * 10) / 10,
       vy: Math.round(this.vy * 10) / 10,
-      stack: this.stack.length,
+      gems: this.runGems,
       coins: Math.floor(this.save.coins),
     };
   }
@@ -354,12 +366,12 @@ export class Game {
     });
     onClick(hud.giftBtn, () => this.claimGift());
     onClick(hud.bookBtn, () => this.openBook());
+    onClick(hud.backpackBtn, () => this.openBackpack());
     hud.onBuy = (item) => this.buy(item);
-    hud.onCarryNext = () => this.cycleCarried();
-    hud.onAction = () => this.usePadUnderfoot();
-    hud.onCarrySell = (i) => this.sellCarried(i);
+    hud.onAction = () => this.useHere();
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyT') hud.tunePanel.classList.toggle('hidden');
+      if (e.code === 'KeyB' && !hud.modalOpen && (this.state === 'home' || this.state === 'aim')) this.openBackpack();
       if (e.code === 'KeyM') this.toggleMute();
       if (e.code === 'Escape') hud.closeShop();
     });
@@ -373,6 +385,11 @@ export class Game {
         writeSave(this.save);
         this.refreshShop();
         this.hud.toast(`+${formatCoins(amount)} coins (test)`, 'good small');
+      },
+      addGems: (amount) => {
+        this.save.gems += amount;
+        writeSave(this.save);
+        this.hud.toast(`+${formatCoins(amount)} gems (test)`, 'good small');
       },
       resetAll: () => {
         clearSave();
@@ -420,9 +437,12 @@ export class Game {
     this.shake *= Math.exp(-realDt * 6);
     this.stun = Math.max(0, this.stun - dt);
     this.invuln = Math.max(0, this.invuln - dt);
-    this.fullCooldown = Math.max(0, this.fullCooldown - realDt);
-    // The shop and other modals swallow presses while they're open.
-    const blocked = this.hud.shopOpen || this.hud.modalOpen;
+    if (this.pulling > 0) {
+      this.pulling -= realDt;
+      if (this.pulling <= 0) this.showPullResult();
+    }
+    // The shop, other modals and a pull in progress swallow presses.
+    const blocked = this.hud.shopOpen || this.hud.modalOpen || this.pulling > 0;
     const pressed = this.input.consumePressed() && !blocked;
     const space = this.input.consumeSpace() && !blocked;
     // Clicks and taps don't move or select anything any more; drop them.
@@ -460,7 +480,7 @@ export class Game {
     if (this.state !== 'home') this.input.consumeOrbitDx();
     this.hud.showStick(this.state === 'home' && !blocked ? this.input.stick : null);
     this.updateEconomy(realDt);
-    this.updatePickups(dt);
+    this.updateGems(dt);
     this.updateBirds(dt);
     this.base.update(this.save, this.time, realDt);
     this.fx.update(dt);
@@ -506,8 +526,8 @@ export class Game {
     this.chute = 'closed';
     this.landing = '';
     this.recordPassed = false;
-    this.knocked = 0;
-    this.dropped = 0;
+    this.runGems = 0;
+    this.gemsLost = 0;
     this.vx = 0;
     this.targetX = this.px;
     this.input.consumeTouchDx();
@@ -545,25 +565,28 @@ export class Game {
     }
   }
 
-  /** Places characters along the predicted ascent, so every row passes by at a readable pace. */
+  /** Places gems along the predicted ascent, so every row passes by at a readable pace. */
   private spawnRun(apex: number, v0: number, tUp: number): void {
     const flight = this.save.flightNo;
     const width = FLIGHT.spawnHalfWidth * (this.lane / FLIGHT.lane);
-    // A Storm Layer flight blasts through Low Sky too fast to catch anything, so nothing spawns there.
+    // A Storm Layer flight blasts through Low Sky too fast to collect anything, so nothing spawns there.
     const apexZone = Math.min(zoneIndexAt(apex), MAX_ZONE);
     const floor = apexZone >= 2 ? ZONES[apexZone - 1].from : 14;
     if (flight === 1) {
-      // Tutorial: a single Common straight up the flight path.
-      this.addPickup(0, 0, MUZZLE_Y + (apex - MUZZLE_Y) * 0.55);
+      // Tutorial: a straight line of gems up the flight path, enough for the first gacha pull.
+      const n = GEMS.tutorialLine;
+      for (let i = 0; i < n; i++) this.addGem(0, 12 + ((apex - 20) * i) / (n - 1), false);
     } else {
       let lastY = -Infinity;
       for (let t = 0.6; t < tUp - 0.1; t += FLIGHT.pickupStep * rand(0.8, 1.2)) {
         const y = MUZZLE_Y + v0 * t - 0.5 * this.gUp * t * t;
         if (y < floor || y - lastY < FLIGHT.pickupMinGap) continue;
         lastY = y;
-        this.addPickup(rollRarity(y), rand(-width, width), y);
+        const x = rand(-width, width);
+        this.addGem(x, y, Math.random() < GEMS.bigChance);
+        // Now and then a pair, side by side.
+        if (Math.random() < 0.3) this.addGem(clamp(x + (x > 0 ? -2.6 : 2.6), -width, width), y + 0.5, false);
       }
-      if (flight === TUTORIAL.guaranteedRareFlight) this.addPickup(RARE, rand(-width, width) / 2, apex * 0.8 + 2);
     }
 
     const mode = this.save.hazards;
@@ -578,24 +601,22 @@ export class Game {
     }
   }
 
-  private addPickup(rarity: number, x: number, y: number): void {
-    const name = pickName(rarity);
-    const rig = makeCharacter(rarity, name);
+  /** A gem worth its zone's value; big ones are gold and worth GEMS.bigMultiplier times as much. */
+  private addGem(x: number, y: number, big: boolean): void {
+    const zone = ZONES[Math.min(zoneIndexAt(y), MAX_ZONE)];
+    const color = big ? 0xffd23f : zone.gemColor;
+    const rig = makeGem(color, big);
     rig.group.position.set(x, y, 0);
-    rig.group.scale.setScalar(SKY_SCALE);
     this.scene.add(rig.group);
-    this.pickups.push({
-      rarity,
-      name,
+    this.gems.push({
+      value: zone.gems * (big ? GEMS.bigMultiplier : 1),
+      big,
+      color,
       rig,
       x,
       y,
-      z: 0,
-      vx: 0,
-      vy: 0,
       state: 'floating',
-      cooldown: 0,
-      passed: false,
+      t: 0,
       seed: Math.random() * 10,
     });
   }
@@ -687,15 +708,9 @@ export class Game {
     const bx = this.px;
     const by = this.py + BODY_MID;
 
-    // Hands are on the straps once the chute is open.
-    if (this.chute === 'closed') {
-      const reach = FLIGHT.playerRadius + FLIGHT.pickupRadius * trackBoost(this.save, 'magnet');
-      for (const p of this.pickups) {
-        if ((p.state !== 'floating' && p.state !== 'tumbling') || p.cooldown > 0) continue;
-        if (segmentDistance(ax, ay, bx, by, p.x, p.y + 0.6) < reach) {
-          this.tryGrab(p);
-        }
-      }
+    const reach = FLIGHT.playerRadius + FLIGHT.pickupRadius * trackBoost(this.save, 'magnet');
+    for (const g of this.gems) {
+      if (g.state === 'floating' && segmentDistance(ax, ay, bx, by, g.x, g.y) < reach) this.grabGem(g);
     }
 
     if (this.invuln > 0) return;
@@ -708,66 +723,20 @@ export class Game {
     }
   }
 
-  private lowestIndex(): number {
-    let low = 0;
-    for (let i = 1; i < this.stack.length; i++) if (this.stack[i].rarity < this.stack[low].rarity) low = i;
-    return low;
-  }
-
-  /** A full stack swaps its lowest-rarity character for a rarer one, and passes equal or lower ones by. */
-  private tryGrab(p: Pickup): void {
-    if (this.stack.length >= carryLimit(this.save)) {
-      const low = this.lowestIndex();
-      if (p.rarity <= this.stack[low].rarity) {
-        if (!p.passed) {
-          p.passed = true;
-          if (this.fullCooldown <= 0) {
-            this.fullCooldown = 0.8;
-            this.hud.toast('FULL', 'small');
-            this.sfx.full();
-          }
-        }
-        return;
-      }
-      const [out] = this.stack.splice(low, 1);
-      this.release(out, 1, rand(-1, 1) * 4, 4);
-      this.hud.toast(`SWAP → ${RARITIES[p.rarity].name}`, 'small');
-      this.sfx.swap();
+  private grabGem(g: Gem): void {
+    g.state = 'taken';
+    g.t = 0;
+    const value = Math.max(1, Math.round(g.value * trackBoost(this.save, 'finder')));
+    this.runGems += value;
+    const at = this.tmp.set(g.x, g.y, 0);
+    this.fx.burst(at, { count: g.big ? 24 : 8, color: g.color, speed: g.big ? 9 : 6, life: 0.5, size: g.big ? 0.7 : 0.45 });
+    this.floatAt(at.setY(g.y + 1.2), `+${value}`, 'gem');
+    this.sfx.pop(g.big ? 4 : 1);
+    if (g.big) {
+      this.slowmo = Math.max(this.slowmo, 0.25);
+      this.hud.toast(`BIG GEM! +${value}`, 'gold');
+      this.sfx.sparkle();
     }
-
-    p.state = 'held';
-    p.passed = false;
-    p.rig.cloud.visible = false;
-    p.rig.group.scale.setScalar(HELD_SCALE);
-    p.rig.figure.rotation.set(0, 0, 0);
-    this.stack.push(p);
-    this.fx.burst(this.tmp.set(p.x, p.y + 0.6, 0), {
-      count: 12 + p.rarity * 5,
-      color: RARITIES[p.rarity].color,
-      speed: 7,
-      life: 0.6,
-      size: 0.6,
-    });
-    this.sfx.pop(p.rarity);
-    this.sfx.chant(p.name);
-    if (this.addToBook(p.name)) this.hud.toast('NEW! Added to your book', 'small');
-    if (p.rarity >= 4) platform.happytime();
-    if (p.rarity >= RARE) {
-      this.slowmo = Math.max(this.slowmo, 0.45);
-      this.hud.toast(`${RARITIES[p.rarity].name.toUpperCase()}!`, '', RARITIES[p.rarity].css);
-    }
-  }
-
-  /** Throws a character off the stack; it tumbles down and can be grabbed again after `cooldown`. */
-  private release(p: Pickup, cooldown: number, vx: number, vy: number): void {
-    p.state = 'tumbling';
-    p.cooldown = cooldown;
-    p.x = this.px;
-    p.y = this.py + STACK_BASE;
-    p.z = this.pz;
-    p.vx = vx;
-    p.vy = vy;
-    p.rig.group.scale.setScalar(SKY_SCALE);
   }
 
   private hitBird(b: Bird): void {
@@ -780,14 +749,24 @@ export class Game {
     this.vy *= rising ? FLIGHT.hitSlow : 0.7;
     this.fx.burst(this.tmp.set(b.x, b.y, 0), { count: 14, color: 0xffffff, speed: 6, life: 0.7, size: 0.45, gravity: 4 });
     this.sfx.hit();
-    if (this.stack.length) {
-      const [out] = this.stack.splice(this.lowestIndex(), 1);
-      this.release(out, 0.8, (this.px >= b.x ? 1 : -1) * 5, 5);
-      this.knocked++;
-      const word = HAZARDS[b.kind].toast;
-      this.hud.toast(rising ? `${word} Catch it on the way down` : word, 'bad small');
+    // A hit knocks some of the run's gems loose (none during the tutorial flights).
+    const tutorial = this.save.flightNo <= TUTORIAL.noDropFlights;
+    const lost = tutorial ? 0 : Math.min(this.runGems, Math.max(1, Math.round(this.runGems * GEMS.hitLoss)));
+    const word = HAZARDS[b.kind].toast;
+    if (lost > 0) {
+      this.runGems -= lost;
+      this.gemsLost += lost;
+      this.fx.burst(this.tmp.set(this.px, this.py + BODY_MID, 0), {
+        count: 12,
+        color: 0x3fc8ff,
+        speed: 8,
+        life: 0.9,
+        size: 0.45,
+        gravity: 12,
+      });
+      this.hud.toast(`${word} -${lost} gems`, 'bad small');
     } else {
-      this.hud.toast(HAZARDS[b.kind].toast, 'bad small');
+      this.hud.toast(rising ? word : `${word}`, 'bad small');
     }
   }
 
@@ -813,7 +792,11 @@ export class Game {
     if (this.save.cannon >= level) return false;
     this.goal.position.set(0, this.apex + 13, -2);
     this.goal.visible = true;
-    this.goalLabel.set(`${zone.name} · Cannon Lv ${level}`, '#ffe58a');
+    this.goalGem.clear();
+    const gem = makeGem(zone.gemColor, true);
+    gem.group.scale.setScalar(3.2);
+    this.goalGem.add(gem.group);
+    this.goalLabel.set(`${zone.name}: ${zone.gems}× gems · Cannon Lv ${level}`, '#ffe58a');
     return true;
   }
 
@@ -884,21 +867,11 @@ export class Game {
     this.landing = tangled ? 'Crash landing' : 'No parachute';
     const tutorial = this.save.flightNo <= TUTORIAL.noDropFlights;
     const share = tangled ? CRASH_DROP.tangled : CRASH_DROP.noChute;
-    const count = tutorial ? 0 : Math.floor(this.stack.length * share);
-    if (count > 0) {
-      // Never drop the rarest one.
-      let top = 0;
-      this.stack.forEach((p, i) => {
-        if (p.rarity > this.stack[top].rarity) top = i;
-      });
-      const keep = this.stack[top];
-      const candidates = this.stack.filter((p) => p !== keep).sort(() => Math.random() - 0.5);
-      for (const p of candidates.slice(0, count)) {
-        this.stack.splice(this.stack.indexOf(p), 1);
-        this.release(p, 99, rand(-8, 8), rand(8, 12));
-        p.state = 'lost';
-      }
-      this.dropped = count;
+    const lost = tutorial ? 0 : Math.floor(this.runGems * share);
+    if (lost > 0) {
+      this.runGems -= lost;
+      this.gemsLost += lost;
+      this.fx.burst(this.tmp.set(this.px, 1, this.pz), { count: 18, color: 0x3fc8ff, speed: 10, life: 1, size: 0.5, up: 6, gravity: 14 });
     }
 
     this.state = 'landed';
@@ -910,8 +883,8 @@ export class Game {
     this.shake = 1;
     this.sfx.thud(1);
     this.hud.toast(tangled ? 'CRASH!' : 'SPLAT!', 'bad big');
-    if (count > 0) this.hud.toast(`Dropped ${count}`, 'bad small');
-    else if (tutorial && this.stack.length) this.hud.toast('Tutorial: nothing dropped', 'small');
+    if (lost > 0) this.hud.toast(`Lost ${lost} gems`, 'bad small');
+    else if (tutorial && this.runGems) this.hud.toast('Tutorial: no gems lost', 'small');
   }
 
   /** Comic ragdoll: two shrinking bounces, then the body lies flat until the reveal. */
@@ -939,135 +912,302 @@ export class Game {
     if (this.landedT <= 0) this.showReveal();
   }
 
+  /** The run's result: gems collected, added to the wallet now so nothing is lost if the tab closes. */
   private showReveal(): void {
     this.state = 'reveal';
     this.revealT = 0;
-    const cards = this.stack.map((p) => ({ name: p.name, rarity: p.rarity }));
+    this.save.gems += this.runGems;
+    writeSave(this.save);
     const parts = [`Apex ${Math.round(this.apex)} m`, this.landing];
-    if (this.knocked) parts.push(`${this.knocked} knocked off`);
-    if (this.dropped) parts.push(`${this.dropped} dropped`);
-    const button = cards.length === 0 ? 'Back to base' : cards.length === 1 ? 'Take it home' : 'Take them home';
-    this.hud.showReveal(cards, parts.join(' · '), button);
-    cards.forEach((c, i) => this.sfx.pop(c.rarity, 0.25 + i * 0.32));
+    if (this.gemsLost) parts.push(`${this.gemsLost} gems lost`);
+    this.hud.showRunResult(this.runGems, this.save.gems, parts.join(' · '));
+    if (this.runGems > 0) this.sfx.coin();
   }
 
   private clearRun(): void {
-    for (const p of this.pickups) this.scene.remove(p.rig.group);
+    for (const g of this.gems) this.scene.remove(g.rig.group);
     for (const b of this.birds) this.scene.remove(b.rig.group);
-    this.pickups = [];
+    this.gems = [];
     this.birds = [];
-    this.stack = [];
     this.goal.visible = false;
     this.recordLine.visible = false;
   }
 
   // ---------------------------------------------------------------- base
 
-  /** Walk home carrying the catch. At the base, each one is placed on a pad or sold, the player's choice. */
+  /** Back to the showcase after a run. */
   private goHome(): void {
-    const catches = this.stack.map((p) => ({ name: p.name, rarity: p.rarity }));
     this.clearRun();
     this.hud.hideReveal();
-    this.save.carrying.push(...catches);
-    this.buildCarried();
     writeSave(this.save);
     this.state = 'home';
+    this.camYaw = HOME_YAW;
     this.walkTo(HOME_SPOT);
   }
 
-  /** Rebuilds the characters on the player's head from the save, selecting the rarest. */
-  private buildCarried(): void {
-    for (const rig of this.carried) this.scene.remove(rig.group);
-    this.carried = this.save.carrying.map((c) => {
-      const rig = makeCharacter(c.rarity, c.name);
-      rig.cloud.visible = false;
-      rig.group.scale.setScalar(HELD_SCALE);
-      this.scene.add(rig.group);
-      return rig;
-    });
-    this.carrySel = this.rarestCarried();
-    this.refreshCarry();
+  private nearMachine(): boolean {
+    return Math.hypot(MACHINE_FRONT.x - this.px, MACHINE_FRONT.z - this.pz) < MACHINE_REACH;
   }
 
-  private rarestCarried(): number {
-    let best = 0;
-    this.save.carrying.forEach((c, i) => {
-      if (c.rarity > this.save.carrying[best].rarity) best = i;
-    });
-    return best;
-  }
-
-  private refreshCarry(): void {
-    this.hud.renderCarry(
-      this.save.carrying.map((c) => ({ ...c, sell: sellValue(this.save, c) })),
-      this.carrySel,
-    );
-  }
-
-  /** Q, Tab or the tray's Next button: choose the next carried character. */
-  private cycleCarried(): void {
-    const n = this.save.carrying.length;
-    if (n > 1) this.selectCarried((this.carrySel + 1) % n);
-  }
-
-  private selectCarried(i: number): void {
-    if (i < 0 || i >= this.save.carrying.length) return;
-    this.carrySel = i;
-    this.refreshCarry();
-    this.sfx.pop(this.save.carrying[i].rarity);
-  }
-
-  private removeCarried(i: number): void {
-    this.save.carrying.splice(i, 1);
-    this.scene.remove(this.carried[i].group);
-    this.carried.splice(i, 1);
-    this.carrySel = this.save.carrying.length ? this.rarestCarried() : 0;
-    this.refreshCarry();
-  }
-
-  /** Puts the selected carried character on an empty pad. */
-  private placeCarried(pad: number): void {
+  /** The gacha panel: each tier with its price and odds. */
+  private openGacha(): void {
     const s = this.save;
-    const c = s.carrying[this.carrySel];
-    if (!c || s.pads[pad]) return;
-    s.pads[pad] = { name: c.name, rarity: c.rarity, cash: 0, level: 1 };
-    this.removeCarried(this.carrySel);
-    this.base.sync(s);
-    this.fx.burst(Base.padPosition(pad, this.tmp).setY(1), {
-      count: 16,
-      color: RARITIES[c.rarity].color,
-      speed: 6,
-      life: 0.7,
-      size: 0.6,
-      up: 3,
+    const have = document.createElement('p');
+    have.className = 'gem-line';
+    have.textContent = `You have ${formatCoins(s.gems)} gems`;
+    const tiers = GACHA.map((tier) => {
+      const el = document.createElement('div');
+      el.className = 'gacha-tier';
+      if (!tierUnlocked(s, tier)) el.classList.add('locked');
+      const head = document.createElement('h3');
+      const name = document.createElement('span');
+      name.textContent = tier.name;
+      const cost = document.createElement('span');
+      cost.className = 'cost';
+      cost.textContent = `${tier.cost} gems`;
+      head.append(name, cost);
+      const odds = document.createElement('div');
+      odds.className = 'odds';
+      for (const [rarity, chance] of tier.odds) {
+        const chip = document.createElement('span');
+        chip.style.setProperty('--c', RARITIES[rarity].css);
+        chip.textContent = `${RARITIES[rarity].name} ${+(chance * 100).toFixed(1)}%`;
+        odds.append(chip);
+      }
+      el.append(head, odds);
+      if (!tierUnlocked(s, tier)) {
+        const note = document.createElement('p');
+        note.textContent = 'Unlocks once a flight reaches Cloud Kingdom.';
+        el.append(note);
+      }
+      return el;
     });
-    this.sfx.pop(c.rarity);
-    this.sfx.chant(c.name);
+    this.hud.showModal('Gacha machine', [have, ...tiers], [
+      ...GACHA.map((tier) => ({
+        label: tierUnlocked(s, tier) ? `${tier.name} · ${tier.cost} gems` : `${tier.name} · locked`,
+        primary: tierUnlocked(s, tier) && s.gems >= tier.cost,
+        action: () => this.startPull(tier),
+      })),
+      { label: 'Close' },
+    ]);
+  }
+
+  /** Spends the gems, shakes the machine, and shows the result once the capsule pops out. */
+  private startPull(tier: GachaTier): void {
+    const s = this.save;
+    if (!tierUnlocked(s, tier)) {
+      this.hud.toast(`Reach Cloud Kingdom to unlock the ${tier.name}`, 'small');
+      return;
+    }
+    if (s.gems < tier.cost) {
+      this.hud.toast(`Need ${tier.cost - s.gems} more gems`, 'bad small');
+      return;
+    }
+    const got = pull(s, tier);
+    if (!got) return;
+    const isNew = this.addToBook(got.name);
+    this.completeHint('pull');
+    writeSave(s);
+    this.base.shakeMachine();
+    this.sfx.swap();
+    this.pulling = PULL_TIME;
+    this.pendingPull = { got, tier, isNew };
+  }
+
+  private showPullResult(): void {
+    const pending = this.pendingPull;
+    this.pendingPull = null;
+    if (!pending) return;
+    const { got, tier, isNew } = pending;
+    const s = this.save;
+    const rarity = RARITIES[got.rarity];
+    this.fx.burst(Base.capsuleExit(this.tmp), {
+      count: 20 + got.rarity * 12,
+      color: rarity.color,
+      speed: 8 + got.rarity,
+      life: 0.9,
+      size: 0.6,
+      up: 5,
+    });
+    this.sfx.pop(got.rarity);
+    this.sfx.chant(got.name);
+    if (got.rarity >= RARE) this.sfx.sparkle();
+    if (got.rarity >= 4) platform.happytime();
+    const card = this.hud.characterCard(got.name, got.rarity);
+    card.classList.add('pulled');
+    const info = document.createElement('p');
+    info.textContent = `${formatCoins(padIncome(s, { rarity: got.rarity }))} coins/s on display${isNew ? ' · NEW in your book!' : ''}`;
+    const empty = s.pads.findIndex((slot) => slot === null);
+    const buttons: { label: string; primary?: boolean; action?: () => void }[] = [];
+    if (empty >= 0) buttons.push({ label: 'Put on display', primary: true, action: () => this.placeFromBackpack(got.name, empty) });
+    if (s.gems >= tier.cost) {
+      buttons.push({ label: `Pull again · ${tier.cost} gems`, primary: empty < 0, action: () => this.startPull(tier) });
+    }
+    buttons.push({ label: `Sell · ${formatCoins(sellValue(s, got))}`, action: () => this.sellFromBackpack(got.name) });
+    buttons.push({ label: 'Keep in backpack' });
+    const title = got.rarity >= RARE ? `${rarity.name.toUpperCase()}!` : `${rarity.name}!`;
+    this.hud.showModal(title, [card, info], buttons);
+  }
+
+  /**
+   * The backpack: brainrots not on display, grouped by rarity, with merge, sell and place buttons.
+   * Opened from an empty slot, placing puts the brainrot on that slot.
+   */
+  private openBackpack(slot: number | null = null): void {
+    const s = this.save;
+    const reopen = () => this.openBackpack(slot);
+    if (!s.inventory.length) {
+      const text = document.createElement('p');
+      text.textContent = 'Your backpack is empty. Pull the gacha machine at the end of the carpet to get brainrots.';
+      this.hud.showModal('Backpack', [text], [{ label: 'Close' }]);
+      return;
+    }
+    const target = slot ?? s.pads.findIndex((p) => p === null);
+    const rules = document.createElement('p');
+    rules.className = 'sub';
+    rules.textContent = 'Merge: 10 Common → 1 Uncommon · 8 Uncommon → 1 Rare · 6 Rare → 1 Epic · 4 Epic → 1 Legendary';
+    const button = (label: string, onClick: () => void, disabled = false) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.disabled = disabled;
+      b.addEventListener('click', onClick);
+      return b;
+    };
+    const groups: HTMLElement[] = [];
+    for (let r = RARITIES.length - 1; r >= 0; r--) {
+      const items = s.inventory.filter((o) => o.rarity === r);
+      if (!items.length) continue;
+      const group = document.createElement('div');
+      group.className = 'inv-group';
+      group.style.setProperty('--c', RARITIES[r].css);
+      const head = document.createElement('div');
+      head.className = 'inv-head';
+      const title = document.createElement('b');
+      title.textContent = `${RARITIES[r].name} ×${items.length}`;
+      head.append(title);
+      const need = mergeNeed(r);
+      if (need !== null) {
+        head.append(
+          button(`Merge ${need} → ${RARITIES[r + 1].name}`, () => {
+            this.mergeRarity(r);
+            reopen();
+          }, items.length < need),
+        );
+      }
+      const each = sellValue(s, { rarity: r });
+      head.append(
+        button(`Sell all · ${formatCoins(each * items.length)}`, () => {
+          this.sellAllOf(r);
+          reopen();
+        }),
+      );
+      const cards = document.createElement('div');
+      cards.className = 'inv-cards';
+      const names = [...new Set(items.map((o) => o.name))];
+      for (const name of names) {
+        const count = items.filter((o) => o.name === name).length;
+        const card = this.hud.characterCard(name, r);
+        card.classList.add('inv-card');
+        if (count > 1) {
+          const badge = document.createElement('span');
+          badge.className = 'count';
+          badge.textContent = `×${count}`;
+          card.append(badge);
+        }
+        const actions = document.createElement('div');
+        actions.className = 'inv-actions';
+        actions.append(
+          button('Display', () => this.placeFromBackpack(name, target), target < 0),
+          button(`Sell ${formatCoins(each)}`, () => {
+            this.sellFromBackpack(name);
+            if (s.inventory.length) reopen();
+            else this.hud.closeModal();
+          }),
+        );
+        card.append(actions);
+        cards.append(card);
+      }
+      group.append(head, cards);
+      groups.push(group);
+    }
+    const title = slot !== null ? `Choose a brainrot for slot ${slot + 1}` : `Backpack · ${s.inventory.length}`;
+    const full = document.createElement('p');
+    full.className = 'sub';
+    full.textContent = target < 0 ? 'Every slot is taken: store or sell one, or unlock more slots in Upgrades.' : '';
+    this.hud.showModal(title, [rules, full, ...groups], [{ label: 'Close' }]);
+  }
+
+  /** Puts a backpack brainrot on an empty, open slot. */
+  private placeFromBackpack(name: string, pad: number): void {
+    const s = this.save;
+    if (pad < 0 || pad >= s.pads.length || s.pads[pad]) {
+      this.hud.toast('No empty slot: store or sell one, or unlock more', 'bad small');
+      return;
+    }
+    const got = takeFromBackpack(s, name);
+    if (!got) return;
+    s.pads[pad] = { name: got.name, rarity: got.rarity, cash: 0, level: 1 };
+    this.base.sync(s);
+    this.hud.closeModal();
+    this.fx.burst(Base.padPosition(pad, this.tmp).setY(1.2), {
+      count: 20,
+      color: RARITIES[got.rarity].color,
+      speed: 6,
+      life: 0.8,
+      size: 0.6,
+      up: 4,
+    });
+    this.sfx.pop(got.rarity);
+    this.sfx.chant(got.name);
     this.completeHint('place');
     writeSave(s);
   }
 
-  private sellCarried(i: number): void {
-    const c = this.save.carrying[i];
-    if (!c) return;
-    const coins = sellValue(this.save, c);
+  private sellFromBackpack(name: string): void {
+    const got = takeFromBackpack(this.save, name);
+    if (!got) return;
+    const coins = sellValue(this.save, got);
     this.save.coins += coins;
-    this.removeCarried(i);
-    this.floatAt(this.tmp.set(this.px, this.py + 2.6, this.pz), `Sold ${c.name} +${formatCoins(coins)}`, 'small');
+    this.hud.toast(`Sold ${got.name} +${formatCoins(coins)}`, 'good small');
     this.sfx.coin();
     writeSave(this.save);
   }
 
-  /** Sells the character on a pad and puts the selected carried one in its place. */
-  private swapCarried(pad: number): void {
+  private sellAllOf(rarity: number): void {
     const s = this.save;
-    const old = s.pads[pad];
-    if (!old || !s.carrying.length) return;
-    const coins = sellValue(s, old) + Math.floor(old.cash);
+    const count = s.inventory.filter((o) => o.rarity === rarity).length;
+    if (!count) return;
+    const coins = sellValue(s, { rarity }) * count;
+    s.inventory = s.inventory.filter((o) => o.rarity !== rarity);
     s.coins += coins;
-    s.pads[pad] = null;
-    this.floatAt(Base.padPosition(pad, this.tmp).setY(2.4), `Sold ${old.name} +${formatCoins(coins)}`, 'small');
-    this.placeCarried(pad);
+    this.hud.toast(`Sold ${count} ${RARITIES[rarity].name} +${formatCoins(coins)}`, 'good small');
+    this.sfx.coin();
+    writeSave(s);
+  }
+
+  private mergeRarity(rarity: number): void {
+    const got = merge(this.save, rarity);
+    if (!got) return;
+    const isNew = this.addToBook(got.name);
+    this.hud.toast(`Merged into ${got.name}!${isNew ? ' NEW!' : ''}`, '', RARITIES[got.rarity].css);
+    this.sfx.sparkle();
+    this.sfx.chant(got.name);
+    if (got.rarity >= 4) platform.happytime();
+    writeSave(this.save);
+  }
+
+  /** Moves a slot's brainrot into the backpack, collecting its coins first. It goes back to level 1. */
+  private storePad(i: number): void {
+    const s = this.save;
+    const slot = s.pads[i];
+    if (!slot) return;
+    this.collect(i);
+    s.inventory.push({ name: slot.name, rarity: slot.rarity });
+    s.pads[i] = null;
+    this.base.sync(s);
+    this.hud.toast(`${slot.name} is in your backpack${(slot.level ?? 1) > 1 ? ' (back to Lv 1)' : ''}`, 'small');
+    writeSave(s);
   }
 
   private walkTo(target: THREE.Vector3, then: (() => void) | null = null): void {
@@ -1122,7 +1262,7 @@ export class Game {
 
   /**
    * Walking at the base: WASD or the touch stick, relative to the camera, easing in and out so it doesn't
-   * snap. Dragging turns the camera; E uses the pad underfoot and 1-8 choose a carried catch.
+   * snap. Dragging turns the camera; E uses the slot underfoot or the gacha machine.
    */
   private moveAtBase(dt: number, blocked: boolean): void {
     if (blocked) {
@@ -1161,9 +1301,7 @@ export class Game {
     } else {
       this.walkVel.set(0, 0);
     }
-    for (let n = 1; n <= 8; n++) if (this.input.consumeKey(`Digit${n}`)) this.selectCarried(n - 1);
-    if (this.input.consumeKey('KeyQ') || this.input.consumeKey('Tab')) this.cycleCarried();
-    if (this.input.consumeKey('KeyE') || this.input.consumeKey('Enter')) this.usePadUnderfoot();
+    if (this.input.consumeKey('KeyE') || this.input.consumeKey('Enter')) this.useHere();
   }
 
   private padUnderfoot(): number | null {
@@ -1174,24 +1312,46 @@ export class Game {
     return null;
   }
 
-  /** What E (or the action button) would do on the pad underfoot, or null when there's nothing to do. */
-  private padActionLabel(): string | null {
-    const pad = this.padUnderfoot();
-    if (pad === null) return null;
-    const slot = this.save.pads[pad];
-    const carried = this.save.carrying[this.carrySel];
-    if (!slot) return carried ? `Place ${carried.name}` : null;
-    return `Open ${slot.name}`;
+  /** A locked slot the player stands on, or null. */
+  private lockedUnderfoot(): number | null {
+    for (let i = this.save.pads.length; i < ECONOMY.maxPads; i++) {
+      const at = Base.padPosition(i, this.tmp);
+      if (Math.hypot(at.x - this.px, at.z - this.pz) < COLLECT_RADIUS) return i;
+    }
+    return null;
   }
 
-  private usePadUnderfoot(): void {
+  /** What E (or the action button) would do here, or null when there's nothing to do. */
+  private actionLabel(): string | null {
+    if (this.nearMachine()) return `Gacha · ${formatCoins(this.save.gems)} gems`;
     const pad = this.padUnderfoot();
-    if (pad === null) {
-      this.hud.toast('Stand on a pad first', 'small');
+    if (pad !== null) {
+      const slot = this.save.pads[pad];
+      if (slot) return `Open ${slot.name}`;
+      return this.save.inventory.length ? 'Display a brainrot' : null;
+    }
+    return this.lockedUnderfoot() !== null ? 'Unlock more slots' : null;
+  }
+
+  private useHere(): void {
+    if (this.state !== 'home') return;
+    if (this.nearMachine()) {
+      this.openGacha();
       return;
     }
-    if (this.save.carrying.length && !this.save.pads[pad]) this.placeCarried(pad);
-    else this.openPad(pad);
+    const pad = this.padUnderfoot();
+    if (pad !== null) {
+      if (this.save.pads[pad]) this.openPad(pad);
+      else if (this.save.inventory.length) this.openBackpack(pad);
+      else this.hud.toast('Empty slot: pull the gacha to get a brainrot', 'small');
+      return;
+    }
+    if (this.lockedUnderfoot() !== null) {
+      this.hud.openShop();
+      this.refreshShop();
+      return;
+    }
+    this.hud.toast('Walk to a slot or the gacha machine first', 'small');
   }
 
   private collect(i: number): void {
@@ -1232,33 +1392,43 @@ export class Game {
     return !this.hasHint('level') && this.hasHint('upgrade') && cost !== null && this.save.coins >= cost;
   }
 
-  private updateHomePrompt(): void {
-    const anyCash = this.save.pads.some((slot) => slot !== null && slot.cash >= 1);
-    let text = '';
-    const carried = this.save.carrying[this.carrySel];
+  /** The current objective for new players: a prompt and, when it's a place, where the green arrow points. */
+  private objective(): { text: string; target: THREE.Vector3 | null } {
+    const s = this.save;
     const press = this.input.isTouch ? 'tap the button' : 'press E';
-    if (carried) {
-      text = this.save.pads.some((slot) => slot === null)
-        ? `Walk onto an empty pad and ${press} to place ${carried.name}`
-        : `Base full: stand on a pad and ${press} to swap ${carried.name} in, or sell it`;
-    } else if (!this.hasHint('collect') && anyCash) {
-      text = 'Walk over a pad to collect its coins';
-    } else if (this.wantsUpgradeHint()) {
-      text = 'Upgrade your cannon!';
-    } else if (this.wantsExpandHint()) {
-      text = 'Your pads are full! Expand the base in Upgrades';
-    } else if (this.wantsLevelHint()) {
-      text = `Stand on a pad and ${press} to level up its character`;
+    const basic = GACHA[0];
+    const empty = s.pads.findIndex((slot) => slot === null);
+    const cashPad = s.pads.findIndex((slot) => slot !== null && slot.cash >= 1);
+    if (!this.hasHint('pull') && s.gems >= basic.cost) {
+      return { text: `Walk to the gacha machine and ${press} to pull`, target: MACHINE_FRONT };
     }
+    if (!this.hasHint('place') && s.inventory.length && empty >= 0) {
+      return {
+        text: `Stand on the glowing slot and ${press} to display your brainrot`,
+        target: Base.padPosition(empty, this.objTarget),
+      };
+    }
+    if (!this.hasHint('collect') && cashPad >= 0) {
+      return { text: 'Walk over the slot to collect its coins', target: Base.padPosition(cashPad, this.objTarget) };
+    }
+    if (this.wantsUpgradeHint()) return { text: 'Upgrade your cannon!', target: null };
+    if (this.wantsExpandHint()) return { text: 'Your showcase is full! Unlock more slots in Upgrades', target: null };
+    if (this.wantsLevelHint()) return { text: `Stand on a slot and ${press} to level up its brainrot`, target: null };
+    if (s.flightNo < 6 && s.gems < basic.cost && !s.inventory.length && empty >= 0) {
+      return { text: `Launch to collect gems in the sky (${s.gems}/${basic.cost} for a pull)`, target: CANNON_FOOT };
+    }
+    return { text: '', target: null };
+  }
+
+  private updateHomePrompt(): void {
+    const { text, target } = this.objective();
     this.hud.prompt(text, !!text);
+    this.guideTarget = target;
   }
 
   private startBoarding(): void {
-    if (this.save.carrying.length) {
-      this.hud.toast("Place or sell what you're carrying first", 'bad small');
-      return;
-    }
     this.state = 'boarding';
+    this.guideTarget = null;
     this.hud.prompt('');
     this.walkTo(CANNON_FOOT);
   }
@@ -1337,9 +1507,8 @@ export class Game {
   private shopRows(): ShopRow[] {
     const s = this.save;
     const apex = (level: number) => Math.round(launchHeight(level));
-    const pct = (track: 'magnet' | 'steering' | 'chute', extra = 0) =>
+    const pct = (track: 'finder' | 'magnet' | 'steering' | 'chute', extra = 0) =>
       `+${Math.round((s[track] + extra) * UPGRADES[track].effect * 100)}%`;
-    const limit = carryLimit(s);
     const rows: ShopRow[] = TRACKS.map((track) => {
       const cost = upgradeCost(s, track);
       let level: string;
@@ -1352,16 +1521,8 @@ export class Game {
               ? `Apex ${apex(s.cannon)} m, the top of this build`
               : `Apex ${apex(s.cannon)} m → ${apex(s.cannon + 1)} m`;
           break;
-        case 'carry':
-          level = `${limit} per run`;
-          detail = !trackUnlocked(s, 'carry')
-            ? 'Unlocks once you reach Cloud Kingdom'
-            : cost === null
-              ? 'Maxed out'
-              : `Carry ${limit} → ${limit + 1} characters`;
-          break;
         default: {
-          const what = { magnet: 'Grab radius', steering: 'Turn speed', chute: 'Safe window' }[track];
+          const what = { finder: 'Gems per pickup', magnet: 'Grab radius', steering: 'Turn speed', chute: 'Safe window' }[track];
           level = pct(track);
           detail = cost === null ? 'Maxed out' : `${what} ${pct(track)} → ${pct(track, 1)}`;
         }
@@ -1372,17 +1533,16 @@ export class Game {
         level,
         detail,
         cost,
-        affordable: trackUnlocked(s, track) && cost !== null && s.coins >= cost,
-        button: trackUnlocked(s, track) ? undefined : 'Locked',
+        affordable: cost !== null && s.coins >= cost,
       };
     });
 
     const pads = expansionCost(s);
     rows.push({
       id: 'pads',
-      title: 'Base pads',
-      level: `${s.pads.length} pads`,
-      detail: pads === null ? 'Maxed out' : `${s.pads.length} → ${s.pads.length + ECONOMY.padStep} pads`,
+      title: 'Showcase slots',
+      level: `${s.pads.length}/${ECONOMY.maxPads}`,
+      detail: pads === null ? 'Every slot is open' : `${s.pads.length} → ${s.pads.length + ECONOMY.padStep} slots`,
       cost: pads,
       affordable: pads !== null && s.coins >= pads,
     });
@@ -1394,8 +1554,8 @@ export class Game {
       title: 'Rebirth',
       level: s.rebirths ? `×${incomeMultiplier(s)} income` : '',
       detail: unlocked
-        ? `Start over with ×${next} income. You keep your rarest character.`
-        : `Unlocks at Cannon Lv ${REBIRTH.cannonLevel}. Resets coins, upgrades and pads for ×${next} income.`,
+        ? `Start over with ×${next} income. You keep your rarest brainrot.`
+        : `Unlocks at Cannon Lv ${REBIRTH.cannonLevel}. Resets coins, gems, upgrades, slots and backpack for ×${next} income.`,
       cost: null,
       affordable: unlocked,
       button: this.rebirthArmed ? 'Sure?' : 'Rebirth',
@@ -1414,13 +1574,13 @@ export class Game {
     }
     this.rebirthArmed = false;
     const cost = item === 'pads' ? expansionCost(s) : upgradeCost(s, item);
-    if (cost === null || s.coins < cost || (item !== 'pads' && !trackUnlocked(s, item))) return;
+    if (cost === null || s.coins < cost) return;
     s.coins -= cost;
     if (item === 'pads') {
       for (let i = 0; i < ECONOMY.padStep; i++) s.pads.push(null);
       this.base.sync(s);
       this.completeHint('expand');
-      this.hud.toast(`${s.pads.length} pads!`, 'gold');
+      this.hud.toast(`${s.pads.length} slots open!`, 'gold');
     } else {
       buyUpgrade(s, item);
       if (item === 'cannon') this.completeHint('upgrade');
@@ -1435,14 +1595,16 @@ export class Game {
   private rebirth(): void {
     const s = this.save;
     this.rebirthArmed = false;
-    let keep: PadSlot | null = null;
-    for (const slot of s.pads) if (slot && (!keep || slot.rarity > keep.rarity)) keep = slot;
+    let keep: Owned | null = null;
+    for (const o of [...s.pads, ...s.inventory]) if (o && (!keep || o.rarity > keep.rarity)) keep = o;
     s.rebirths += 1;
     s.coins = 0;
+    s.gems = 0;
     s.cannon = 1;
-    s.carryLevel = s.magnet = s.steering = s.chute = 0;
+    s.finder = s.magnet = s.steering = s.chute = 0;
     s.pads = Array.from({ length: ECONOMY.startPads }, () => null);
-    if (keep) s.pads[0] = { ...keep, cash: 0, level: 1, xp: 0 };
+    s.inventory = [];
+    if (keep) s.pads[0] = { name: keep.name, rarity: keep.rarity, cash: 0, level: 1, xp: 0 };
     this.base.sync(s);
     this.paintCannon();
     writeSave(s);
@@ -1450,7 +1612,7 @@ export class Game {
     this.hud.toast(`REBIRTH! ×${incomeMultiplier(s)} income`, 'gold big');
     platform.happytime();
     this.sfx.sparkle();
-    this.fx.burst(this.tmp.set(-7, 2, 0), { count: 60, color: 0xffd84a, speed: 12, life: 1.2, size: 0.7, up: 6 });
+    this.fx.burst(Base.padPosition(0, this.tmp).setY(2), { count: 60, color: 0xffd84a, speed: 12, life: 1.2, size: 0.7, up: 6 });
   }
 
   /** Each rebirth unlocks a cannon colour: the design doc's cosmetic skin, in gray-box form. */
@@ -1466,7 +1628,7 @@ export class Game {
     const s = this.save;
     const slot = s.pads[i];
     if (!slot) {
-      this.hud.toast('Empty pad: catch something to fill it', 'small');
+      this.hud.toast('Empty slot: pull the gacha to fill it', 'small');
       return;
     }
     const level = slot.level ?? 1;
@@ -1489,17 +1651,13 @@ export class Game {
           ? `Level up · ${formatCoins(cost)}`
           : `Needs XP · ${Math.ceil((need ?? 0) - (slot.xp ?? 0))} s`;
     const sell = sellValue(s, slot);
-    const carried = s.carrying[this.carrySel];
-    const swap = carried
-      ? [{ label: `Swap in ${carried.name}`, primary: true, action: () => this.swapCarried(i) }]
-      : [];
     this.hud.showModal(slot.name, [card, stats, next], [
-      ...swap,
       {
         label: levelLabel,
-        primary: !carried && ready && cost !== null && s.coins >= cost,
+        primary: ready && cost !== null && s.coins >= cost,
         action: () => this.levelUp(i),
       },
+      { label: 'Store in backpack', action: () => this.storePad(i) },
       {
         label: sellArmed ? `Sure? +${formatCoins(sell)}` : `Sell · ${formatCoins(sell)}`,
         action: () => (sellArmed ? this.sellPad(i) : this.openPad(i, true)),
@@ -1623,10 +1781,9 @@ export class Game {
       this.sfx.coin();
     } else {
       const name = pickName(reward.rarity);
-      placeCatches(s, [{ name, rarity: reward.rarity }]);
+      s.inventory.push({ name, rarity: reward.rarity });
       this.addToBook(name);
-      this.base.sync(s);
-      this.hud.toast(`${RARITIES[reward.rarity].name}: ${name}!`, '', RARITIES[reward.rarity].css);
+      this.hud.toast(`${RARITIES[reward.rarity].name}: ${name}! It's in your backpack`, '', RARITIES[reward.rarity].css);
       this.sfx.chant(name);
     }
     writeSave(s);
@@ -1683,34 +1840,17 @@ export class Game {
 
   // ---------------------------------------------------------------- entities
 
-  private updatePickups(dt: number): void {
-    for (const p of this.pickups) {
-      if (p.state === 'floating') {
-        p.rig.figure.position.y = Math.sin(this.time * 2 + p.seed) * 0.15;
-        p.rig.figure.rotation.y = Math.sin(this.time * 0.8 + p.seed) * 0.35;
-        p.rig.group.position.set(p.x, p.y, 0);
-        p.rig.animate(this.time + p.seed);
-      } else if (p.state === 'tumbling' || p.state === 'lost') {
-        p.cooldown -= dt;
-        p.vy = Math.max(p.vy - 14 * dt, p.state === 'lost' ? -30 : -FLIGHT.tumbleFall);
-        p.vx *= Math.max(0, 1 - 1.2 * dt);
-        p.x = clamp(p.x + p.vx * dt, -this.lane - 2, this.lane + 2);
-        p.y += p.vy * dt;
-        p.rig.figure.rotation.z += 5 * dt;
-        p.rig.figure.rotation.x += 3 * dt;
-        p.rig.group.position.set(p.x, p.y, p.z);
-        if (p.y <= 0.2) {
-          p.state = 'gone';
-          p.rig.group.visible = false;
-          this.fx.burst(this.tmp.set(p.x, 0.5, p.z), {
-            count: 12,
-            color: RARITIES[p.rarity].color,
-            speed: 5,
-            life: 0.6,
-            size: 0.7,
-            up: 2,
-          });
-        }
+  private updateGems(dt: number): void {
+    for (const g of this.gems) {
+      if (g.state === 'floating') {
+        g.rig.gem.rotation.y = this.time * 2.5 + g.seed;
+        g.rig.group.position.set(g.x, g.y + Math.sin(this.time * 2 + g.seed) * 0.2, 0);
+      } else if (g.rig.group.visible) {
+        // Collected: it zips into the player and shrinks away.
+        g.t = Math.min(1, g.t + dt * 6);
+        g.rig.group.position.lerp(this.tmp.set(this.px, this.py + BODY_MID, this.pz), g.t);
+        g.rig.group.scale.setScalar((g.big ? GEM_SCALE.big : GEM_SCALE.small) * (1 - g.t));
+        if (g.t >= 1) g.rig.group.visible = false;
       }
     }
   }
@@ -1779,22 +1919,9 @@ export class Game {
     this.player.chute.rotation.z =
       this.chute === 'tangled' ? Math.sin(this.time * 30) * 0.3 : Math.sin(this.time * 1.5) * 0.05;
 
-    const stackBase = lying ? 1.1 : STACK_BASE;
-    this.stack.forEach((p, i) => {
-      const sway = Math.sin(this.time * 5 + i) * 0.05 * i;
-      p.rig.group.position.set(this.px + sway, this.py + stackBase + i * STACK_STEP, this.pz + 0.15);
-      p.rig.figure.position.y = 0;
-      p.rig.figure.rotation.y = Math.sin(this.time * 2 + i) * 0.3;
-    });
-    this.carried.forEach((rig, i) => {
-      const selected = i === this.carrySel;
-      rig.group.position.set(this.px, this.py + STACK_BASE + i * STACK_STEP, this.pz + 0.15);
-      rig.group.scale.setScalar(HELD_SCALE * (selected ? 1.25 : 1));
-      rig.figure.position.y = selected ? Math.abs(Math.sin(this.time * 6)) * 0.15 : 0;
-      rig.figure.rotation.y = this.player.group.rotation.y + Math.PI;
-    });
-    this.hud.setCarryVisible(this.state === 'home' && this.save.carrying.length > 0);
-    this.hud.showAction(this.state === 'home' && !this.walking ? this.padActionLabel() : null);
+    const free = this.state === 'home' && !this.walking && this.pulling <= 0 && !this.hud.modalOpen;
+    this.hud.showAction(free ? this.actionLabel() : null);
+    this.updateGuide();
     animateShared(this.time);
 
     const shadow = this.env.shadow;
@@ -1816,12 +1943,9 @@ export class Game {
 
     const alt = this.state === 'aim' || this.state === 'charging' ? 0 : Math.max(0, this.py);
     this.hud.setAlt(!atBase && this.state !== 'reveal', alt, ZONES[zoneIndexAt(alt)].name, this.save.best);
-    this.hud.setStack(
-      this.stack.map((p) => p.rarity),
-      carryLimit(this.save),
-      !atBase,
-    );
-    this.hud.setWallet(this.save.coins, incomePerSecond(this.save));
+    this.hud.setRunGems(inFlight || this.state === 'landed' || this.state === 'aim' || this.state === 'charging' ? this.runGems : null);
+    this.hud.setWallet(this.save.coins, incomePerSecond(this.save), this.save.gems);
+    this.hud.setBackpack(this.save.inventory.length);
     const canShop = this.state === 'home' || this.state === 'aim';
     const upgradeHint = this.wantsUpgradeHint() || this.wantsExpandHint();
     const launchHint =
@@ -1830,6 +1954,25 @@ export class Game {
       !upgradeHint &&
       !this.save.pads.some((slot) => slot !== null && slot.cash >= 1);
     this.hud.showBaseButtons(canShop, this.state === 'home', canShop && upgradeHint, launchHint, this.bookRewardWaiting());
+  }
+
+  /** The green arrows: one bobbing over the objective, one on the ground by the player pointing the way. */
+  private updateGuide(): void {
+    const { marker, ground } = this.guide;
+    const target = this.state === 'home' && !this.hud.modalOpen && !this.hud.shopOpen ? this.guideTarget : null;
+    marker.visible = !!target;
+    ground.visible = false;
+    if (!target) return;
+    marker.position.set(target.x, target.y + 3 + Math.abs(Math.sin(this.time * 3.2)) * 0.6, target.z);
+    marker.rotation.y = this.time * 1.6;
+    const dx = target.x - this.px;
+    const dz = target.z - this.pz;
+    const d = Math.hypot(dx, dz);
+    if (d < 2.5) return;
+    ground.visible = true;
+    const reach = 1.6 + Math.sin(this.time * 5) * 0.15;
+    ground.position.set(this.px + (dx / d) * reach, 0.22, this.pz + (dz / d) * reach);
+    ground.rotation.y = Math.atan2(-dx, -dz);
   }
 
   /**

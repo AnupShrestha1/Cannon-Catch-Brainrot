@@ -53,11 +53,11 @@ export interface BookZone {
   reward: number;
 }
 
-/** Book pages by home zone, each paying out once when every character on it has been caught. */
+/** Book pages by rarity, each paying out once when every character on it has been pulled. */
 export const BOOK_ZONES: BookZone[] = [
-  { name: 'Low Sky', rarities: [0, 1], reward: 500 },
-  { name: 'Cloud Kingdom', rarities: [2, 3], reward: 5000 },
-  { name: 'Storm Layer', rarities: [4], reward: 50000 },
+  { name: 'Common & Uncommon', rarities: [0, 1], reward: 500 },
+  { name: 'Rare & Epic', rarities: [2, 3], reward: 5000 },
+  { name: 'Legendary', rarities: [4], reward: 50000 },
 ];
 
 export function bookEntries(zone: BookZone): { name: string; rarity: number }[] {

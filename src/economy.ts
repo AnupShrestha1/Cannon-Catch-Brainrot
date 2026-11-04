@@ -1,32 +1,19 @@
-// Coins, upgrades, pads and selling: pure rules over the save.
-import { CARRY_UNLOCK_HEIGHT, ECONOMY, LEVELS, RARITIES, REBIRTH, UPGRADES, type Track } from './config';
-import type { PadSlot, Save } from './store';
+// Coins, gems, upgrades, pads, the gacha, merging and selling: pure rules over the save.
+import { ECONOMY, FIRST_PULL_RARITY, LEVELS, MERGE, RARITIES, REBIRTH, ROSTER, UPGRADES, rollTier, type GachaTier, type Track } from './config';
+import type { Owned, PadSlot, Save } from './store';
 
 export function upgradesBought(save: Save, track: Track): number {
-  switch (track) {
-    case 'cannon':
-      return save.cannon - 1;
-    case 'carry':
-      return save.carryLevel;
-    default:
-      return save[track];
-  }
+  return track === 'cannon' ? save.cannon - 1 : save[track];
 }
 
 export function buyUpgrade(save: Save, track: Track): void {
   if (track === 'cannon') save.cannon += 1;
-  else if (track === 'carry') save.carryLevel += 1;
   else save[track] += 1;
 }
 
-/** Multiplier from the magnet, steering or parachute track, e.g. 1.3 after 3 magnet upgrades. */
-export function trackBoost(save: Save, track: 'magnet' | 'steering' | 'chute'): number {
+/** Multiplier from a percentage track, e.g. 1.3 after 3 magnet upgrades. */
+export function trackBoost(save: Save, track: 'finder' | 'magnet' | 'steering' | 'chute'): number {
   return 1 + save[track] * UPGRADES[track].effect;
-}
-
-/** Whether a track can be bought yet: carry waits until the player has reached Cloud Kingdom. */
-export function trackUnlocked(save: Save, track: Track): boolean {
-  return track !== 'carry' || save.best >= CARRY_UNLOCK_HEIGHT;
 }
 
 /** Price of the next purchase on a track, or null at max. */
@@ -36,11 +23,7 @@ export function upgradeCost(save: Save, track: Track): number | null {
   return bought >= u.max ? null : Math.round(u.base * Math.pow(u.growth, bought));
 }
 
-export function carryLimit(save: Save): number {
-  return ECONOMY.startCarry + save.carryLevel;
-}
-
-/** Price of the next 4 pads, or null at max. */
+/** Price of the next pair of slots, or null at max. */
 export function expansionCost(save: Save): number | null {
   const pads = save.pads.length;
   if (pads >= ECONOMY.maxPads) return null;
@@ -98,56 +81,57 @@ export function sellValue(save: Save, slot: Pick<PadSlot, 'rarity' | 'level'>): 
   return Math.round(padIncome(save, slot) * ECONOMY.sellSeconds);
 }
 
-export interface Catch {
-  name: string;
-  rarity: number;
+export function pickName(rarity: number): string {
+  const names = ROSTER[rarity];
+  return names[Math.floor(Math.random() * names.length)];
 }
 
-export interface Outcome {
-  /** Pad the catch went to, or null if it was sold. */
-  pad: number | null;
-  /** Coins from selling the catch, or from selling the character it replaced. */
-  coins: number;
-  /** Name of the character the catch replaced, if any. */
-  replaced: string | null;
+/** Whether a gacha tier is unlocked: the Super pull waits until a run has reached Cloud Kingdom. */
+export function tierUnlocked(save: Save, tier: GachaTier): boolean {
+  return save.best >= tier.unlockBest;
 }
 
-/**
- * Auto-placement, best catches first: a free pad if there is one, else the weakest placed character
- * is sold to make room when the catch earns more, else the catch itself is sold.
- * Returns one outcome per catch, in the catches' order.
- */
-export function placeCatches(save: Save, catches: Catch[]): Outcome[] {
-  const outcomes: Outcome[] = catches.map(() => ({ pad: null, coins: 0, replaced: null }));
-  const order = catches.map((_, i) => i).sort((a, b) => catches[b].rarity - catches[a].rarity);
-  for (const i of order) {
-    const c = catches[i];
-    let pad = save.pads.findIndex((slot) => slot === null);
-    if (pad < 0) {
-      // Weakest by income, so a levelled-up character isn't sold for a barely rarer newcomer.
-      let weakest = 0;
-      save.pads.forEach((slot, k) => {
-        if (slot && padIncome(save, slot) < padIncome(save, save.pads[weakest]!)) weakest = k;
-      });
-      const old = save.pads[weakest]!;
-      if (padIncome(save, c) <= padIncome(save, old)) {
-        outcomes[i].coins = sellValue(save, c);
-        save.coins += outcomes[i].coins;
-        continue;
-      }
-      pad = weakest;
-      outcomes[i].coins = sellValue(save, old) + Math.floor(old.cash);
-      outcomes[i].replaced = old.name;
-      save.coins += outcomes[i].coins;
-    }
-    save.pads[pad] = { name: c.name, rarity: c.rarity, cash: 0, level: 1 };
-    outcomes[i].pad = pad;
-  }
-  return outcomes;
+/** Spends the gems and rolls a brainrot into the backpack, or returns null if the player can't afford it. */
+export function pull(save: Save, tier: GachaTier): Owned | null {
+  if (save.gems < tier.cost || !tierUnlocked(save, tier)) return null;
+  save.gems -= tier.cost;
+  let rarity = rollTier(tier);
+  if (save.pulls === 0) rarity = Math.max(rarity, FIRST_PULL_RARITY);
+  save.pulls += 1;
+  const got = { name: pickName(rarity), rarity };
+  save.inventory.push(got);
+  return got;
+}
+
+export function countInBackpack(save: Save, rarity: number): number {
+  return save.inventory.filter((o) => o.rarity === rarity).length;
+}
+
+/** How many of a rarity make one of the next, or null when it can't be merged. */
+export function mergeNeed(rarity: number): number | null {
+  return MERGE[rarity] ?? null;
+}
+
+/** Merges the backpack's characters of a rarity into one of the next rarity up, or returns null. */
+export function merge(save: Save, rarity: number): Owned | null {
+  const need = mergeNeed(rarity);
+  if (need === null || countInBackpack(save, rarity) < need) return null;
+  let left = need;
+  save.inventory = save.inventory.filter((o) => !(o.rarity === rarity && left-- > 0));
+  const got = { name: pickName(rarity + 1), rarity: rarity + 1 };
+  save.inventory.push(got);
+  return got;
+}
+
+/** Removes one backpack character by name and returns it, or null. */
+export function takeFromBackpack(save: Save, name: string): Owned | null {
+  const i = save.inventory.findIndex((o) => o.name === name);
+  return i < 0 ? null : save.inventory.splice(i, 1)[0];
 }
 
 export function formatCoins(n: number): string {
   if (n < 10_000) return Math.floor(n).toLocaleString('en-US');
   if (n < 1_000_000) return `${(n / 1000).toFixed(n < 100_000 ? 1 : 0)}K`;
-  return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  return `${(n / 1_000_000_000).toFixed(1)}B`;
 }
