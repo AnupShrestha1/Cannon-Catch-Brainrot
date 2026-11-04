@@ -78,6 +78,28 @@ export class Hud {
   private last = { alt: -1, zone: '', best: -1, stack: '', prompt: '', coins: '', income: -1, gift: '', shop: '' };
 
   constructor() {
+    // Modals answer the keyboard and the backdrop too, so there's always a way out. Capture phase and
+    // stopImmediatePropagation keep the key from also reaching the game (Space would launch).
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        if (!this.modalOpen) return;
+        const buttons = this.modalButtons.querySelectorAll('button');
+        let pick: HTMLButtonElement | undefined;
+        if (e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter') pick = buttons[0];
+        else if (e.code === 'Escape') pick = buttons[buttons.length - 1];
+        else return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (!e.repeat) pick?.click();
+      },
+      true,
+    );
+    this.modal.addEventListener('click', (e) => {
+      if (e.target !== this.modal) return;
+      const buttons = this.modalButtons.querySelectorAll('button');
+      buttons[buttons.length - 1]?.click();
+    });
     const place = (el: HTMLElement, [from, to]: readonly [number, number]) => {
       el.style.bottom = `${from * 100}%`;
       el.style.height = `${(to - from) * 100}%`;
