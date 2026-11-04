@@ -26,7 +26,7 @@ export interface ShopRow {
 
 export interface TuningHooks {
   changed(): void;
-  addCoins(): void;
+  addCoins(amount: number): void;
   resetAll(): void;
 }
 
@@ -481,12 +481,29 @@ export class Hud {
       hooks.changed();
       hazards.blur();
     });
-    const coinsBtn = byId<HTMLButtonElement>('coinsBtn');
-    coinsBtn.addEventListener('click', () => {
-      hooks.addCoins();
-      coinsBtn.blur();
+    for (const btn of this.tunePanel.querySelectorAll<HTMLButtonElement>('[data-coins]')) {
+      btn.addEventListener('click', () => {
+        hooks.addCoins(Number(btn.dataset.coins));
+        btn.blur();
+      });
+    }
+    // Reset wipes the save, so it takes a second tap within 3 seconds.
+    const resetBtn = byId<HTMLButtonElement>('resetBtn');
+    let resetTimer = 0;
+    resetBtn.addEventListener('click', () => {
+      if (resetTimer) {
+        hooks.resetAll();
+        return;
+      }
+      resetBtn.textContent = 'Tap again to wipe the save';
+      resetBtn.classList.add('armed');
+      resetTimer = window.setTimeout(() => {
+        resetTimer = 0;
+        resetBtn.textContent = 'Reset everything';
+        resetBtn.classList.remove('armed');
+      }, 3000);
+      resetBtn.blur();
     });
-    byId<HTMLButtonElement>('resetBtn').addEventListener('click', () => hooks.resetAll());
     // Upgrades bought in the shop move the sliders too.
     this.tuneBtn.addEventListener('click', show);
     window.addEventListener('keydown', (e) => {

@@ -134,7 +134,7 @@ unlocked rebirth after 8 minutes.
 ## Tuning
 
 Press **T** (or the Tune button) for the tuning panel: cannon level (1–37 in this build), carry limit,
-hazards, a +1,000 coins button, and a full reset. **M** mutes. All first-pass numbers live in
+hazards, coin buttons (+1K, +100K, +10M, +1B), and a full reset that needs a second tap. **M** mutes. All first-pass numbers live in
 `src/config.ts`.
 
 ## Code map

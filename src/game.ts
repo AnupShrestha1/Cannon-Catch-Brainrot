@@ -368,9 +368,11 @@ export class Game {
         writeSave(this.save);
         this.refreshShop();
       },
-      addCoins: () => {
-        this.save.coins += 1000;
+      addCoins: (amount) => {
+        this.save.coins += amount;
         writeSave(this.save);
+        this.refreshShop();
+        this.hud.toast(`+${formatCoins(amount)} coins (test)`, 'good small');
       },
       resetAll: () => {
         clearSave();

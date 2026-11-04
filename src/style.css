@@ -554,6 +554,23 @@ button:active {
   font-size: 13px;
 }
 
+#tune .tune-money {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 10px;
+}
+
+#tune .tune-money button {
+  margin-top: 0;
+  background: var(--gold);
+}
+
+#tune #resetBtn.armed {
+  background: var(--red);
+  color: #fff;
+}
+
 #tune .sub {
   margin: 4px 0 0;
   font-size: 11px;
