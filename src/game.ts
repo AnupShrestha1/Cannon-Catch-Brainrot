@@ -119,6 +119,8 @@ const CANNON_FOOT = new THREE.Vector3(0, 0, 2.3);
 const WALK_SPEED = 9;
 /** Walking within this distance of a pad's centre collects its coins. */
 const COLLECT_RADIUS = 1.7;
+/** Radians the base camera turns per pixel dragged. */
+const ORBIT_SPEED = 0.006;
 /** Characters float larger than life in the sky so they read from the chase camera; held ones shrink. */
 const SKY_SCALE = 1.35;
 const HELD_SCALE = 0.55;
@@ -192,6 +194,8 @@ export class Game {
   /** Base camera heading: it looks along (-sin, -cos) of this, from behind the player. */
   private camYaw = 0;
   private walkPhase = 0;
+  /** Base walking velocity on the ground (x, z). */
+  private walkVel = new THREE.Vector2();
   private walkTarget = new THREE.Vector3();
 
   private chargeT = 0;
@@ -442,6 +446,9 @@ export class Game {
         break;
     }
 
+    // Camera drags only mean something at the base; drop any made during a run.
+    if (this.state !== 'home') this.input.consumeOrbitDx();
+    this.hud.showStick(this.state === 'home' && !blocked ? this.input.stick : null);
     this.updateEconomy(realDt);
     this.updatePickups(dt);
     this.updateBirds(dt);
@@ -1066,12 +1073,12 @@ export class Game {
     const step = Math.min(dist, WALK_SPEED * dt);
     this.px += (dx / dist) * step;
     this.pz += (dz / dist) * step;
-    this.facing = Math.atan2(-dx, -dz);
+    this.facing = lerpAngle(this.facing, Math.atan2(-dx, -dz), damp(14, dt));
   }
 
   private updateHome(dt: number, tap: { x: number; y: number } | null, space: boolean, blocked: boolean): void {
     this.stepping = false;
-    if (!blocked) this.keyboardAtBase(dt);
+    this.moveAtBase(dt, blocked);
     this.updateWalk(dt);
     this.save.pads.forEach((slot, i) => {
       if (!slot || slot.cash < 1) return;
@@ -1094,24 +1101,46 @@ export class Game {
     }
   }
 
-  /** WASD or the arrows walk (the camera looks along -z), E uses the pad underfoot, 1-8 choose a carried catch. */
-  private keyboardAtBase(dt: number): void {
-    const right = this.input.axis;
-    const forward = this.input.axisY;
-    if (right || forward) {
+  /**
+   * Walking at the base: WASD or the touch stick, relative to the camera, easing in and out so it doesn't
+   * snap. Dragging turns the camera; E uses the pad underfoot and 1-8 choose a carried catch.
+   */
+  private moveAtBase(dt: number, blocked: boolean): void {
+    if (blocked) {
+      this.walkVel.set(0, 0);
+      return;
+    }
+    this.camYaw -= this.input.consumeOrbitDx() * ORBIT_SPEED;
+    const stick = this.input.stick;
+    const right = this.input.axis + (stick.active ? stick.x : 0);
+    const forward = this.input.axisY + (stick.active ? stick.y : 0);
+    const amount = Math.min(1, Math.hypot(right, forward));
+    let wantX = 0;
+    let wantZ = 0;
+    if (amount > 0.1) {
+      // Steering by hand cancels a tap-to-walk, and the camera stays where the player put it.
       this.walking = false;
       this.arrive = null;
-      this.stepping = true;
-      // Relative to the camera: its forward is (-sin, -cos) of camYaw and its right is (cos, -sin).
+      this.followCam = false;
+      // The camera's forward is (-sin, -cos) of camYaw and its right is (cos, -sin).
       const sin = Math.sin(this.camYaw);
       const cos = Math.cos(this.camYaw);
       const mx = -sin * forward + cos * right;
       const mz = -cos * forward - sin * right;
       const len = Math.hypot(mx, mz);
-      this.px = clamp(this.px + (mx / len) * WALK_SPEED * dt, -45, 12);
-      this.pz = clamp(this.pz + (mz / len) * WALK_SPEED * dt, -12, 12);
-      this.facing = Math.atan2(-mx, -mz);
-      this.followCam = forward > 0;
+      wantX = (mx / len) * WALK_SPEED * amount;
+      wantZ = (mz / len) * WALK_SPEED * amount;
+      this.facing = lerpAngle(this.facing, Math.atan2(-mx, -mz), damp(14, dt));
+    }
+    if (!this.walking) {
+      const k = damp(12, dt);
+      this.walkVel.x += (wantX - this.walkVel.x) * k;
+      this.walkVel.y += (wantZ - this.walkVel.y) * k;
+      this.px = clamp(this.px + this.walkVel.x * dt, -45, 12);
+      this.pz = clamp(this.pz + this.walkVel.y * dt, -12, 12);
+      this.stepping = this.walkVel.length() > 0.6;
+    } else {
+      this.walkVel.set(0, 0);
     }
     for (let n = 1; n <= 8; n++) if (this.input.consumeKey(`Digit${n}`)) this.selectCarried(n - 1);
     if (this.input.consumeKey('KeyE') || this.input.consumeKey('Enter')) this.usePadUnderfoot();
@@ -1804,7 +1833,9 @@ export class Game {
     const { arms, legs, body } = this.player;
     const t = this.time;
     const moving = atBase && (this.walking || this.stepping);
-    if (moving) this.walkPhase += dt * 11;
+    // Stride speed follows ground speed, so easing in and out looks like stepping, not sliding.
+    const pace = this.walking ? 1 : Math.min(1, this.walkVel.length() / WALK_SPEED);
+    if (moving) this.walkPhase += dt * 11 * Math.max(0.4, pace);
     const freefall = this.state === 'fall' && this.chute === 'closed';
     let armOut = 0.25 + Math.sin(t * 2) * 0.04;
     let armSwing = 0;
@@ -1898,7 +1929,8 @@ export class Game {
       case 'boarding': {
         // Third person: behind and above the player, swinging round behind them as they walk forward.
         const moving = this.walking || this.stepping;
-        if (moving && this.followCam) this.camYaw = lerpAngle(this.camYaw, this.facing, damp(2.2, realDt));
+        // Only a tap-to-walk swings the camera round; with keys or the stick, the player owns it.
+        if (moving && this.followCam) this.camYaw = lerpAngle(this.camYaw, this.facing, damp(1.5, realDt));
         const dist = 7.5 * (1 + portrait * 0.4);
         const sin = Math.sin(this.camYaw);
         const cos = Math.cos(this.camYaw);

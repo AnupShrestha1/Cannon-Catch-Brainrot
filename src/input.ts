@@ -1,10 +1,25 @@
 // One input layer for mouse, keyboard and touch.
 // Desktop: hold Space or the mouse to charge, steer with the mouse or A/D, Space or click opens the chute.
 // Touch: hold anywhere to charge, drag to steer, the on-screen button opens the chute.
-// At the base, a tap or click picks a spot, WASD or the arrows walk, E uses the pad underfoot, 1-8 choose a
-// carried character, and Space heads to the cannon.
+// At the base: WASD or the arrows walk, dragging the mouse turns the camera, a click picks a pad, E uses the
+// pad underfoot, 1-8 choose a carried character and Space heads to the cannon. On touch, a drag that starts
+// on the left of the screen is a joystick, a drag on the right turns the camera, and a tap picks a pad.
 
 export type SteerMode = 'mouse' | 'keys' | 'touch';
+
+/** A press on the game surface, followed until release to tell taps from drags. */
+interface Gesture {
+  touch: boolean;
+  startX: number;
+  startY: number;
+  lastX: number;
+  kind: 'none' | 'stick' | 'orbit';
+}
+
+/** Pixels a press can move and still count as a tap. */
+const TAP_SLOP = 10;
+/** Pixels of joystick drag for full speed. */
+const STICK_RANGE = 60;
 
 export class Input {
   /** True while Space, the mouse button or a finger is held on the game. */
@@ -13,14 +28,18 @@ export class Input {
   mode: SteerMode = 'mouse';
   isTouch = false;
   onGesture: () => void = () => {};
+  /** The touch joystick at the base: where it started on screen, and its direction (x right, y up, length ≤ 1). */
+  readonly stick = { active: false, originX: 0, originY: 0, x: 0, y: 0 };
 
   private pressed = false;
   private spacePressed = false;
   private tap: { x: number; y: number } | null = null;
   private chute = false;
   private touchDx = 0;
+  private orbitDx = 0;
   private touchId = -1;
   private lastTouchX = 0;
+  private gestures = new Map<number, Gesture>();
   private keys = new Set<string>();
   /** Keys pressed since last consumed, for one-shot actions. */
   private taps = new Set<string>();
@@ -28,30 +47,42 @@ export class Input {
   constructor(surface: HTMLElement) {
     surface.addEventListener('pointerdown', (e) => {
       this.onGesture();
-      if (e.pointerType === 'touch') {
+      const touch = e.pointerType === 'touch';
+      if (touch) {
         this.isTouch = true;
         this.mode = 'touch';
-        this.touchId = e.pointerId;
-        this.lastTouchX = e.clientX;
+        if (this.touchId < 0) {
+          this.touchId = e.pointerId;
+          this.lastTouchX = e.clientX;
+        }
       } else {
         this.mouseX = e.clientX / window.innerWidth;
         this.chute = true;
       }
+      this.gestures.set(e.pointerId, { touch, startX: e.clientX, startY: e.clientY, lastX: e.clientX, kind: 'none' });
       this.actionDown = true;
       this.pressed = true;
-      this.tap = { x: e.clientX, y: e.clientY };
     });
     window.addEventListener('pointermove', (e) => {
       if (e.pointerType === 'touch') {
-        if (e.pointerId !== this.touchId) return;
-        this.touchDx += e.clientX - this.lastTouchX;
-        this.lastTouchX = e.clientX;
+        if (e.pointerId === this.touchId) {
+          this.touchDx += e.clientX - this.lastTouchX;
+          this.lastTouchX = e.clientX;
+        }
       } else {
         this.mouseX = e.clientX / window.innerWidth;
         this.mode = 'mouse';
       }
+      const g = this.gestures.get(e.pointerId);
+      if (g) this.drag(g, e.clientX, e.clientY);
     });
     const release = (e: PointerEvent) => {
+      const g = this.gestures.get(e.pointerId);
+      if (g) {
+        if (g.kind === 'none') this.tap = { x: e.clientX, y: e.clientY };
+        if (g.kind === 'stick') this.stick.active = false;
+        this.gestures.delete(e.pointerId);
+      }
       if (e.pointerType === 'touch' && e.pointerId !== this.touchId) return;
       this.touchId = -1;
       this.actionDown = false;
@@ -86,8 +117,32 @@ export class Input {
     });
     window.addEventListener('blur', () => {
       this.keys.clear();
+      this.gestures.clear();
+      this.stick.active = false;
       this.actionDown = false;
     });
+  }
+
+  /** Once a press moves past TAP_SLOP it becomes a drag: a joystick on the left half for touch, else the camera. */
+  private drag(g: Gesture, x: number, y: number): void {
+    const dx = x - g.startX;
+    const dy = y - g.startY;
+    if (g.kind === 'none' && Math.hypot(dx, dy) > TAP_SLOP) {
+      g.kind = g.touch && g.startX < window.innerWidth * 0.45 ? 'stick' : 'orbit';
+      if (g.kind === 'stick') {
+        this.stick.active = true;
+        this.stick.originX = g.startX;
+        this.stick.originY = g.startY;
+      }
+    }
+    if (g.kind === 'orbit') this.orbitDx += x - g.lastX;
+    if (g.kind === 'stick') {
+      const len = Math.hypot(dx, dy);
+      const scale = len > STICK_RANGE ? 1 / len : 1 / STICK_RANGE;
+      this.stick.x = dx * scale;
+      this.stick.y = -dy * scale;
+    }
+    g.lastX = x;
   }
 
   /** -1 to 1 from A/D or the arrow keys. */
@@ -131,7 +186,7 @@ export class Input {
     return v;
   }
 
-  /** Screen position of the last press on the game surface. */
+  /** Screen position of the last tap or click: a press released without dragging. */
   consumeTap(): { x: number; y: number } | null {
     const v = this.tap;
     this.tap = null;
@@ -147,6 +202,13 @@ export class Input {
   consumeTouchDx(): number {
     const v = this.touchDx;
     this.touchDx = 0;
+    return v;
+  }
+
+  /** Horizontal pixels dragged to turn the base camera since last read. */
+  consumeOrbitDx(): number {
+    const v = this.orbitDx;
+    this.orbitDx = 0;
     return v;
   }
 }

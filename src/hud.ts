@@ -68,6 +68,8 @@ export class Hud {
   private shopRows = byId('shopRows');
   private flight = byId('flightNo');
   private carry = byId('carry');
+  private stick = byId('stick');
+  private stickKnob = this.stick.querySelector<HTMLElement>('.knob')!;
   private carryKey = '';
   private modal = byId('modal');
   private modalTitle = byId('modalTitle');
@@ -288,6 +290,16 @@ export class Hud {
         return card;
       }),
     );
+  }
+
+  /** The touch joystick at the base: a ring where the drag started and a knob that follows it. */
+  showStick(stick: { active: boolean; originX: number; originY: number; x: number; y: number } | null): void {
+    const on = !!stick?.active;
+    this.stick.classList.toggle('on', on);
+    if (!stick || !on) return;
+    this.stick.style.left = `${stick.originX}px`;
+    this.stick.style.top = `${stick.originY}px`;
+    this.stickKnob.style.transform = `translate(${stick.x * 44}px, ${-stick.y * 44}px)`;
   }
 
   setCarryVisible(on: boolean): void {
