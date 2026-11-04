@@ -12,6 +12,7 @@ import {
   ECONOMY,
   FLIGHT,
   GIFTS,
+  HAZARD_SPACING,
   LEVELS,
   MAX_ZONE,
   RARE,
@@ -558,9 +559,13 @@ export class Game {
 
     const mode = this.save.hazards;
     if (mode === 'on' || (mode === 'auto' && flight >= TUTORIAL.hazardFromFlight)) {
-      // Hazards get denser with height.
-      const lowest = Math.max(24, floor);
-      for (let y = lowest; y < apex - 3; y += lerp(24, 12, Math.min(1, y / 1500)) * rand(0.8, 1.25)) this.addBird(y);
+      // A few hazards, a little denser with height, capped per flight.
+      const h = HAZARD_SPACING;
+      let count = 0;
+      for (let y = Math.max(h.start, floor); y < apex - 3 && count < h.maxPerFlight; count++) {
+        this.addBird(y);
+        y += lerp(h.gapLow, h.gapHigh, Math.min(1, y / 1500)) * rand(0.8, 1.2);
+      }
     }
   }
 

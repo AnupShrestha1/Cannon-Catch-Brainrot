@@ -138,6 +138,13 @@ export const CHUTE = {
   barSeconds: 4,
 };
 
+/**
+ * Hazard density: the first one at `start` metres, then one every `gapLow` metres near the ground, closing to
+ * `gapHigh` by 1,500 m (±20% jitter), and never more than `maxPerFlight`. Playtests found the first pass
+ * (from 24 m, every 24 → 12 m, no cap) far too crowded.
+ */
+export const HAZARD_SPACING = { start: 40, gapLow: 55, gapHigh: 35, maxPerFlight: 8 };
+
 export const TUTORIAL = {
   hazardFromFlight: 3,
   noDropFlights: 3,
