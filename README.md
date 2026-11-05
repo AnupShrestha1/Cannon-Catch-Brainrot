@@ -31,10 +31,10 @@ the Network URL it prints.
 | Parachute | Space or click | PARACHUTE button |
 | At the base: walk (collects slots you cross) | WASD or arrows, relative to the camera | Drag on the left half (joystick) |
 | At the base: turn the camera | Drag with the mouse | Drag on the right half |
-| At the base: open the gacha machine or merge station | Walk up to it (or E) | Walk up to it (or the action button) |
+| Open the gacha machine or merge station | Step on its platform, press E | Step on its platform, tap the action button |
 | At the base: level up a brainrot | Click Level up under it | Tap Level up under it |
 | At the base: store or sell the brainrot you stand on | E | The action button |
-| Backpack | B or the Backpack button | Backpack button |
+| Backpack | Bag in the dock, or B | Bag in the dock |
 
 Release the charge in the green band for +15% height, or the gold band for +30%.
 
@@ -45,9 +45,10 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   and then gems come in pairs. A hazard hit knocks 15% of the run's gems loose. A crash loses 30% of
   them, or 50% without a parachute. There's no result window: on landing the gems go into the wallet
   with a toast, and the player stays where they landed, ready to walk.
-- **Parachute warning**: if the parachute is still closed as the ground bar's marker nears the end of the
-  gold zone, just before the red crash zone, PARACHUTE NOW! flashes for 0.6 seconds.
-- **Gacha machine**, to the right of the cannon:
+- **Parachute warning**: if the parachute is still closed as the ground bar's marker gets within 0.6
+  seconds of the red crash zone (the last part of the gold zone), PARACHUTE NOW! flashes for 1.2 seconds.
+- **Gacha machine**, to the right of the cannon. Step on the glowing pink platform in front of it and
+  press E (walking past doesn't open anything):
   - Basic pull, 10 gems: Common 62%, Uncommon 28%, Rare 8%, Epic 1.8%, Legendary 0.2%.
   - Super pull, 100 gems, unlocked once a flight reaches Cloud Kingdom: Uncommon 35%, Rare 40%, Epic
     18%, Legendary 7%.
@@ -60,7 +61,8 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   - Results go on display by themselves: empty slots fill best first, and a rarer pull swaps out a
     level-1 brainrot (which goes to the backpack with its coins collected). Levelled ones are never moved.
     The machine's panel then reopens with the results on top, so pulling again is one click.
-- **Merge station**, a bubbling cauldron to the left of the cannon: 10 Common → 1 Uncommon, 8 Uncommon →
+- **Merge station**, a bubbling cauldron to the left of the cannon. Step on the purple platform in front
+  of it and press E: 10 Common → 1 Uncommon, 8 Uncommon →
   1 Rare, 6 Rare → 1 Epic, 4 Epic → 1 Legendary, from the backpack. A merge gives a random character of
   the next rarity. Merge all runs every recipe from the bottom up in one click, and merged brainrots go
   on display if they beat what's there.
@@ -78,9 +80,10 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   brainrot's rarity colour.
 - **Tutorial**: flight 1 is a straight line of 12 gems, enough for the first pull. Hazards start on
   flight 3, and nothing is lost to hits or crashes during the first 3 flights. At the base, a green
-  arrow bobs over the next objective (the gacha machine, the coins to collect, the merge station once
-  there's enough to merge, a brainrot ready to level up), and a second arrow on the ground by the
-  player points the way. From flight 4, the apex
+  arrow bobs over the next place to go (a station's platform, coins to collect, a brainrot ready to
+  level up), and a gold
+  arrow with a dark outline on the ground by the player points the way. When the next step is a
+  button (Upgrades, Launch), that button bounces instead. From flight 4, the apex
   shows the next zone's gem value and the cannon level that reaches it.
 - **Upgrades**: cannon power (to level 37 in this build), gem finder (+10% gems per pickup each), gem
   magnet (+10% grab radius each), steering (+6% turn speed each), parachute (+5% safe window each), and
@@ -102,6 +105,12 @@ Not in this build: fusion of named characters, sky events, the rival, the spin w
 
 ## Look
 
+- **UI**: chunky candy-coloured cartoon style. Lilita One for titles and numbers and Fredoka for text
+  (from Google Fonts, with system fallbacks), glossy 3D buttons with thick ink outlines that press down,
+  currency pills, a dock of icon tiles (Upgrades, Bag, Book), a prompt banner, and panels
+  that open with a coloured ribbon.
+- **Brainrot icons**: every card shows that character's own portrait, rendered once from its 3D model
+  and cached. Characters not yet pulled show as a dark silhouette in the book.
 - The player is a blocky avatar with rounded edges: a square head with a drawn face, a cap, a T-shirt,
   jeans and sneakers. It has a walk cycle at the base, reaches up on the way up, flails in free fall and
   hangs from the straps under the parachute.
@@ -171,7 +180,8 @@ All first-pass numbers live in `src/config.ts`.
 | `src/world.ts` | Sky pieces, cannon, player avatar, gems, hazards, guide arrows, labels |
 | `src/scenery.ts` | Sky dome, ground, hills, mountains, path, lanterns, fence and bunting, swaying trees, cottage, windmill, pond, butterflies |
 | `src/fx.ts` | Particle bursts and wind streaks |
-| `src/hud.ts` | HTML overlay: wallet and gems, altitude, run gems, meters, run result, shop, modals, tuning panel |
+| `src/hud.ts` | HTML overlay: wallet and gems, altitude, run gems, meters, dock, shop, modals, level-up buttons, tuning panel |
+| `src/icons.ts` | Brainrot portraits for cards, rendered from the 3D models |
 | `src/input.ts` | Mouse, keyboard and touch input |
 | `src/audio.ts` | Synthesised placeholder sounds |
 | `src/store.ts` | Local save: coins, gems, slots, backpack, upgrades, rebirths, flights, hints, settings |

@@ -49,6 +49,8 @@ export const MACHINE = new THREE.Vector3(4.6, 0, -4);
 export const MACHINE_FRONT = new THREE.Vector3(MACHINE.x, 0, MACHINE.z + 2.5);
 export const MERGER = new THREE.Vector3(-4.6, 0, -4);
 export const MERGER_FRONT = new THREE.Vector3(MERGER.x, 0, MERGER.z + 2.5);
+/** Radius of the step-on platform in front of each station. */
+export const PLATFORM_RADIUS = 1.25;
 /** Both stations are built facing +x; this turns them to face +z. */
 const STATION_TURN = -Math.PI / 2;
 /** Height of the coin over a brainrot's head. */
@@ -83,6 +85,8 @@ export class Base {
   private swirl = new THREE.Group();
   private brew!: THREE.MeshLambertMaterial;
   private mergeT = 0;
+  /** The glowing platforms in front of the gacha machine and the merge station, and their rising rings. */
+  private platforms: { ring: THREE.Mesh; top: THREE.MeshLambertMaterial; seed: number }[] = [];
 
   constructor(scene: THREE.Scene) {
     scene.add(this.group);
@@ -91,6 +95,8 @@ export class Base {
     this.crank = new THREE.Group();
     this.buildMachine();
     this.buildMerger();
+    this.addPlatform(MACHINE_FRONT, 0xff5fa2, 'GACHA');
+    this.addPlatform(MERGER_FRONT, 0x8a5cff, 'MERGE');
     for (let i = 0; i < ECONOMY.maxPads; i++) this.addPad(i);
   }
 
@@ -162,6 +168,13 @@ export class Base {
     if (refreshLabels) this.labelTimer = 0.2;
     this.animateMachine(time, realDt);
     this.animateMerger(time, realDt);
+    for (const p of this.platforms) {
+      const t = (time * 0.9 + p.seed) % 1;
+      p.ring.position.y = 0.2 + t * 1.3;
+      p.ring.scale.setScalar(1 - t * 0.3);
+      (p.ring.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - t);
+      p.top.emissiveIntensity = 0.55 + Math.sin(time * 3 + p.seed * 6) * 0.2;
+    }
     this.views.forEach((view, i) => {
       const slot = i < save.pads.length ? save.pads[i] : null;
       view.pop = Math.max(0, view.pop - realDt * 4);
@@ -420,6 +433,34 @@ export class Base {
     sign.sprite.scale.multiplyScalar(0.8);
     m.add(sign.sprite);
     this.group.add(m);
+  }
+
+  /** A round step-on platform: stone base, glowing coloured top, gold rim, a rising ring and "Press E". */
+  private addPlatform(at: THREE.Vector3, color: number, name: string): void {
+    const g = new THREE.Group();
+    g.position.set(at.x, 0, at.z);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(PLATFORM_RADIUS + 0.15, PLATFORM_RADIUS + 0.3, 0.2, 24), stoneMat);
+    base.position.y = 0.1;
+    base.receiveShadow = true;
+    const top = new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.55 });
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(PLATFORM_RADIUS, PLATFORM_RADIUS, 0.08, 32), top);
+    disc.position.y = 0.22;
+    const rim = new THREE.Mesh(
+      new THREE.TorusGeometry(PLATFORM_RADIUS + 0.02, 0.07, 6, 40).rotateX(Math.PI / 2),
+      flat(GOLD, { emissive: 0x5a3c00 }),
+    );
+    rim.position.y = 0.26;
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(PLATFORM_RADIUS * 0.85, 0.06, 6, 40).rotateX(Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    const sign = makeLabel();
+    sign.set(`${name} · E`, '#ffffff');
+    sign.sprite.position.y = 1.9;
+    sign.sprite.scale.multiplyScalar(0.42);
+    g.add(base, disc, rim, ring, sign.sprite);
+    this.group.add(g);
+    this.platforms.push({ ring, top, seed: Math.random() });
   }
 
   /** A purple cauldron on a stand, bubbling with glowing brew, under a MERGE sign. */

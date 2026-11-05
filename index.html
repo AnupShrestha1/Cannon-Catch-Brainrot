@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>Cannon Catch Brainrot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Lilita+One&display=swap" rel="stylesheet" />
     <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
   </head>
   <body>
@@ -11,21 +14,21 @@
 
     <div id="hud">
       <div id="topLeft">
-        <div id="wallet" class="outline"><span class="coin"></span><span id="coins">0</span><span id="income"></span></div>
-        <div id="gemWallet" class="outline"><span class="gem-icon"></span><span id="gemCount">0</span></div>
+        <div id="wallet" class="pill"><span class="coin"></span><span id="coins">0</span><span id="income"></span></div>
+        <div id="gemWallet" class="pill"><span class="gem-icon"></span><span id="gemCount">0</span></div>
         <div id="alt" class="outline">
           <div><span id="altNum">0</span><span class="unit">m</span></div>
           <div id="zone">Low Sky</div>
           <div id="best"></div>
         </div>
       </div>
-      <div id="stack" class="outline"></div>
+      <div id="stack" class="pill"></div>
       <div id="corner">
         <button id="soundBtn" type="button">Sound on</button>
         <button id="tuneBtn" type="button">Tune</button>
       </div>
       <button id="giftBtn" type="button" disabled></button>
-      <div id="prompt" class="outline"></div>
+      <div id="prompt"></div>
       <div id="toasts"></div>
       <div id="floats"></div>
       <div id="charge">
@@ -38,14 +41,22 @@
         <div class="label outline">GROUND</div>
       </div>
       <button id="chuteBtn" type="button">PARA<br />CHUTE<span class="key">Space</span></button>
-      <button id="upgradesBtn" type="button">Upgrades</button>
-      <button id="bookBtn" type="button">Book</button>
-      <button id="backpackBtn" type="button">Backpack<span id="backpackCount"></span></button>
-      <button id="launchBtn" type="button">Launch!<span class="key">Space</span></button>
+      <div id="dock">
+        <button id="upgradesBtn" class="tile t-gold" type="button">
+          <svg viewBox="0 0 24 24"><path d="M12 2.5 3.5 12H9v8.5h6V12h5.5z" /></svg><span>Upgrades</span>
+        </button>
+        <button id="backpackBtn" class="tile t-blue" type="button">
+          <svg viewBox="0 0 24 24"><path d="M9 8V6.5a3 3 0 0 1 6 0V8" class="line" /><path d="M5 8.5h14l-1.2 12H6.2z" /><path d="M9 13h6" class="line" /></svg><span>Bag</span><span id="backpackCount"></span>
+        </button>
+        <button id="bookBtn" class="tile t-teal" type="button">
+          <svg viewBox="0 0 24 24"><path d="M3 5.5c3-1 6-1 8.5 1v13c-2.5-2-5.5-2-8.5-1z" /><path d="M21 5.5c-3-1-6-1-8.5 1v13c2.5-2 5.5-2 8.5-1z" /></svg><span>Book</span>
+        </button>
+      </div>
+      <button id="launchBtn" type="button">LAUNCH!<span class="key">Space</span></button>
       <div id="padBtns"></div>
       <div id="stick"><div class="knob"></div></div>
       <button id="actionBtn" type="button"></button>
-      <div id="flightNo" class="outline"></div>
+      <div id="flightNo"></div>
     </div>
 
     <div id="reveal" class="hidden">
@@ -62,7 +73,7 @@
       <div class="panel">
         <div class="shop-head">
           <h2>Upgrades</h2>
-          <button id="shopClose" type="button">Close</button>
+          <button id="shopClose" type="button" aria-label="Close">✕</button>
         </div>
         <div id="shopRows"></div>
       </div>

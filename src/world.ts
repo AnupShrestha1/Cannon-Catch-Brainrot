@@ -455,7 +455,7 @@ export interface GuideRig {
   /** Hovers over the objective, pointing down at it. */
   marker: THREE.Group;
   /** Lies on the ground by the player, pointing toward the objective. */
-  ground: THREE.Mesh;
+  ground: THREE.Object3D;
 }
 
 /** The tutorial's green arrows. */
@@ -488,10 +488,17 @@ export function makeGuide(): GuideRig {
   shape.closePath();
   const geo = new THREE.ShapeGeometry(shape);
   geo.rotateX(-Math.PI / 2);
-  const ground = new THREE.Mesh(
-    geo,
-    new THREE.MeshBasicMaterial({ color: 0x3ccf5a, transparent: true, opacity: 0.9, depthWrite: false }),
-  );
+  // Bright gold on a thick ink outline, so it never blends into the grass.
+  const ground = new THREE.Group();
+  const fill = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffd23f, depthWrite: false }));
+  fill.position.y = 0.02;
+  fill.renderOrder = 2;
+  const edge = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x1d1640, depthWrite: false }));
+  edge.scale.setScalar(1.28);
+  edge.position.z = 0.05;
+  edge.renderOrder = 1;
+  ground.add(edge, fill);
+  ground.scale.setScalar(1.3);
   ground.visible = false;
   return { marker, ground };
 }

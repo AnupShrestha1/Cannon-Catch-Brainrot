@@ -3,8 +3,9 @@
 // buy upgrades. The flight is scripted rather than simulated, so the apex hits launchHeight() exactly.
 import * as THREE from 'three';
 import { Sfx } from './audio';
-import { Base, CARPET_Z, MACHINE_FRONT, MERGER_FRONT } from './base';
+import { Base, CARPET_Z, MACHINE_FRONT, MERGER_FRONT, PLATFORM_RADIUS } from './base';
 import { animateShared } from './characters';
+import { brainrotIcon } from './icons';
 import {
   CHARGE,
   CHUTE,
@@ -127,8 +128,6 @@ const HOME_YAW = Math.PI / 2;
 const WALK_SPEED = 9;
 /** Walking within this distance of a slot's centre collects its coins. */
 const COLLECT_RADIUS = 2;
-/** How close to a station's front (gacha or merge) the player must stand to use it. */
-const STATION_REACH = 2.1;
 /** Level-up buttons show for slots this close to the camera. */
 const BUTTON_RANGE = 24;
 /** Radians the base camera turns per pixel dragged. */
@@ -233,8 +232,6 @@ export class Game {
   /** Seconds left of the machine's shake before the pending pull's result shows. */
   private pulling = 0;
   private pendingPull: { got: Owned[]; tier: GachaTier; isNew: boolean[] } | null = null;
-  /** The station the player stood at last frame, so walking up to one opens it once. */
-  private lastStation: 'gacha' | 'merge' | null = null;
   private screen = new THREE.Vector3();
   /** What to do when the current walk arrives. */
   private arrive: (() => void) | null = null;
@@ -375,12 +372,14 @@ export class Game {
     onClick(hud.giftBtn, () => this.claimGift());
     onClick(hud.bookBtn, () => this.openBook());
     onClick(hud.backpackBtn, () => this.openBackpack());
+    hud.iconFor = brainrotIcon;
     hud.onBuy = (item) => this.buy(item);
     hud.onAction = () => this.useHere();
     hud.onPadButton = (i) => this.levelUp(i);
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyT') hud.tunePanel.classList.toggle('hidden');
-      if (e.code === 'KeyB' && !hud.modalOpen && (this.state === 'home' || this.state === 'aim')) this.openBackpack();
+      const atBase = !hud.modalOpen && (this.state === 'home' || this.state === 'aim');
+      if (e.code === 'KeyB' && atBase) this.openBackpack();
       if (e.code === 'KeyM') this.toggleMute();
       if (e.code === 'Escape') hud.closeShop();
     });
@@ -832,9 +831,9 @@ export class Game {
     const urgent = tau < 3.2;
     this.hud.showChute(true, urgent);
     // A quick flash as the marker nears the end of the gold zone, just before the red crash zone.
-    if (!this.chuteWarned && tau < late + 0.3) {
+    if (!this.chuteWarned && tau < late + 0.6) {
       this.chuteWarned = true;
-      this.hud.toast('PARACHUTE NOW!', 'bad big flash', undefined, 600);
+      this.hud.toast('PARACHUTE NOW!', 'bad big flash', undefined, 1200);
       this.sfx.full();
     }
     if (urgent && this.save.flightNo <= TUTORIAL.wideChuteFlights) {
@@ -962,24 +961,6 @@ export class Game {
     this.walkVel.set(0, 0);
     this.camYaw = 0;
     this.facing = 0;
-  }
-
-  private nearMachine(): boolean {
-    return Math.hypot(MACHINE_FRONT.x - this.px, MACHINE_FRONT.z - this.pz) < STATION_REACH;
-  }
-
-  private nearMerger(): boolean {
-    return Math.hypot(MERGER_FRONT.x - this.px, MERGER_FRONT.z - this.pz) < STATION_REACH;
-  }
-
-  /** Walking up to the gacha machine or the merge station opens it, once per visit. */
-  private openStationOnArrival(blocked: boolean): void {
-    const station = this.nearMachine() ? 'gacha' : this.nearMerger() ? 'merge' : null;
-    if (station && station !== this.lastStation && !blocked && !this.walking) {
-      if (station === 'gacha') this.openGacha();
-      else this.openMerger();
-    }
-    this.lastStation = station;
   }
 
   /** The gacha panel: each tier with its price and odds, and the last pull's results on top. */
@@ -1423,7 +1404,6 @@ export class Game {
       this.startBoarding();
       return;
     }
-    this.openStationOnArrival(blocked);
     this.updateHomePrompt();
 
     // Now and then a character at the base chants its name.
@@ -1498,8 +1478,8 @@ export class Game {
 
   /** What E (or the action button) would do here, or null when there's nothing to do. */
   private actionLabel(): string | null {
-    if (this.nearMachine()) return `Gacha · ${formatCoins(this.save.gems)} gems`;
-    if (this.nearMerger()) return 'Merge station';
+    if (this.onPlatform(MACHINE_FRONT)) return `Gacha · ${formatCoins(this.save.gems)} gems`;
+    if (this.onPlatform(MERGER_FRONT)) return 'Merge station';
     const pad = this.padUnderfoot();
     if (pad !== null) {
       const slot = this.save.pads[pad];
@@ -1509,13 +1489,18 @@ export class Game {
     return this.lockedUnderfoot() !== null ? 'Unlock more slots' : null;
   }
 
+  /** Whether the player stands on the platform at a station's front. */
+  private onPlatform(at: THREE.Vector3): boolean {
+    return Math.hypot(at.x - this.px, at.z - this.pz) < PLATFORM_RADIUS;
+  }
+
   private useHere(): void {
     if (this.state !== 'home') return;
-    if (this.nearMachine()) {
+    if (this.onPlatform(MACHINE_FRONT)) {
       this.openGacha();
       return;
     }
-    if (this.nearMerger()) {
+    if (this.onPlatform(MERGER_FRONT)) {
       this.openMerger();
       return;
     }
@@ -1531,7 +1516,7 @@ export class Game {
       this.refreshShop();
       return;
     }
-    this.hud.toast('Walk to a slot or the gacha machine first', 'small');
+    this.hud.toast('Stand on a slot or a platform first', 'small');
   }
 
   private collect(i: number): void {
@@ -1554,6 +1539,19 @@ export class Game {
     const v = this.tmp2.copy(pos).project(this.camera);
     if (v.z > 1) return;
     this.hud.floatText(((v.x + 1) / 2) * window.innerWidth, ((1 - v.y) / 2) * window.innerHeight, text, kind);
+  }
+
+  private wantsPullHint(): boolean {
+    return !this.hasHint('pull') && this.save.gems >= GACHA[0].cost;
+  }
+
+  /** The lowest rarity the backpack has enough of to merge, or null. */
+  private mergeableRarity(): number | null {
+    for (let r = 0; r < RARITIES.length; r++) {
+      const need = mergeNeed(r);
+      if (need !== null && countInBackpack(this.save, r) >= need) return r;
+    }
+    return null;
   }
 
   private wantsUpgradeHint(): boolean {
@@ -1579,8 +1577,8 @@ export class Game {
     const basic = GACHA[0];
     const empty = s.pads.findIndex((slot) => slot === null);
     const cashPad = s.pads.findIndex((slot) => slot !== null && slot.cash >= 1);
-    if (!this.hasHint('pull') && s.gems >= basic.cost) {
-      return { text: `Walk to the gacha machine and ${press} to pull`, target: MACHINE_FRONT };
+    if (this.wantsPullHint()) {
+      return { text: `Step on the pink platform by the gacha machine and ${press}`, target: MACHINE_FRONT };
     }
     if (!this.hasHint('place') && s.inventory.length && empty >= 0) {
       return {
@@ -1591,9 +1589,12 @@ export class Game {
     if (!this.hasHint('collect') && cashPad >= 0) {
       return { text: 'Walk over the slot to collect its coins', target: Base.padPosition(cashPad, this.objTarget) };
     }
-    const mergeable = [0, 1, 2, 3].find((r) => countInBackpack(s, r) >= (mergeNeed(r) ?? Infinity));
-    if (!this.hasHint('merge') && mergeable !== undefined) {
-      return { text: `Walk to the merge station: you have enough ${RARITIES[mergeable].name}s to merge`, target: MERGER_FRONT };
+    const mergeable = this.mergeableRarity();
+    if (!this.hasHint('merge') && mergeable !== null) {
+      return {
+        text: `Step on the purple platform by the merge station and ${press}: you have enough ${RARITIES[mergeable].name}s`,
+        target: MERGER_FRONT,
+      };
     }
     if (this.wantsUpgradeHint()) return { text: 'Upgrade your cannon!', target: null };
     if (this.wantsExpandHint()) return { text: 'Your showcase is full! Unlock more slots in Upgrades', target: null };
@@ -2146,7 +2147,11 @@ export class Game {
       this.hasHint('collect') &&
       !upgradeHint &&
       !this.save.pads.some((slot) => slot !== null && slot.cash >= 1);
-    this.hud.showBaseButtons(canShop, this.state === 'home', canShop && upgradeHint, launchHint, this.bookRewardWaiting());
+    this.hud.showBaseButtons(canShop, this.state === 'home', {
+      upgrades: canShop && upgradeHint,
+      launch: launchHint,
+      book: this.bookRewardWaiting(),
+    });
   }
 
   /** A Level up button under each nearby brainrot, placed on screen under its pedestal's front edge. */
@@ -2194,8 +2199,8 @@ export class Game {
     const d = Math.hypot(dx, dz);
     if (d < 2.5) return;
     ground.visible = true;
-    const reach = 1.6 + Math.sin(this.time * 5) * 0.15;
-    ground.position.set(this.px + (dx / d) * reach, 0.22, this.pz + (dz / d) * reach);
+    const reach = 1.9 + Math.sin(this.time * 5) * 0.2;
+    ground.position.set(this.px + (dx / d) * reach, 0.25, this.pz + (dz / d) * reach);
     ground.rotation.y = Math.atan2(-dx, -dz);
   }
 

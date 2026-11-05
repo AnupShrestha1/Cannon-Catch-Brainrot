@@ -46,6 +46,8 @@ export class Hud {
   readonly upgradesBtn = byId<HTMLButtonElement>('upgradesBtn');
   readonly bookBtn = byId<HTMLButtonElement>('bookBtn');
   readonly backpackBtn = byId<HTMLButtonElement>('backpackBtn');
+  /** A portrait image for a brainrot, or '' to fall back to the plain rarity swatch. */
+  iconFor: (name: string, rarity: number) => string = () => '';
   readonly launchBtn = byId<HTMLButtonElement>('launchBtn');
   readonly giftBtn = byId<HTMLButtonElement>('giftBtn');
   readonly tunePanel = byId('tune');
@@ -249,14 +251,23 @@ export class Hud {
     this.chuteBtn.classList.toggle('pulse', on && pulse);
   }
 
-  showBaseButtons(upgrades: boolean, launch: boolean, pulseUpgrades = false, pulseLaunch = false, pulseBook = false): void {
-    this.backpackBtn.classList.toggle('on', upgrades);
-    this.bookBtn.classList.toggle('on', upgrades);
-    this.bookBtn.classList.toggle('pulse', upgrades && pulseBook);
-    this.upgradesBtn.classList.toggle('on', upgrades);
-    this.upgradesBtn.classList.toggle('pulse', upgrades && pulseUpgrades);
+  /** The dock (Upgrades, Bag, Book) and the Launch button, each pulsing when it's the next step. */
+  showBaseButtons(
+    dock: boolean,
+    launch: boolean,
+    pulse: { upgrades: boolean; launch: boolean; book: boolean },
+  ): void {
+    const tiles: [HTMLButtonElement, boolean][] = [
+      [this.upgradesBtn, pulse.upgrades],
+      [this.backpackBtn, false],
+      [this.bookBtn, pulse.book],
+    ];
+    for (const [tile, on] of tiles) {
+      tile.classList.toggle('on', dock);
+      tile.classList.toggle('pulse', dock && on);
+    }
     this.launchBtn.classList.toggle('on', launch);
-    this.launchBtn.classList.toggle('pulse', launch && pulseLaunch);
+    this.launchBtn.classList.toggle('pulse', launch && pulse.launch);
   }
 
   /** secondsLeft: null hides the gift, 0 or less makes it claimable. */
@@ -399,6 +410,15 @@ export class Hud {
     card.style.setProperty('--c', r.css);
     const swatch = document.createElement('div');
     swatch.className = 'swatch';
+    const icon = this.iconFor(name, rarity);
+    if (icon) {
+      const img = document.createElement('img');
+      img.src = icon;
+      img.alt = '';
+      img.draggable = false;
+      swatch.append(img);
+      swatch.classList.add('has-icon');
+    }
     const label = document.createElement('div');
     label.className = 'name';
     label.textContent = locked ? '???' : name;
