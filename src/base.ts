@@ -34,25 +34,26 @@ interface PadView {
   seed: number;
 }
 
-/** The carpet runs along -x at this depth, from the entrance near the cannon to the gacha machine. */
-export const CARPET_Z = -1;
+/** The carpet runs along -x in line with the cannon (z = 0), from the showcase entrance toward the far end. */
+export const CARPET_Z = 0;
 const ENTRANCE_X = -9;
 const FIRST_X = -12.5;
 const STEP_X = 4.3;
 const ROW_OFFSET = 3.4;
 const HALL_END_X = FIRST_X - STEP_X * 4 - 3;
 /**
- * The gacha machine and the merge station stand either side of the cannon, a little behind it, facing the
- * landing spot (+z); the fronts are where the player stands to use them.
+ * As in the sketch: the carpet leads from the showcase to the cannon, and the gacha machine and the merge
+ * station stand either side of the cannon, a little further from the showcase than it is. Both face the
+ * showcase (-x); the fronts, where their platforms are, are where the player stands to use them.
  */
-export const MACHINE = new THREE.Vector3(4.6, 0, -4);
-export const MACHINE_FRONT = new THREE.Vector3(MACHINE.x, 0, MACHINE.z + 2.5);
-export const MERGER = new THREE.Vector3(-4.6, 0, -4);
-export const MERGER_FRONT = new THREE.Vector3(MERGER.x, 0, MERGER.z + 2.5);
+export const MACHINE = new THREE.Vector3(3.5, 0, 6.5);
+export const MACHINE_FRONT = new THREE.Vector3(MACHINE.x - 2.5, 0, MACHINE.z);
+export const MERGER = new THREE.Vector3(3.5, 0, -6.5);
+export const MERGER_FRONT = new THREE.Vector3(MERGER.x - 2.5, 0, MERGER.z);
 /** Radius of the step-on platform in front of each station. */
 export const PLATFORM_RADIUS = 1.25;
-/** Both stations are built facing +x; this turns them to face +z. */
-const STATION_TURN = -Math.PI / 2;
+/** Both stations are built facing +x; this turns them to face the showcase (-x). */
+const STATION_TURN = Math.PI;
 /** Height of the coin over a brainrot's head. */
 const COIN_Y = 3.3;
 
@@ -130,7 +131,7 @@ export class Base {
 
   /** Where a pulled capsule pops out. */
   static capsuleExit(out = new THREE.Vector3()): THREE.Vector3 {
-    return out.set(MACHINE.x, 1.1, MACHINE.z + 1.5);
+    return out.set(MACHINE.x - 1.5, 1.1, MACHINE.z);
   }
 
   /** Matches pedestals, characters and rarity colours to the save. Slots past save.pads are locked. */

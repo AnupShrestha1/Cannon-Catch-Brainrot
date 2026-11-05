@@ -35,7 +35,7 @@ function keepClear(x: number, z: number): boolean {
   if (x > -48 && x < 7 && z > -12 && z < 11) return true;
   if (Math.hypot(x, z) < 6) return true;
   // The gacha machine and merge station either side of the cannon.
-  if (x > -8 && x < 8 && z > -8 && z < 0) return true;
+  if (x > -2 && x < 8 && z > -9.5 && z < 9.5) return true;
   if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 2) return true;
   if (Math.hypot(x - COTTAGE.x, z - COTTAGE.z) < 9) return true;
   if (Math.hypot(x - WINDMILL.x, z - WINDMILL.z) < 8) return true;
@@ -147,7 +147,8 @@ export function addScenery(scene: THREE.Scene): Scenery {
     tile.receiveShadow = true;
     scene.add(tile);
   };
-  path(-4.5, 0.65, 9.8, 2.6, -0.35);
+  // Straight from the cannon to the showcase entrance, in line with the carpet.
+  path(-4, 0, 5.5, 2.6);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const up = new THREE.Vector3(0, 1, 0);
@@ -160,7 +161,7 @@ export function addScenery(scene: THREE.Scene): Scenery {
   const lampGeo = new THREE.BoxGeometry(0.42, 0.5, 0.42).translate(0, 2.35, 0);
   const capGeo = new THREE.ConeGeometry(0.4, 0.3, 4).rotateY(Math.PI / 4).translate(0, 2.75, 0);
   for (let x = -12; x >= -34; x -= 7) {
-    for (const z of [7.6, -8.1]) {
+    for (const z of [8.7, -7.4]) {
       const lamp = new THREE.Group();
       lamp.add(new THREE.Mesh(postGeo, darkWood), new THREE.Mesh(lampGeo, lampMat), new THREE.Mesh(capGeo, darkWood));
       lamp.position.set(x, 0, z);
@@ -441,14 +442,14 @@ export function addScenery(scene: THREE.Scene): Scenery {
   const bed = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.2, 0), lambert(0xffffff), 140);
   for (let i = 0; i < 140; i++) {
     const x = -35 + rand() * 25;
-    const z = range(5.7, 6.7);
+    const z = range(6.7, 7.7);
     m.compose(new THREE.Vector3(x, 0.3, z), q.identity(), new THREE.Vector3(1, 1, 1));
     bed.setMatrixAt(i, m);
     bed.setColorAt(i, c.setHex(pick(flowerColors)));
   }
   scene.add(bed);
   const soil = new THREE.Mesh(new THREE.BoxGeometry(25.5, 0.35, 1.4), lambert(0x6b4a2e));
-  soil.position.set(-22.5, 0.12, 6.2);
+  soil.position.set(-22.5, 0.12, 7.2);
   scene.add(soil);
 
   // Distant hills, then snowy mountains ringing the horizon. The mountains skip fog and carry their own

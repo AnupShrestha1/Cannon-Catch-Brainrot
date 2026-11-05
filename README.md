@@ -47,7 +47,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   with a toast, and the player stays where they landed, ready to walk.
 - **Parachute warning**: if the parachute is still closed as the ground bar's marker gets within 0.6
   seconds of the red crash zone (the last part of the gold zone), PARACHUTE NOW! flashes for 1.2 seconds.
-- **Gacha machine**, to the right of the cannon. Step on the glowing pink platform in front of it and
+- **Gacha machine**, on one side of the cannon (the carpet runs from the showcase to the cannon). Step on the glowing pink platform in front of it and
   press E (walking past doesn't open anything):
   - Basic pull, 10 gems: Common 62%, Uncommon 28%, Rare 8%, Epic 1.8%, Legendary 0.2%.
   - Super pull, 100 gems, unlocked once a flight reaches Cloud Kingdom: Uncommon 35%, Rare 40%, Epic
@@ -61,7 +61,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   - Results go on display by themselves: empty slots fill best first, and a rarer pull swaps out a
     level-1 brainrot (which goes to the backpack with its coins collected). Levelled ones are never moved.
     The machine's panel then reopens with the results on top, so pulling again is one click.
-- **Merge station**, a bubbling cauldron to the left of the cannon. Step on the purple platform in front
+- **Merge station**, a bubbling cauldron on the other side of the cannon. Step on the purple platform in front
   of it and press E: 10 Common → 1 Uncommon, 8 Uncommon →
   1 Rare, 6 Rare → 1 Epic, 4 Epic → 1 Legendary, from the backpack. A merge gives a random character of
   the next rarity. Merge all runs every recipe from the bottom up in one click, and merged brainrots go
