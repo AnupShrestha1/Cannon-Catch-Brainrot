@@ -31,6 +31,17 @@ export interface PadButton {
   progress: number;
 }
 
+/** One card in the flip reveal after a pull or a merge. */
+export interface RevealItem {
+  name: string;
+  rarity: number;
+  isNew: boolean;
+  /** "On display" or "In backpack". */
+  note: string;
+  /** e.g. "+8/s". */
+  income: string;
+}
+
 export interface TuningHooks {
   changed(): void;
   addCoins(amount: number): void;
@@ -84,6 +95,13 @@ export class Hud {
   private actionBtn = byId<HTMLButtonElement>('actionBtn');
   private actionKey = '';
   private padLayer = byId('padBtns');
+  private revealEl = byId('cardReveal');
+  private revealHead = byId('revealHead');
+  private revealRow = this.revealEl.querySelector<HTMLElement>('.tcards')!;
+  private flipAllBtn = byId<HTMLButtonElement>('flipAllBtn');
+  private revealDone = byId<HTMLButtonElement>('revealDone');
+  /** Space or Enter during a reveal: flip the next card, or continue once all are face up. */
+  private revealNext: (() => void) | null = null;
   private padPool = new Map<number, { el: HTMLButtonElement; key: string }>();
   private stickKnob = this.stick.querySelector<HTMLElement>('.knob')!;
   private modal = byId('modal');
@@ -98,7 +116,14 @@ export class Hud {
     window.addEventListener(
       'keydown',
       (e) => {
-        if (!this.modalOpen) return;
+        if (this.revealing) {
+          if (e.code !== 'Enter' && e.code !== 'Space' && e.code !== 'NumpadEnter') return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          if (!e.repeat) this.revealNext?.();
+          return;
+        }
+        if (this.modal.classList.contains('hidden')) return;
         const buttons = this.modalButtons.querySelectorAll('button');
         let pick: HTMLButtonElement | undefined;
         if (e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter') pick = buttons[0];
@@ -374,8 +399,114 @@ export class Hud {
     this.stickKnob.style.transform = `translate(${stick.x * 44}px, ${-stick.y * 44}px)`;
   }
 
+  /** True while any panel or the card reveal covers the game. */
   get modalOpen(): boolean {
-    return !this.modal.classList.contains('hidden');
+    return !this.modal.classList.contains('hidden') || this.revealing;
+  }
+
+  get revealing(): boolean {
+    return !this.revealEl.classList.contains('hidden');
+  }
+
+  /**
+   * Trading-card reveal: the cards are dealt face down, rarest last, and each flips over when tapped (or all
+   * at once with Flip all). Rare and better glow through their backs first; Epic and better have holo foil.
+   */
+  revealCards(items: RevealItem[], title: string, onFlip: (item: RevealItem) => void, onDone: () => void): void {
+    const ordered = [...items].sort((a, b) => a.rarity - b.rarity);
+    let left = ordered.length;
+    const flips: (() => void)[] = [];
+    const update = () => {
+      this.revealHead.textContent = left > 0 ? title : 'All revealed!';
+      this.flipAllBtn.classList.toggle('hidden', left === 0);
+      this.revealDone.classList.toggle('hidden', left > 0);
+    };
+    const close = () => {
+      this.revealEl.classList.add('hidden');
+      this.revealNext = null;
+      this.revealDone.onclick = null;
+      this.flipAllBtn.onclick = null;
+      onDone();
+    };
+    this.revealRow.replaceChildren(
+      ...ordered.map((item, i) => {
+        const r = RARITIES[item.rarity];
+        const card = document.createElement('div');
+        card.className = 'tcard';
+        card.style.setProperty('--c', r.css);
+        card.style.animationDelay = `${i * 0.08}s`;
+        if (item.rarity >= 2) card.classList.add('hint');
+        if (item.rarity >= 3) card.classList.add('holo');
+        if (item.rarity === RARITIES.length - 1) card.classList.add('secret');
+        const inner = document.createElement('div');
+        inner.className = 'tcard-inner';
+        const back = document.createElement('div');
+        back.className = 'tcard-back';
+        back.innerHTML = '<div class="tc-emblem"><span>BRAIN</span><span>ROT</span></div>';
+        const front = document.createElement('div');
+        front.className = 'tcard-front';
+        const top = document.createElement('div');
+        top.className = 'tc-top';
+        const name = document.createElement('span');
+        name.className = 'tc-name';
+        name.textContent = item.name;
+        const income = document.createElement('span');
+        income.className = 'tc-income';
+        income.textContent = item.income;
+        top.append(name, income);
+        const art = document.createElement('div');
+        art.className = 'tc-art';
+        const icon = this.iconFor(item.name, item.rarity);
+        if (icon) {
+          const img = document.createElement('img');
+          img.src = icon;
+          img.alt = '';
+          img.draggable = false;
+          art.append(img);
+        }
+        const type = document.createElement('div');
+        type.className = 'tc-type';
+        type.textContent = `${r.name} ${'★'.repeat(item.rarity + 1)}`;
+        const note = document.createElement('div');
+        note.className = 'tc-note';
+        note.textContent = item.note;
+        front.append(top, art, type, note);
+        if (item.isNew) {
+          const badge = document.createElement('div');
+          badge.className = 'tc-new';
+          badge.textContent = 'NEW!';
+          front.append(badge);
+        }
+        const shine = document.createElement('div');
+        shine.className = 'tc-shine';
+        front.append(shine);
+        inner.append(back, front);
+        card.append(inner);
+        const flip = () => {
+          if (card.classList.contains('flipped')) return;
+          card.classList.add('flipped');
+          left--;
+          onFlip(item);
+          update();
+        };
+        card.addEventListener('click', flip);
+        flips.push(flip);
+        return card;
+      }),
+    );
+    this.revealEl.classList.toggle('many', ordered.length > 5);
+    this.flipAllBtn.onclick = () => {
+      flips.forEach((flip, i) => setTimeout(flip, i * 160));
+      this.flipAllBtn.blur();
+    };
+    this.revealDone.onclick = close;
+    this.revealNext = () => {
+      const next = flips.find((_, i) => !this.revealRow.children[i].classList.contains('flipped'));
+      if (next) next();
+      else close();
+    };
+    update();
+    this.revealEl.classList.remove('hidden');
   }
 
   /** One modal at a time: a title, any content, and buttons that each close it and run their action. */

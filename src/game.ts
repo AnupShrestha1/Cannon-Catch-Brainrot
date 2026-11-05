@@ -53,7 +53,7 @@ import {
   upgradeCost,
 } from './economy';
 import { Particles, Streaks } from './fx';
-import { Hud, type PadButton, type ShopItem, type ShopRow } from './hud';
+import { Hud, type PadButton, type RevealItem, type ShopItem, type ShopRow } from './hud';
 import { Input } from './input';
 import { BOOK_ZONES, DAILY, bookEntries, dailyCoins, dailyStatus, dayKey, offlineEarnings, zoneComplete } from './meta';
 import { platform } from './platform';
@@ -1085,15 +1085,34 @@ export class Game {
       size: 0.6,
       up: 5,
     });
-    this.sfx.pop(best.rarity);
-    this.sfx.chant(best.name);
-    if (best.rarity >= RARE) {
-      this.sfx.sparkle();
-      this.hud.toast(`${RARITIES[best.rarity].name.toUpperCase()}!`, 'big', RARITIES[best.rarity].css);
-    }
+    this.sfx.swap();
     if (best.rarity >= 4) platform.happytime();
-    // Back to the machine's panel with the results on top, so pulling again is one more click.
-    this.openGacha(pending);
+    // Flip the cards, then back to the machine's panel so pulling again is one more click.
+    const title = pending.got.length > 1 ? `Tap the cards to flip them!` : 'Tap the card to flip it!';
+    this.hud.revealCards(this.revealItems(pending.got, pending.isNew), title, (item) => this.onCardFlip(item), () =>
+      this.openGacha(),
+    );
+  }
+
+  /** Cards for the flip reveal, noting where each brainrot went. */
+  private revealItems(got: Owned[], isNew: boolean[]): RevealItem[] {
+    return got.map((o, i) => ({
+      name: o.name,
+      rarity: o.rarity,
+      isNew: isNew[i],
+      note: this.save.pads.some((slot) => slot?.name === o.name) ? 'On display' : 'In backpack',
+      income: `+${formatCoins(padIncome(this.save, { rarity: o.rarity }))}/s`,
+    }));
+  }
+
+  /** Each flip pops; rare and better sparkle, call out their rarity and chant their name. */
+  private onCardFlip(item: RevealItem): void {
+    this.sfx.pop(item.rarity);
+    if (item.rarity >= RARE) {
+      this.sfx.sparkle();
+      this.sfx.chant(item.name);
+      this.hud.toast(`${RARITIES[item.rarity].name.toUpperCase()}!`, 'big', RARITIES[item.rarity].css);
+    }
   }
 
   /**
@@ -1215,7 +1234,9 @@ export class Game {
       if (best.rarity >= 4) platform.happytime();
     }
     this.sfx.sparkle();
-    this.openMerger({ got: owned, isNew });
+    this.hud.revealCards(this.revealItems(owned, isNew), 'Merged! Tap to flip', (item) => this.onCardFlip(item), () =>
+      this.openMerger(),
+    );
   }
 
   /**

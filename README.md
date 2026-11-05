@@ -60,7 +60,11 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     or by pity, so an Uncommon on pull 2 means the next guaranteed one is pull 17, not pull 15.
   - Results go on display by themselves: empty slots fill best first, and a rarer pull swaps out a
     level-1 brainrot (which goes to the backpack with its coins collected). Levelled ones are never moved.
-    The machine's panel then reopens with the results on top, so pulling again is one click.
+    Then the cards are revealed like trading cards (no pack to open): dealt face down, rarest last, each
+    flipped with a tap (or Flip all, or Space). Rare and better glow through their backs and wobble first;
+    the front is a framed card with the brainrot's art, income, rarity stars and a NEW badge, and Epic and
+    better have holo foil. Continue goes back to the machine's panel, so pulling again is one click.
+    Merges reveal their results the same way.
 - **Merge station**, a bubbling cauldron on the other side of the cannon. Step on the purple platform in front
   of it and press E: 10 Common → 1 Uncommon, 8 Uncommon →
   1 Rare, 6 Rare → 1 Epic, 4 Epic → 1 Legendary, from the backpack. A merge gives a random character of
