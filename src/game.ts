@@ -6,6 +6,7 @@ import { Sfx } from './audio';
 import { Base, CARPET_Z, MACHINE_FRONT, MERGER_FRONT, PLATFORM_RADIUS } from './base';
 import { animateShared } from './characters';
 import { brainrotIcon } from './icons';
+import { FENCE, OWN_SLOT, PLOT_SPACING, SLOTS, fenceStep } from './layout';
 import {
   CHARGE,
   CHUTE,
@@ -158,6 +159,8 @@ export class Game {
   private camera = new THREE.PerspectiveCamera(60, 1, 0.1, 900);
   private env: Env;
   private base: Base;
+  /** The other plots in the town: vacant until multiplayer gives them owners. */
+  private neighbors: Base[] = [];
   private player: PlayerRig;
   private fx: Particles;
   private streaks: Streaks;
@@ -267,6 +270,14 @@ export class Game {
     this.scene.fog = new THREE.Fog(0x8fd3ff, 90, 420);
     this.env = buildEnv(this.scene);
     this.base = new Base(this.scene);
+    for (const slot of SLOTS) {
+      if (slot.index === OWN_SLOT) continue;
+      this.neighbors.push(new Base(this.scene, slot, true));
+      const cannon = this.env.cannon.clone();
+      cannon.position.set(slot.x, 0, slot.z);
+      cannon.rotation.y = slot.rot;
+      this.scene.add(cannon);
+    }
     this.player = makePlayer();
     this.player.group.traverse((o) => {
       if (o instanceof THREE.Mesh) o.castShadow = true;
@@ -491,6 +502,7 @@ export class Game {
     this.updateGems(dt);
     this.updateBirds(dt);
     this.base.update(this.save, this.time, realDt);
+    for (const plot of this.neighbors) plot.update(this.save, this.time, realDt);
     this.fx.update(dt);
     this.updateVisuals(realDt, dt);
     // The reveal screen and the shop are breaks in play.
@@ -1400,10 +1412,11 @@ export class Game {
     const dist = Math.hypot(dx, dz);
     if (dist < 0.05) {
       this.walking = false;
-      if (this.state === 'boarding') this.boardCannon();
       const then = this.arrive;
       this.arrive = null;
-      then?.();
+      // A walk with more waypoints goes on; the last stop of a boarding walk is the cannon.
+      if (then) then();
+      else if (this.state === 'boarding') this.boardCannon();
       return;
     }
     const step = Math.min(dist, WALK_SPEED * dt);
@@ -1471,9 +1484,8 @@ export class Game {
       const k = damp(12, dt);
       this.walkVel.x += (wantX - this.walkVel.x) * k;
       this.walkVel.y += (wantZ - this.walkVel.y) * k;
-      // Inside the base's fence.
-      this.px = clamp(this.px + this.walkVel.x * dt, -16, 16);
-      this.pz = clamp(this.pz + this.walkVel.y * dt, -37, 16);
+      // Fences hold except at the gates; the street joins the plots.
+      [this.px, this.pz] = fenceStep(this.px, this.pz, this.px + this.walkVel.x * dt, this.pz + this.walkVel.y * dt);
       this.stepping = this.walkVel.length() > 0.6;
     } else {
       this.walkVel.set(0, 0);
@@ -1639,11 +1651,25 @@ export class Game {
     this.guideTarget = target;
   }
 
+  /** Walks to the cannon, out through the gate of a neighbour's plot and in through our own if need be. */
   private startBoarding(): void {
     this.state = 'boarding';
     this.guideTarget = null;
     this.hud.prompt('');
-    this.walkTo(CANNON_FOOT);
+    const stops: THREE.Vector3[] = [];
+    const inOwnPlot = Math.abs(this.px) < FENCE.x && this.pz < FENCE.front;
+    if (!inOwnPlot) {
+      const cx = Math.round(this.px / PLOT_SPACING) * PLOT_SPACING;
+      const inOtherPlot = cx !== 0 && Math.abs(this.px - cx) < FENCE.x && this.pz < FENCE.front;
+      if (inOtherPlot) stops.push(new THREE.Vector3(cx, 0, FENCE.front - 1), new THREE.Vector3(cx, 0, FENCE.front + 2));
+      stops.push(new THREE.Vector3(0, 0, FENCE.front + 2), new THREE.Vector3(0, 0, FENCE.front - 1));
+    }
+    stops.push(CANNON_FOOT);
+    const next = () => {
+      const stop = stops.shift();
+      if (stop) this.walkTo(stop, stops.length ? next : null);
+    };
+    next();
   }
 
   /** Into the cannon, ready to charge. */

@@ -47,6 +47,14 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   with a toast, and the player stays where they landed, ready to walk.
 - **Parachute warning**: if the parachute is still closed as the ground bar's marker gets within 0.6
   seconds of the red crash zone (the last part of the gold zone), PARACHUTE NOW! flashes for 1.2 seconds.
+- **Town, ready for multiplayer** (`src/layout.ts`): six plots in two rows of three, facing each other
+  across a shared street. Every plot is the same base, built in plot space (cannon at the origin, gate
+  toward the street). This client's plot is the middle of the near row, at the world origin, so its
+  gameplay, cameras and flights are unchanged; the other five are vacant ("OPEN PLOT" over the gate:
+  empty pedestals, no coins) until a server assigns players to slots. The street has a fountain in the
+  middle, lanterns along both kerbs and leaderboard boards (placeholders) in the gaps between plots.
+  You can walk out through your gate into the street; fences hold everywhere else, and the fountain is
+  solid. Launching from outside walks you back in through your gate to the cannon.
 - **Base layout**, following the sketch and lined up with the launch camera: the cannon stands on a round
   paved plaza; the showcase hall is straight behind it, its red carpet running across the plaza to the
   cannon; the gacha machine (left) and merge station (right) stand on the plaza's edge facing the cannon.
@@ -188,6 +196,7 @@ All first-pass numbers live in `src/config.ts`.
 | `src/base.ts` | The showcase hall, its pedestals, brainrots and coins, and the gacha machine and merge station by the cannon |
 | `src/characters.ts` | The 10 character models and their idle animations |
 | `src/world.ts` | Sky pieces, cannon, player avatar, gems, hazards, guide arrows, labels |
+| `src/layout.ts` | The town: plot slots, the street, fences and walking limits, for multiplayer |
 | `src/scenery.ts` | Sky dome, ground, hills, mountains, path, lanterns, fence and bunting, swaying trees, cottage, windmill, pond, butterflies |
 | `src/fx.ts` | Particle bursts and wind streaks |
 | `src/hud.ts` | HTML overlay: wallet and gems, altitude, run gems, meters, dock, shop, modals, level-up buttons, tuning panel |

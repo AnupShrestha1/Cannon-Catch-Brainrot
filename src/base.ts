@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { ECONOMY, RARITIES } from './config';
 import { makeCharacter, type CharacterRig } from './characters';
 import { formatCoins } from './economy';
+import { FENCE, type PlotSlot } from './layout';
 import type { PadSlot, Save } from './store';
 import { flat, makeLabel, softTexture, type Label } from './world';
 
@@ -82,9 +83,14 @@ const lockedTop = 0x6f7783;
 const emptyTop = 0xdfeaf6;
 const GOLD = 0xffc84a;
 
+/** Vacant plots share one label for their (never shown) coin counters, so they don't each draw canvases. */
+let vacantLabel: Label | null = null;
+
 export class Base {
   private views: PadView[] = [];
   private group = new THREE.Group();
+  /** An unclaimed plot: empty pedestals, no coins, no LOCKED signs. Nothing on it changes. */
+  private vacant: boolean;
   private labelTimer = 0;
   private machine: THREE.Group;
   private capsules: THREE.Mesh[] = [];
@@ -97,9 +103,19 @@ export class Base {
   /** The glowing platforms in front of the gacha machine and the merge station, and their rising rings. */
   private platforms: { ring: THREE.Mesh; top: THREE.MeshLambertMaterial; seed: number }[] = [];
 
-  constructor(scene: THREE.Scene) {
+  /**
+   * Builds a plot's base. Without a slot it's this client's own plot, at the world origin; with one, it's
+   * placed at that slot, and `vacant` leaves it unclaimed.
+   */
+  constructor(scene: THREE.Scene, slot: PlotSlot | null = null, vacant = false) {
+    this.vacant = vacant;
+    if (slot) {
+      this.group.position.set(slot.x, 0, slot.z);
+      this.group.rotation.y = slot.rot;
+    }
     scene.add(this.group);
     this.buildPlaza();
+    this.buildGateSign(vacant ? 'OPEN PLOT' : 'YOUR BASE', vacant ? '#c9ced6' : '#ffd84a');
     this.buildHall();
     this.machine = new THREE.Group();
     this.crank = new THREE.Group();
@@ -147,6 +163,7 @@ export class Base {
 
   /** Matches pedestals, characters and rarity colours to the save. Slots past save.pads are locked. */
   sync(save: Save): void {
+    if (this.vacant) return;
     this.views.forEach((view, i) => {
       const locked = i >= save.pads.length;
       const slot = locked ? null : save.pads[i];
@@ -180,6 +197,17 @@ export class Base {
     if (refreshLabels) this.labelTimer = 0.2;
     this.animateMachine(time, realDt);
     this.animateMerger(time, realDt);
+    if (this.vacant) {
+      this.animatePlatforms(time);
+      return;
+    }
+    this.animatePlatforms(time);
+    this.views.forEach((view, i) => {
+      this.updatePad(view, i < save.pads.length ? save.pads[i] : null, time, realDt, refreshLabels);
+    });
+  }
+
+  private animatePlatforms(time: number): void {
     for (const p of this.platforms) {
       const t = (time * 0.9 + p.seed) % 1;
       p.ring.position.y = 0.2 + t * 1.3;
@@ -187,41 +215,41 @@ export class Base {
       (p.ring.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - t);
       p.top.emissiveIntensity = 0.55 + Math.sin(time * 3 + p.seed * 6) * 0.2;
     }
-    this.views.forEach((view, i) => {
-      const slot = i < save.pads.length ? save.pads[i] : null;
-      view.pop = Math.max(0, view.pop - realDt * 4);
-      const pop = 1 + view.pop * 0.3;
-      view.label.sprite.scale.set(6 * 0.7 * pop, 6 * (96 / 512) * 0.7 * pop, 1);
-      // The coin turns slowly, bobs, and swells for a moment on each income tick.
-      view.coin.rotation.y = time * 1.2 + view.seed;
-      view.coin.position.y = COIN_Y + Math.sin(time * 1.8 + view.seed) * 0.12;
-      view.coin.scale.setScalar(pop);
-      view.beacon.visible = view.key === '';
-      if (view.beacon.visible) {
-        const p = (time * 0.8 + view.seed) % 1;
-        view.beacon.position.y = PAD_TOP + 0.05 + p * 1.2;
-        view.beacon.scale.setScalar(1 - p * 0.35);
-        (view.beacon.material as THREE.MeshBasicMaterial).opacity = 0.7 * (1 - p);
-      }
-      if (view.rig) {
-        view.rig.animate(time + view.seed);
-        // A gentle idle bounce with squash, and a bigger squash as it lands on the pedestal.
-        const bounce = Math.abs(Math.sin(time * 2.2 + view.seed));
-        view.arrive = Math.max(0, view.arrive - realDt * 2.5);
-        const squash = 1 - (1 - bounce) * 0.05 - Math.sin(view.arrive * Math.PI) * 0.25;
-        view.rig.figure.scale.set(1 / Math.sqrt(squash), squash, 1 / Math.sqrt(squash));
-        view.rig.figure.position.y = bounce * 0.08 + view.arrive * 1.5;
-        view.glowMat.opacity = 0.55 + Math.sin(time * 2.2 + view.seed) * 0.2;
-      }
-      if (!refreshLabels) return;
-      const cash = slot ? Math.floor(slot.cash) : 0;
-      if (cash === view.shown) return;
-      if (cash > view.shown && view.shown > 0) view.pop = 1;
-      view.shown = cash;
-      view.label.sprite.visible = cash > 0;
-      view.coin.visible = cash > 0;
-      if (cash > 0) view.label.set(`+${formatCoins(cash)}`, '#ffd84a');
-    });
+  }
+
+  private updatePad(view: PadView, slot: PadSlot | null, time: number, realDt: number, refreshLabels: boolean): void {
+    view.pop = Math.max(0, view.pop - realDt * 4);
+    const pop = 1 + view.pop * 0.3;
+    view.label.sprite.scale.set(6 * 0.7 * pop, 6 * (96 / 512) * 0.7 * pop, 1);
+    // The coin turns slowly, bobs, and swells for a moment on each income tick.
+    view.coin.rotation.y = time * 1.2 + view.seed;
+    view.coin.position.y = COIN_Y + Math.sin(time * 1.8 + view.seed) * 0.12;
+    view.coin.scale.setScalar(pop);
+    view.beacon.visible = view.key === '';
+    if (view.beacon.visible) {
+      const p = (time * 0.8 + view.seed) % 1;
+      view.beacon.position.y = PAD_TOP + 0.05 + p * 1.2;
+      view.beacon.scale.setScalar(1 - p * 0.35);
+      (view.beacon.material as THREE.MeshBasicMaterial).opacity = 0.7 * (1 - p);
+    }
+    if (view.rig) {
+      view.rig.animate(time + view.seed);
+      // A gentle idle bounce with squash, and a bigger squash as it lands on the pedestal.
+      const bounce = Math.abs(Math.sin(time * 2.2 + view.seed));
+      view.arrive = Math.max(0, view.arrive - realDt * 2.5);
+      const squash = 1 - (1 - bounce) * 0.05 - Math.sin(view.arrive * Math.PI) * 0.25;
+      view.rig.figure.scale.set(1 / Math.sqrt(squash), squash, 1 / Math.sqrt(squash));
+      view.rig.figure.position.y = bounce * 0.08 + view.arrive * 1.5;
+      view.glowMat.opacity = 0.55 + Math.sin(time * 2.2 + view.seed) * 0.2;
+    }
+    if (!refreshLabels) return;
+    const cash = slot ? Math.floor(slot.cash) : 0;
+    if (cash === view.shown) return;
+    if (cash > view.shown && view.shown > 0) view.pop = 1;
+    view.shown = cash;
+    view.label.sprite.visible = cash > 0;
+    view.coin.visible = cash > 0;
+    if (cash > 0) view.label.set(`+${formatCoins(cash)}`, '#ffd84a');
   }
 
   /** An occupied pedestal takes its brainrot's rarity colour and glows; an open empty one pulses a ring of light. */
@@ -270,13 +298,36 @@ export class Base {
       new THREE.MeshBasicMaterial({ color: 0x9dfcff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
     );
     beacon.position.set(pos.x, PAD_TOP, pos.z);
-    const lock = this.makeLock(pos);
+    const lock = this.vacant ? new THREE.Group() : this.makeLock(pos);
     const coin = new THREE.Group();
     const face = new THREE.Mesh(coinGeo, coinMat);
     face.castShadow = true;
     coin.add(face, new THREE.Mesh(coinFaceGeo, coinFaceMat), new THREE.Mesh(coinRimGeo, coinRimMat));
     coin.position.set(pos.x, COIN_Y, pos.z);
     coin.visible = false;
+    if (this.vacant) {
+      beacon.visible = false;
+      this.group.add(pedestal, top, rim);
+      vacantLabel ??= makeLabel();
+      this.views.push({
+        top,
+        topMat,
+        rimMat,
+        glow,
+        glowMat,
+        beacon,
+        lock,
+        rig: null,
+        key: '',
+        coin,
+        label: vacantLabel,
+        shown: 0,
+        pop: 0,
+        arrive: 0,
+        seed: 0,
+      });
+      return;
+    }
     const label = makeLabel();
     label.sprite.position.set(pos.x, COIN_Y + 1.05, pos.z);
     label.sprite.scale.multiplyScalar(0.7);
@@ -328,6 +379,25 @@ export class Base {
   }
 
   /** Stone floor with a border, the red carpet with gold edging, and an arch over the entrance. */
+  /** Two posts and a beam over the plot's gate, with the owner's sign. */
+  private buildGateSign(text: string, color: string): void {
+    const postMat = flat(0x9a6a3c);
+    for (const side of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.45, 4.2, 0.45), postMat);
+      post.position.set(side * (FENCE.gate + 0.3), 2.1, FENCE.front);
+      post.castShadow = true;
+      this.group.add(post);
+    }
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(FENCE.gate * 2 + 1.4, 0.7, 0.4), flat(this.vacant ? 0x8a8f99 : 0xc8102e));
+    beam.position.set(0, 4.3, FENCE.front);
+    beam.castShadow = true;
+    const sign = makeLabel();
+    sign.set(text, color);
+    sign.sprite.position.set(0, 5.2, FENCE.front);
+    sign.sprite.scale.multiplyScalar(0.75);
+    this.group.add(beam, sign.sprite);
+  }
+
   /** A paved round plaza around the cannon, with a ring pattern and a low curb. */
   private buildPlaza(): void {
     const plaza = new THREE.Mesh(new THREE.CircleGeometry(PLAZA_RADIUS, 48), flat(0xe9dcc3));

@@ -3,6 +3,7 @@
 // sway in the wind, flowers, mushrooms, rocks, a pond with lily pads and a dock, a cottage, a windmill and
 // butterflies. Seeded, so the world looks the same every load; repeated props are instanced to stay cheap.
 import * as THREE from 'three';
+import { FENCE, SLOTS, STREET, STREET_MID, TOWN, type PlotSlot } from './layout';
 
 const lambert = (color: number, extra: THREE.MeshLambertMaterialParameters = {}) =>
   new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
@@ -18,24 +19,27 @@ function seeded(seed: number): () => number {
   };
 }
 
-/** Flat where the game is played, rolling hills beyond about 70 m. */
+/** Flat over the whole town and a margin around it, rolling hills beyond. */
 function groundHeight(x: number, z: number): number {
-  const d = Math.hypot(x, z);
-  if (d < 70) return 0;
-  const ramp = Math.min(1, (d - 70) / 60);
+  // Distance outside the town's rectangle.
+  const dx = Math.max(TOWN.minX - x, 0, x - TOWN.maxX);
+  const dz = Math.max(TOWN.minZ - z, 0, z - TOWN.maxZ);
+  const d = Math.hypot(dx, dz);
+  if (d < 25) return 0;
+  const ramp = Math.min(1, (d - 25) / 60);
   return ramp * (5 + Math.sin(x * 0.03) * Math.cos(z * 0.025) * 4 + Math.sin(x * 0.011 + z * 0.017) * 6);
 }
 
-// The base sits inside a rectangular fence (FENCE); the landmarks frame it from outside: the windmill and the
-// cottage behind it on either side, seen past the cannon from the launch camera, and the pond off to the right.
-const FENCE = { x: 17, front: 17, back: -38, gate: 4 };
-const POND = { x: 34, z: 6, r: 9 };
-const COTTAGE = { x: 30, z: -50 };
-const WINDMILL = { x: -30, z: -54 };
+// The town (see layout.ts) is six fenced plots across a street. The landmarks frame it from outside: the
+// windmill and the cottage behind this client's row, seen past the cannon from the launch camera, and the pond
+// off past the end of the street.
+const POND = { x: TOWN.maxX + 20, z: STREET_MID, r: 9 };
+const COTTAGE = { x: 24, z: TOWN.minZ - 14 };
+const WINDMILL = { x: -26, z: TOWN.minZ - 18 };
 
-/** Where props may not go: inside the fence (and a margin), the pond and the buildings. */
+/** Where props may not go: the town (with a margin), the pond and the buildings. */
 function keepClear(x: number, z: number): boolean {
-  if (Math.abs(x) < FENCE.x + 3 && z > FENCE.back - 3 && z < FENCE.front + 3) return true;
+  if (x > TOWN.minX - 4 && x < TOWN.maxX + 4 && z > TOWN.minZ - 4 && z < TOWN.maxZ + 4) return true;
   if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 2) return true;
   if (Math.hypot(x - COTTAGE.x, z - COTTAGE.z) < 9) return true;
   if (Math.hypot(x - WINDMILL.x, z - WINDMILL.z) < 8) return true;
@@ -138,102 +142,191 @@ export function addScenery(scene: THREE.Scene): Scenery {
   groundMesh.receiveShadow = true;
   scene.add(groundMesh);
 
-  // Sandy path from the cannon to the showcase entrance.
-  const sand = lambert(0xe2c98f);
-  const path = (x: number, z: number, w: number, d: number, turn = 0) => {
-    const tile = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, d), sand);
-    tile.position.set(x, 0.025, z);
-    tile.rotation.y = turn;
-    tile.receiveShadow = true;
-    scene.add(tile);
-  };
-  // From the gate in the front fence to the plaza.
-  path(0, (FENCE.front + 10) / 2, 3, FENCE.front - 10 + 1);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const up = new THREE.Vector3(0, 1, 0);
-
-  // Lanterns along both long sides of the showcase, with a warm glow.
+  const sand = lambert(0xe2c98f);
   const wood = lambert(0x9a6a3c);
   const darkWood = lambert(0x6e4526);
   const lampMat = new THREE.MeshLambertMaterial({ color: 0xffe9a8, emissive: 0xffc94d, emissiveIntensity: 0.9 });
   const postGeo = new THREE.CylinderGeometry(0.09, 0.12, 2.2, 6).translate(0, 1.1, 0);
   const lampGeo = new THREE.BoxGeometry(0.42, 0.5, 0.42).translate(0, 2.35, 0);
   const capGeo = new THREE.ConeGeometry(0.4, 0.3, 4).rotateY(Math.PI / 4).translate(0, 2.75, 0);
-  const lampSpots: [number, number][] = [];
-  // Around the plaza, leaving the hall entrance, the two stations and the line from the gate clear (the
-  // base camera sits on that line behind the player).
-  for (const deg of [35, 65, 115, 145, 225, 315]) {
-    const a = (deg * Math.PI) / 180;
-    lampSpots.push([Math.cos(a) * 12, Math.sin(a) * 12]);
-  }
-  // Down both long sides of the showcase.
-  for (let z = -13; z >= -31; z -= 6) lampSpots.push([-8.3, z], [8.3, z]);
-  for (const [x, z] of lampSpots) {
-    const lamp = new THREE.Group();
-    lamp.add(new THREE.Mesh(postGeo, darkWood), new THREE.Mesh(lampGeo, lampMat), new THREE.Mesh(capGeo, darkWood));
-    lamp.position.set(x, 0, z);
-    scene.add(casts(lamp));
-  }
-
-  // Wooden fence behind the base and along its far end, hung with bunting.
+  const lamp = (x: number, z: number) => {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(postGeo, darkWood), new THREE.Mesh(lampGeo, lampMat), new THREE.Mesh(capGeo, darkWood));
+    g.position.set(x, 0, z);
+    return casts(g);
+  };
   const fencePost = new THREE.BoxGeometry(0.25, 1.2, 0.25);
   const flagGeo = new THREE.BufferGeometry();
   flagGeo.setAttribute('position', new THREE.Float32BufferAttribute([-0.3, 0, 0, 0.3, 0, 0, 0, -0.55, 0], 3));
   flagGeo.computeVertexNormals();
+  const flagMat = lambert(0xffffff, { side: THREE.DoubleSide });
   const flagColors = [0xff5d73, 0xffd23f, 0x4dabff, 0x3ccf5a, 0xb57bff, 0xff9f43];
-  const flags: { x: number; y: number; z: number; turn: number }[] = [];
-  const fence = (x0: number, z0: number, x1: number, z1: number) => {
-    const length = Math.hypot(x1 - x0, z1 - z0);
-    const posts = Math.max(2, Math.round(length / 2.5) + 1);
-    const turn = -Math.atan2(z1 - z0, x1 - x0);
-    for (let i = 0; i < posts; i++) {
-      const t = i / (posts - 1);
-      const post = new THREE.Mesh(fencePost, wood);
-      post.position.set(x0 + (x1 - x0) * t, 0.6, z0 + (z1 - z0) * t);
-      post.castShadow = true;
-      scene.add(post);
+  const flowerColors = [0xff5d73, 0xffd23f, 0xffffff, 0xb57bff, 0xff9f43, 0x4dabff];
+  const flowerGeo = new THREE.IcosahedronGeometry(0.2, 0);
+  const soilMat = lambert(0x6b4a2e);
+
+  /** Everything one plot has outside its Base: path, lanterns, fence with bunting, flower beds. Plot space. */
+  const plotDecor = (slot: PlotSlot) => {
+    const g = new THREE.Group();
+    g.position.set(slot.x, 0, slot.z);
+    g.rotation.y = slot.rot;
+    // A sandy path from the plaza out through the gate to the street.
+    const path = new THREE.Mesh(new THREE.BoxGeometry(3, 0.05, FENCE.front - 10 + 2), sand);
+    path.position.set(0, 0.025, (FENCE.front + 10 + 1) / 2);
+    path.receiveShadow = true;
+    g.add(path);
+    // Lanterns around the plaza, leaving the hall entrance, the two stations and the line from the gate clear
+    // (the base camera sits on that line behind the player), and down both long sides of the showcase.
+    for (const deg of [35, 65, 115, 145, 225, 315]) {
+      const ang = (deg * Math.PI) / 180;
+      g.add(lamp(Math.cos(ang) * 12, Math.sin(ang) * 12));
     }
-    for (const y of [0.45, 0.95]) {
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(length, 0.12, 0.1), wood);
-      rail.position.set((x0 + x1) / 2, y, (z0 + z1) / 2);
-      rail.rotation.y = turn;
-      rail.castShadow = true;
-      scene.add(rail);
-    }
-    // Bunting sags between tall poles every 7 m.
-    const spans = Math.max(1, Math.round(length / 7));
-    for (let s = 0; s < spans; s++) {
-      for (let k = 0; k < 7; k++) {
-        const t = (s + (k + 0.5) / 7) / spans;
-        const sag = Math.sin(((k + 0.5) / 7) * Math.PI) * 0.45;
-        flags.push({ x: x0 + (x1 - x0) * t, y: 2.3 - sag, z: z0 + (z1 - z0) * t, turn });
+    for (let z = -13; z >= -31; z -= 6) g.add(lamp(-8.3, z), lamp(8.3, z));
+    // The fence, with bunting sagging between tall poles every 7 m.
+    const flags: { x: number; y: number; z: number; turn: number }[] = [];
+    const fence = (x0: number, z0: number, x1: number, z1: number) => {
+      const length = Math.hypot(x1 - x0, z1 - z0);
+      const posts = Math.max(2, Math.round(length / 2.5) + 1);
+      const turn = -Math.atan2(z1 - z0, x1 - x0);
+      for (let i = 0; i < posts; i++) {
+        const t = i / (posts - 1);
+        const post = new THREE.Mesh(fencePost, wood);
+        post.position.set(x0 + (x1 - x0) * t, 0.6, z0 + (z1 - z0) * t);
+        post.castShadow = true;
+        g.add(post);
       }
+      for (const y of [0.45, 0.95]) {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(length, 0.12, 0.1), wood);
+        rail.position.set((x0 + x1) / 2, y, (z0 + z1) / 2);
+        rail.rotation.y = turn;
+        rail.castShadow = true;
+        g.add(rail);
+      }
+      const spans = Math.max(1, Math.round(length / 7));
+      for (let sp = 0; sp < spans; sp++) {
+        for (let k = 0; k < 7; k++) {
+          const t = (sp + (k + 0.5) / 7) / spans;
+          const sag = Math.sin(((k + 0.5) / 7) * Math.PI) * 0.45;
+          flags.push({ x: x0 + (x1 - x0) * t, y: 2.3 - sag, z: z0 + (z1 - z0) * t, turn });
+        }
+      }
+      for (let sp = 0; sp <= spans; sp++) {
+        const t = sp / spans;
+        const pole = new THREE.Mesh(postGeo, wood);
+        pole.scale.y = 1.15;
+        pole.position.set(x0 + (x1 - x0) * t, 0, z0 + (z1 - z0) * t);
+        pole.castShadow = true;
+        g.add(pole);
+      }
+    };
+    const f = FENCE;
+    fence(-f.x, f.front, -f.x, f.back);
+    fence(-f.x, f.back, f.x, f.back);
+    fence(f.x, f.back, f.x, f.front);
+    fence(f.x, f.front, f.gate, f.front);
+    fence(-f.gate, f.front, -f.x, f.front);
+    const bunting = new THREE.InstancedMesh(flagGeo, flagMat, flags.length);
+    flags.forEach((fl, i) => {
+      q.setFromAxisAngle(up, fl.turn);
+      m.compose(new THREE.Vector3(fl.x, fl.y, fl.z), q, new THREE.Vector3(1, 1, 1));
+      bunting.setMatrixAt(i, m);
+      bunting.setColorAt(i, c.setHex(flagColors[i % flagColors.length]));
+    });
+    g.add(bunting);
+    // Flower beds down both long sides of the showcase.
+    const bed = new THREE.InstancedMesh(flowerGeo, lambert(0xffffff), 200);
+    for (let i = 0; i < 200; i++) {
+      const side = i % 2 ? 1 : -1;
+      m.compose(new THREE.Vector3(side * range(6.6, 7.4), 0.3, range(-31.5, -10.5)), q.identity(), new THREE.Vector3(1, 1, 1));
+      bed.setMatrixAt(i, m);
+      bed.setColorAt(i, c.setHex(pick(flowerColors)));
     }
-    for (let s = 0; s <= spans; s++) {
-      const t = s / spans;
-      const pole = new THREE.Mesh(postGeo, wood);
-      pole.scale.y = 1.15;
-      pole.position.set(x0 + (x1 - x0) * t, 0, z0 + (z1 - z0) * t);
-      pole.castShadow = true;
-      scene.add(pole);
+    g.add(bed);
+    for (const side of [-1, 1]) {
+      const soil = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.35, 21.5), soilMat);
+      soil.position.set(side * 7, 0.12, -21);
+      g.add(soil);
     }
+    scene.add(g);
   };
-  // One rectangle around the whole base, with a gate in the front.
-  const f = FENCE;
-  fence(-f.x, f.front, -f.x, f.back);
-  fence(-f.x, f.back, f.x, f.back);
-  fence(f.x, f.back, f.x, f.front);
-  fence(f.x, f.front, f.gate, f.front);
-  fence(-f.gate, f.front, -f.x, f.front);
-  const bunting = new THREE.InstancedMesh(flagGeo, lambert(0xffffff, { side: THREE.DoubleSide }), flags.length);
-  flags.forEach((f, i) => {
-    q.setFromAxisAngle(up, f.turn);
-    m.compose(new THREE.Vector3(f.x, f.y, f.z), q, new THREE.Vector3(1, 1, 1));
-    bunting.setMatrixAt(i, m);
-    bunting.setColorAt(i, c.setHex(flagColors[i % flagColors.length]));
-  });
-  scene.add(bunting);
+  for (const slot of SLOTS) plotDecor(slot);
+
+  // The shared street: paving between the two rows, a fountain in the middle, lanterns down both kerbs, and a
+  // leaderboard board in each gap between plots (placeholders until multiplayer fills them).
+  const street = new THREE.Mesh(
+    new THREE.BoxGeometry(STREET.halfLength * 2, 0.06, STREET.far - STREET.near),
+    lambert(0xd9cdb4),
+  );
+  street.position.set(0, 0.03, STREET_MID);
+  street.receiveShadow = true;
+  scene.add(street);
+  const kerbMat = lambert(0xbfae8c);
+  for (const z of [STREET.near + 0.3, STREET.far - 0.3]) {
+    const kerb = new THREE.Mesh(new THREE.BoxGeometry(STREET.halfLength * 2, 0.16, 0.5), kerbMat);
+    kerb.position.set(0, 0.08, z);
+    scene.add(kerb);
+  }
+  for (let x = -STREET.halfLength + 6; x <= STREET.halfLength - 6; x += 12) {
+    if (Math.abs(x) < 7 || [-40, 0, 40].some((px) => Math.abs(x - px) < 6)) continue;
+    scene.add(lamp(x, STREET.near + 1.6), lamp(x, STREET.far - 1.6));
+  }
+  const fountain = new THREE.Group();
+  fountain.position.set(0, 0, STREET_MID);
+  const basin = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.7, 0.7, 24), lambert(0xe9dcc3));
+  basin.position.y = 0.35;
+  const fountainWater = new THREE.Mesh(
+    new THREE.CylinderGeometry(3, 3, 0.1, 24),
+    new THREE.MeshLambertMaterial({ color: 0x5ab3e8, emissive: 0x0b3a66, transparent: true, opacity: 0.9 }),
+  );
+  fountainWater.position.y = 0.68;
+  const column = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.5, 2, 10), lambert(0xe9dcc3));
+  column.position.y = 1.5;
+  const bowl = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 0.6, 0.45, 18), lambert(0xe9dcc3));
+  bowl.position.y = 2.6;
+  const spout = new THREE.Mesh(
+    new THREE.SphereGeometry(0.5, 12, 8),
+    new THREE.MeshLambertMaterial({ color: 0xbfe9ff, emissive: 0x3a7ab0, transparent: true, opacity: 0.85 }),
+  );
+  spout.position.y = 3.1;
+  fountain.add(basin, fountainWater, column, bowl, spout);
+  scene.add(casts(fountain));
+  const boardMat = lambert(0x3d2a6b);
+  for (const x of [-20, 20]) {
+    const board = new THREE.Group();
+    board.position.set(x, 0, FENCE.front - 4);
+    for (const side of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.2, 0.3), wood);
+      leg.position.set(side * 1.9, 1.6, 0);
+      board.add(leg);
+    }
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(4.4, 3, 0.25), boardMat);
+    panel.position.y = 3.6;
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(4.7, 0.25, 0.32), lambert(0xffc84a));
+    trim.position.y = 5.2;
+    board.add(panel, trim);
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 176;
+    const g2 = canvas.getContext('2d')!;
+    g2.fillStyle = '#3d2a6b';
+    g2.fillRect(0, 0, 256, 176);
+    g2.textAlign = 'center';
+    g2.fillStyle = '#ffd84a';
+    g2.font = '900 30px system-ui, sans-serif';
+    g2.fillText(x < 0 ? 'TOP RICHEST' : 'TOP FLYERS', 128, 40);
+    g2.fillStyle = '#ffffff';
+    g2.font = '700 20px system-ui, sans-serif';
+    for (let row = 0; row < 3; row++) g2.fillText(`${row + 1}.  — — —`, 128, 84 + row * 30);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 2.85), new THREE.MeshBasicMaterial({ map: tex }));
+    face.position.set(0, 3.6, 0.14);
+    board.add(face);
+    scene.add(casts(board));
+  }
 
   // Pond with lily pads, reeds and a little dock.
   const water = new THREE.MeshLambertMaterial({ color: 0x4fb0ea, transparent: true, opacity: 0.88, emissive: 0x0b3a66 });
@@ -385,7 +478,15 @@ export function addScenery(scene: THREE.Scene): Scenery {
   }
   // A few clusters close to the base so the play area has some shade.
   // Clusters just outside the fence, at its corners and along its sides, to frame the base.
-  for (const [cx, cz] of [[-25, -40], [25, -36], [-26, 8], [-24, 26], [22, 28], [-27, -16]] as const) {
+  // Clusters around the town's edges, framing it.
+  for (const [cx, cz] of [
+    [TOWN.minX - 8, TOWN.minZ + 4],
+    [TOWN.maxX + 8, TOWN.minZ + 4],
+    [TOWN.minX - 8, STREET_MID - 12],
+    [TOWN.minX - 8, TOWN.maxZ - 4],
+    [TOWN.maxX + 8, TOWN.maxZ - 4],
+    [-4, TOWN.minZ - 10],
+  ] as const) {
     for (let k = 0; k < 4; k++) {
       const x = cx + range(-4, 4);
       const z = cz + range(-4, 4);
@@ -414,7 +515,6 @@ export function addScenery(scene: THREE.Scene): Scenery {
   leaves(roundGeo, rounds, [0x4caf50, 0x5cbf4a, 0x43a047, 0x7cc943, 0xffa3c4, 0xf6a04d, 0x4caf50, 0x5cbf4a]);
 
   // Ground cover: flowers, grass tufts, mushrooms, rocks and bushes.
-  const flowerColors = [0xff5d73, 0xffd23f, 0xffffff, 0xb57bff, 0xff9f43, 0x4dabff];
   scatter(new THREE.IcosahedronGeometry(0.17, 0), lambert(0xffffff), 1100, 6, 100, () => ({
     y: 0.24,
     scale: new THREE.Vector3(1, 1, 1),
@@ -450,21 +550,6 @@ export function addScenery(scene: THREE.Scene): Scenery {
     const s = range(0.8, 1.6);
     return { y: 0.5 * s, scale: new THREE.Vector3(s * 1.2, s, s), color: pick([0x3e9a4e, 0x47a84f, 0x358a49]) };
   }, true);
-
-  // Flower beds down both long sides of the showcase.
-  const bed = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.2, 0), lambert(0xffffff), 200);
-  for (let i = 0; i < 200; i++) {
-    const side = i % 2 ? 1 : -1;
-    m.compose(new THREE.Vector3(side * range(6.6, 7.4), 0.3, range(-31.5, -10.5)), q.identity(), new THREE.Vector3(1, 1, 1));
-    bed.setMatrixAt(i, m);
-    bed.setColorAt(i, c.setHex(pick(flowerColors)));
-  }
-  scene.add(bed);
-  for (const side of [-1, 1]) {
-    const soil = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.35, 21.5), lambert(0x6b4a2e));
-    soil.position.set(side * 7, 0.12, -21);
-    scene.add(soil);
-  }
 
   // Distant hills, then snowy mountains ringing the horizon. The mountains skip fog and carry their own
   // hazy blue, so they stay visible past the fog line.
