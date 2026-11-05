@@ -3,7 +3,7 @@
 // buy upgrades. The flight is scripted rather than simulated, so the apex hits launchHeight() exactly.
 import * as THREE from 'three';
 import { Sfx } from './audio';
-import { Base, CARPET_Z, MACHINE_FRONT, MERGER_FRONT, PLATFORM_RADIUS } from './base';
+import { Base, CARPET_Z, MACHINE_FRONT, MERGER_FRONT, PLATFORM_RADIUS, floorAt, plotSolids } from './base';
 import { animateShared } from './characters';
 import { brainrotIcon } from './icons';
 import { FENCE, OWN_SLOT, PLOT_SPACING, SLOTS, fenceStep } from './layout';
@@ -127,10 +127,12 @@ const CANNON_FOOT = new THREE.Vector3(0, 0, 2.3);
 /** The base camera looks down the carpet, into the showcase. */
 const HOME_YAW = 0;
 const WALK_SPEED = 9;
-/** Walking within this distance of a slot's centre collects its coins. */
-const COLLECT_RADIUS = 2;
-/** Level-up buttons show for slots this close to the camera. */
-const BUTTON_RANGE = 24;
+/** Walking up within this distance of a slot's centre collects its coins (the pedestal itself is solid). */
+const COLLECT_RADIUS = 2.9;
+/** How wide the player is, for bumping into things at the base. */
+const PLAYER_RADIUS = 0.45;
+/** Level-up buttons show for slots this close to the player. */
+const BUTTON_RANGE = 11;
 /** Radians the base camera turns per pixel dragged. */
 const ORBIT_SPEED = 0.006;
 /** Seconds the machine shakes before a pull's result shows. */
@@ -492,6 +494,7 @@ export class Game {
         break;
       case 'boarding':
         this.updateWalk(dt);
+        if (this.state === 'boarding') this.py = lerp(this.py, this.floorHere(), damp(20, dt));
         break;
     }
 
@@ -1429,6 +1432,8 @@ export class Game {
     this.stepping = false;
     this.moveAtBase(dt, blocked);
     this.updateWalk(dt);
+    // Step up onto platforms and the showcase floor.
+    this.py = lerp(this.py, this.floorHere(), damp(20, dt));
     this.save.pads.forEach((slot, i) => {
       if (!slot || slot.cash < 1) return;
       const pad = Base.padPosition(i, this.tmp);
@@ -1486,6 +1491,7 @@ export class Game {
       this.walkVel.y += (wantZ - this.walkVel.y) * k;
       // Fences hold except at the gates; the street joins the plots.
       [this.px, this.pz] = fenceStep(this.px, this.pz, this.px + this.walkVel.x * dt, this.pz + this.walkVel.y * dt);
+      [this.px, this.pz] = this.bumpSolids(this.px, this.pz);
       this.stepping = this.walkVel.length() > 0.6;
     } else {
       this.walkVel.set(0, 0);
@@ -1493,12 +1499,61 @@ export class Game {
     if (this.input.consumeKey('KeyE') || this.input.consumeKey('Enter')) this.useHere();
   }
 
+  /** Pushes a point out of the cannon, the stations, the pedestals and the showcase walls of the plot it's in. */
+  private bumpSolids(x: number, z: number): [number, number] {
+    if (z > FENCE.front) return [x, z];
+    const cx = clamp(Math.round(x / PLOT_SPACING) * PLOT_SPACING, -PLOT_SPACING, PLOT_SPACING);
+    let lx = x - cx;
+    let lz = z;
+    const { circles, walls } = plotSolids();
+    for (const [sx, sz, r] of circles) {
+      const dx = lx - sx;
+      const dz = lz - sz;
+      const d = Math.hypot(dx, dz);
+      const min = r + PLAYER_RADIUS;
+      if (d >= min) continue;
+      if (d < 1e-4) {
+        lz = sz + min;
+        continue;
+      }
+      lx = sx + (dx / d) * min;
+      lz = sz + (dz / d) * min;
+    }
+    for (const [x0, z0, x1, z1] of walls) {
+      const wx = x1 - x0;
+      const wz = z1 - z0;
+      const t = clamp(((lx - x0) * wx + (lz - z0) * wz) / (wx * wx + wz * wz), 0, 1);
+      const nx = lx - (x0 + wx * t);
+      const nz = lz - (z0 + wz * t);
+      const d = Math.hypot(nx, nz);
+      const min = 0.2 + PLAYER_RADIUS;
+      if (d >= min || d < 1e-4) continue;
+      lx += (nx / d) * (min - d);
+      lz += (nz / d) * (min - d);
+    }
+    return [cx + lx, lz];
+  }
+
+  /** Height of the floor under the player: raised on the platforms, the showcase floor and its carpet. */
+  private floorHere(): number {
+    if (this.pz > FENCE.front) return 0.06;
+    const cx = clamp(Math.round(this.px / PLOT_SPACING) * PLOT_SPACING, -PLOT_SPACING, PLOT_SPACING);
+    return floorAt(this.px - cx, this.pz);
+  }
+
+  /** The nearest open slot the player is standing at, or null. */
   private padUnderfoot(): number | null {
+    let best: number | null = null;
+    let bestD = COLLECT_RADIUS;
     for (let i = 0; i < this.save.pads.length; i++) {
       const at = Base.padPosition(i, this.tmp);
-      if (Math.hypot(at.x - this.px, at.z - this.pz) < COLLECT_RADIUS) return i;
+      const d = Math.hypot(at.x - this.px, at.z - this.pz);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
     }
-    return null;
+    return best;
   }
 
   /** A locked slot the player stands on, or null. */
@@ -1550,7 +1605,7 @@ export class Game {
       this.refreshShop();
       return;
     }
-    this.hud.toast('Stand on a slot or a platform first', 'small');
+    this.hud.toast('Walk up to a slot, or onto a platform, first', 'small');
   }
 
   private collect(i: number): void {
@@ -1616,12 +1671,12 @@ export class Game {
     }
     if (!this.hasHint('place') && s.inventory.length && empty >= 0) {
       return {
-        text: `Stand on the glowing slot and ${press} to display your brainrot`,
+        text: `Walk up to the glowing slot and ${press} to display your brainrot`,
         target: Base.padPosition(empty, this.objTarget),
       };
     }
     if (!this.hasHint('collect') && cashPad >= 0) {
-      return { text: 'Walk over the slot to collect its coins', target: Base.padPosition(cashPad, this.objTarget) };
+      return { text: 'Walk up to the slot to collect its coins', target: Base.padPosition(cashPad, this.objTarget) };
     }
     const mergeable = this.mergeableRarity();
     if (!this.hasHint('merge') && mergeable !== null) {
@@ -2170,6 +2225,7 @@ export class Game {
     const s = 0.9 + this.py * 0.04;
     shadow.position.x = this.px;
     shadow.position.z = this.pz;
+    shadow.position.y = (atBase ? this.floorHere() : 0) + 0.03;
     shadow.scale.set(s, s, 1);
     (shadow.material as THREE.MeshBasicMaterial).opacity =
       this.state === 'aim' || this.state === 'charging' ? 0 : clamp(0.4 - this.py / 150, 0, 0.4);
@@ -2214,7 +2270,7 @@ export class Game {
         const need = xpNeeded(slot);
         if (cost === null || need === null) return;
         const at = Base.buttonAnchor(i, this.screen);
-        if (at.distanceTo(this.camera.position) > BUTTON_RANGE) return;
+        if (Math.hypot(at.x - this.px, at.z - this.pz) > BUTTON_RANGE) return;
         at.project(this.camera);
         if (at.z > 1 || Math.abs(at.x) > 1.1 || Math.abs(at.y) > 1.1) return;
         const progress = Math.min(1, (slot.xp ?? 0) / need);

@@ -52,6 +52,9 @@ const FIRST_X = -12.5;
 const STEP_X = 4.3;
 const ROW_OFFSET = 3.4;
 const HALL_END_X = FIRST_X - STEP_X * 4 - 3;
+/** Half the hall's width across the carpet, and the gap left in its front wall for the entrance. */
+const HALL_HALF_WIDTH = (ROW_OFFSET * 2 + 5) / 2;
+const HALL_GAP = 6.2;
 /**
  * The gacha machine (left of the cannon from the launch camera) and the merge station (right), on the plaza's
  * edge level with the cannon, both facing it. The fronts, where their platforms are, are where the
@@ -85,6 +88,52 @@ const GOLD = 0xffc84a;
 
 /** Vacant plots share one label for their (never shown) coin counters, so they don't each draw canvases. */
 let vacantLabel: Label | null = null;
+
+/** Solid things in plot space, for walking: circles [x, z, r] and wall segments [x0, z0, x1, z1]. */
+export interface Solids {
+  circles: [number, number, number][];
+  walls: [number, number, number, number][];
+}
+
+let solids: Solids | null = null;
+
+/** The cannon, both stations, every pedestal and the showcase's low walls (open at the entrance). */
+export function plotSolids(): Solids {
+  if (solids) return solids;
+  const circles: [number, number, number][] = [
+    [0, 0, 1.9],
+    [MACHINE.x, MACHINE.z, 1.9],
+    [MERGER.x, MERGER.z, 1.8],
+  ];
+  const at = new THREE.Vector3();
+  for (let i = 0; i < ECONOMY.maxPads; i++) {
+    Base.padPosition(i, at);
+    circles.push([at.x, at.z, 1.7]);
+  }
+  // The hall in world terms: local (x, z) lands at (-z, x).
+  const half = HALL_HALF_WIDTH;
+  const gap = HALL_GAP / 2;
+  const walls: [number, number, number, number][] = [
+    [-half, HALL_END_X, -half, ENTRANCE_X],
+    [half, HALL_END_X, half, ENTRANCE_X],
+    [-half, HALL_END_X, half, HALL_END_X],
+    [-half, ENTRANCE_X, -gap, ENTRANCE_X],
+    [gap, ENTRANCE_X, half, ENTRANCE_X],
+  ];
+  solids = { circles, walls };
+  return solids;
+}
+
+/** Floor height under a point in plot space: platforms and the showcase floor and carpet are raised. */
+export function floorAt(x: number, z: number): number {
+  for (const f of [MACHINE_FRONT, MERGER_FRONT]) {
+    if (Math.hypot(x - f.x, z - f.z) < PLATFORM_RADIUS + 0.1) return 0.27;
+  }
+  const onCarpet = Math.abs(x) < 1.4 && z < -2.5 && z > HALL_END_X;
+  if (onCarpet) return 0.17;
+  if (Math.abs(x) < HALL_HALF_WIDTH && z < ENTRANCE_X && z > HALL_END_X) return 0.12;
+  return 0.04;
+}
 
 export class Base {
   private views: PadView[] = [];
@@ -424,7 +473,7 @@ export class Base {
     const far = HALL_END_X;
     const length = near - far;
     const midX = (near + far) / 2;
-    const depth = ROW_OFFSET * 2 + 5;
+    const depth = HALL_HALF_WIDTH * 2;
     const floor = new THREE.Mesh(new THREE.BoxGeometry(length, 0.12, depth), flat(0xe9dcc3));
     floor.position.set(midX, 0.06, CARPET_Z);
     floor.receiveShadow = true;
@@ -459,7 +508,7 @@ export class Base {
     wall(midX, CARPET_Z + depth / 2, length, 0.35);
     wall(midX, CARPET_Z - depth / 2, length, 0.35);
     wall(far, CARPET_Z, 0.35, depth);
-    const gap = 6.2;
+    const gap = HALL_GAP;
     const side = (depth - gap) / 2;
     wall(near, CARPET_Z + gap / 2 + side / 2, 0.35, side);
     wall(near, CARPET_Z - gap / 2 - side / 2, 0.35, side);
@@ -559,11 +608,8 @@ export class Base {
       new THREE.TorusGeometry(PLATFORM_RADIUS * 0.85, 0.06, 6, 40).rotateX(Math.PI / 2),
       new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
     );
-    const sign = makeLabel();
-    sign.set(`${name} · E`, '#ffffff');
-    sign.sprite.position.y = 1.9;
-    sign.sprite.scale.multiplyScalar(0.42);
-    g.add(base, disc, rim, ring, sign.sprite);
+    g.name = name;
+    g.add(base, disc, rim, ring);
     this.group.add(g);
     this.platforms.push({ ring, top, seed: Math.random() });
   }

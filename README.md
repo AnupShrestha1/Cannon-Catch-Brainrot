@@ -29,11 +29,11 @@ the Network URL it prints.
 | Charge, then fire | Hold and release Space or the mouse | Hold and release anywhere |
 | Steer | Mouse position, or A/D or the arrow keys | Drag left and right |
 | Parachute | Space or click | PARACHUTE button |
-| At the base: walk (collects slots you cross) | WASD or arrows, relative to the camera | Drag on the left half (joystick) |
+| At the base: walk (collects from slots you walk up to) | WASD or arrows, relative to the camera | Drag on the left half (joystick) |
 | At the base: turn the camera | Drag with the mouse | Drag on the right half |
 | Open the gacha machine or merge station | Step on its platform, press E | Step on its platform, tap the action button |
 | At the base: level up a brainrot | Click Level up under it | Tap Level up under it |
-| At the base: store or sell the brainrot you stand on | E | The action button |
+| At the base: store or sell the brainrot you're next to | E | The action button |
 | Backpack | Bag in the dock, or B | Bag in the dock |
 
 Release the charge in the green band for +15% height, or the gold band for +30%.
@@ -92,10 +92,12 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   ring of light.
 - **Slots**: a brainrot on display earns coins once a second by rarity (Common 1/s up to Legendary 90/s),
   up to 10 minutes' worth. The coins waiting show as a big gold coin spinning slowly over its head, with
-  the amount above it. Walk over a slot to collect. Right under each brainrot a Level up button shows its XP
-  (earned on display) and, once full, the price: click it to level up. Standing on a slot and pressing
-  E opens its panel to store it in the backpack (back to level 1) or sell it. Slots glow in their
-  brainrot's rarity colour.
+  the amount above it. Pedestals are solid: walk up to one to collect its coins. Right under each
+  brainrot within about 11 m, a Level up button shows its XP (earned on display) and, once full, the
+  price: click it to level up. Standing next to a slot and pressing E opens its panel to store it in
+  the backpack (back to level 1) or sell it. Slots glow in their brainrot's rarity colour.
+- **Walking at the base**: the cannon, both stations, the pedestals and the showcase's low walls are
+  solid (you slide around them), and you step up onto the station platforms and the showcase floor.
 - **Tutorial**: flight 1 is a straight line of 12 gems, enough for the first pull. Hazards start on
   flight 3, and nothing is lost to hits or crashes during the first 3 flights. At the base, a green
   arrow bobs over the next place to go (a station's platform, coins to collect, a brainrot ready to

@@ -596,7 +596,14 @@ export class Hud {
         const buy = document.createElement('button');
         buy.type = 'button';
         buy.dataset.item = row.id;
-        buy.textContent = row.button ?? (row.cost === null ? 'MAX' : formatCoins(row.cost));
+        if (row.button || row.cost === null) {
+          buy.textContent = row.button ?? 'MAX';
+        } else {
+          // A price: coin icon, then the amount.
+          const coin = document.createElement('i');
+          coin.className = 'coin-dot';
+          buy.append(coin, formatCoins(row.cost));
+        }
         buy.disabled = !row.affordable;
         el.append(text, buy);
         return el;

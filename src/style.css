@@ -437,13 +437,14 @@ button.primary,
   box-shadow: 0 0 16px var(--gold);
 }
 
+/* Centred a little low, so it clears the altitude readout on short screens. */
 #groundBar {
   position: absolute;
   left: 18px;
-  top: 50%;
+  top: calc(50% + 34px);
   width: 34px;
-  height: min(300px, 44vh);
-  margin-top: calc(min(300px, 44vh) / -2);
+  height: min(300px, 40vh);
+  margin-top: calc(min(300px, 40vh) / -2);
   display: none;
 }
 
@@ -1119,6 +1120,10 @@ button.primary,
 }
 
 .shop-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   --c: #3ccf5a;
   --hi: #8ff09e;
   --lo: #23a944;
@@ -1839,7 +1844,7 @@ button.primary,
 
 .tc-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 4px;
   padding: 3px 6px;
@@ -1851,10 +1856,13 @@ button.primary,
   line-height: 1.05;
 }
 
+/* Long names wrap onto a second line rather than being cut off. */
 .tc-name {
+  display: -webkit-box;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .tc-income {
