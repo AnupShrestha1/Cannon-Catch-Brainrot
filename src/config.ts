@@ -77,12 +77,32 @@ export interface GachaTier {
   odds: [number, number][];
   /** The best height a run must have reached to unlock this tier. */
   unlockBest: number;
+  /**
+   * Hidden pity: [rarity, every] pairs. Every `every`-th pull without that rarity or better is guaranteed
+   * at least that rarity. The player never sees these counters.
+   */
+  pity: [number, number][];
 }
 
 /** The gacha machine at the end of the showcase carpet. */
 export const GACHA: GachaTier[] = [
-  { id: 'basic', name: 'Basic pull', cost: 10, odds: [[0, 0.62], [1, 0.28], [2, 0.08], [3, 0.018], [4, 0.002]], unlockBest: 0 },
-  { id: 'super', name: 'Super pull', cost: 100, odds: [[1, 0.35], [2, 0.4], [3, 0.18], [4, 0.07]], unlockBest: 150 },
+  {
+    id: 'basic',
+    name: 'Basic pull',
+    cost: 10,
+    odds: [[0, 0.62], [1, 0.28], [2, 0.08], [3, 0.018], [4, 0.002]],
+    unlockBest: 0,
+    pity: [[1, 15], [2, 30], [3, 60], [4, 90]],
+  },
+  {
+    id: 'super',
+    name: 'Super pull',
+    cost: 100,
+    odds: [[1, 0.35], [2, 0.4], [3, 0.18], [4, 0.07]],
+    unlockBest: 150,
+    // Same idea, scaled to the Super pull's better odds: a Rare at least every 5, an Epic every 12, a Legendary every 30.
+    pity: [[2, 5], [3, 12], [4, 30]],
+  },
 ];
 
 /** The very first pull is at least this rarity, so a new player's first brainrot feels good. */

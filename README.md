@@ -31,7 +31,9 @@ the Network URL it prints.
 | Parachute | Space or click | PARACHUTE button |
 | At the base: walk (collects slots you cross) | WASD or arrows, relative to the camera | Drag on the left half (joystick) |
 | At the base: turn the camera | Drag with the mouse | Drag on the right half |
-| At the base: use the gacha machine or the slot you stand on | E | The action button |
+| At the base: open the gacha machine or merge station | Walk up to it (or E) | Walk up to it (or the action button) |
+| At the base: level up a brainrot | Click Level up under it | Tap Level up under it |
+| At the base: store or sell the brainrot you stand on | E | The action button |
 | Backpack | B or the Backpack button | Backpack button |
 
 Release the charge in the green band for +15% height, or the gold band for +30%.
@@ -41,28 +43,41 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - **Gems in the sky.** Each flight passes rows of gems along its path. A gem is worth 1 in Low Sky, 3 in
   Cloud Kingdom and 8 in the Storm Layer. One in ten is a big gold gem worth 5 times as much, and now
   and then gems come in pairs. A hazard hit knocks 15% of the run's gems loose. A crash loses 30% of
-  them, or 50% without a parachute. Gems are added to the wallet when the run's result shows.
+  them, or 50% without a parachute. There's no result window: on landing the gems go into the wallet
+  with a toast and the player heads straight back to the showcase.
 - **Gacha machine** at the far end of the showcase carpet:
   - Basic pull, 10 gems: Common 62%, Uncommon 28%, Rare 8%, Epic 1.8%, Legendary 0.2%.
   - Super pull, 100 gems, unlocked once a flight reaches Cloud Kingdom: Uncommon 35%, Rare 40%, Epic
     18%, Legendary 7%.
+  - Each tier has a ×10 button once you can afford ten.
   - The very first pull is at least Uncommon.
-  - Each result can go straight on display, be pulled again, be sold, or be kept in the backpack.
+  - Hidden pity, never shown to the player: on Basic pulls, every 15th pull without an Uncommon or better
+    is one, and likewise a Rare by 30, an Epic by 60 and a Legendary by 90. On Super pulls: a Rare by 5,
+    an Epic by 12 and a Legendary by 30. Each counter resets when that rarity or better comes up.
+  - Results go on display by themselves: empty slots fill best first, and a rarer pull swaps out a
+    level-1 brainrot (which goes to the backpack with its coins collected). Levelled ones are never moved.
+    The machine's panel then reopens with the results on top, so pulling again is one click.
+- **Merge station**, a bubbling cauldron beside the gacha machine: 10 Common → 1 Uncommon, 8 Uncommon →
+  1 Rare, 6 Rare → 1 Epic, 4 Epic → 1 Legendary, from the backpack. A merge gives a random character of
+  the next rarity. Merge all runs every recipe from the bottom up in one click, and merged brainrots go
+  on display if they beat what's there.
 - **Backpack**: brainrots not on display. Sell one or all of a rarity (60 seconds of its income each),
-  put one on display, or merge: 10 Common → 1 Uncommon, 8 Uncommon → 1 Rare, 6 Rare → 1 Epic, 4 Epic
-  → 1 Legendary. A merge gives a random character of the next rarity.
+  put one on display, or merge a rarity.
 - **Showcase**: a stone hall with a red carpet down the middle and two rows of 5 slots either side,
   laid out like the sketch. 4 slots are open at the start; locked ones are roped off, and each base
   expansion in Upgrades opens 2 more (1,000, then 5,000, then 25,000 coins). Empty open slots pulse a
   ring of light.
 - **Slots**: a brainrot on display earns coins once a second by rarity (Common 1/s up to Legendary 90/s),
-  piled on its slot up to 10 minutes' worth. Walk over a slot to collect. Stand on a slot and press E
-  to level it up (XP from time on display, then coins), store it back in the backpack (it returns to
-  level 1), or sell it. Slots glow in their brainrot's rarity colour.
+  up to 10 minutes' worth. The coins waiting show as a big gold coin spinning slowly over its head, with
+  the amount above it. Walk over a slot to collect. Under each brainrot a Level up button shows its XP
+  (earned on display) and, once full, the price: click it to level up. Standing on a slot and pressing
+  E opens its panel to store it in the backpack (back to level 1) or sell it. Slots glow in their
+  brainrot's rarity colour.
 - **Tutorial**: flight 1 is a straight line of 12 gems, enough for the first pull. Hazards start on
   flight 3, and nothing is lost to hits or crashes during the first 3 flights. At the base, a green
-  arrow bobs over the next objective (the gacha machine, then the empty slot, then the coins to
-  collect), and a second arrow on the ground by the player points the way. From flight 4, the apex
+  arrow bobs over the next objective (the gacha machine, the coins to collect, the merge station once
+  there's enough to merge, a brainrot ready to level up), and a second arrow on the ground by the
+  player points the way. From flight 4, the apex
   shows the next zone's gem value and the cannon level that reaches it.
 - **Upgrades**: cannon power (to level 37 in this build), gem finder (+10% gems per pickup each), gem
   magnet (+10% grab radius each), steering (+6% turn speed each), parachute (+5% safe window each), and
@@ -144,11 +159,11 @@ All first-pass numbers live in `src/config.ts`.
 | File | What it does |
 | --- | --- |
 | `src/config.ts` | Rarities, roster, zones and their gem values, gacha tiers, merge recipe, upgrades, economy |
-| `src/game.ts` | The state machine: run, landing, base, gacha, backpack, shop, tutorial arrows, and camera |
-| `src/economy.ts` | Upgrade costs, income, slots, pulls, merging and selling |
+| `src/game.ts` | The state machine: run, landing, base, gacha, merging, backpack, level-up buttons, shop, tutorial arrows, camera |
+| `src/economy.ts` | Upgrade costs, income, slots, pulls with hidden pity, merging and selling |
 | `src/meta.ts` | Offline earnings, the daily streak, and collection book pages |
 | `src/platform.ts` | The CrazyGames SDK wrapper |
-| `src/base.ts` | The showcase hall, its pedestals and their brainrots, and the gacha machine |
+| `src/base.ts` | The showcase hall, its pedestals, brainrots and coins, the gacha machine and the merge station |
 | `src/characters.ts` | The 10 character models and their idle animations |
 | `src/world.ts` | Sky pieces, cannon, player avatar, gems, hazards, guide arrows, labels |
 | `src/scenery.ts` | Sky dome, ground, hills, mountains, path, lanterns, fence and bunting, swaying trees, cottage, windmill, pond, butterflies |

@@ -19,6 +19,18 @@ export interface ShopRow {
   button?: string;
 }
 
+/** A level-up button under a brainrot on display, at a screen position. */
+export interface PadButton {
+  index: number;
+  x: number;
+  y: number;
+  title: string;
+  sub: string;
+  /** 'go': ready and affordable; 'poor': ready but short of coins; 'xp': still earning XP. */
+  kind: 'go' | 'poor' | 'xp';
+  progress: number;
+}
+
 export interface TuningHooks {
   changed(): void;
   addCoins(amount: number): void;
@@ -39,6 +51,7 @@ export class Hud {
   readonly tunePanel = byId('tune');
   onBuy: (item: ShopItem) => void = () => {};
   onAction: () => void = () => {};
+  onPadButton: (index: number) => void = () => {};
 
   private coins = byId('coins');
   private income = byId('income');
@@ -68,6 +81,8 @@ export class Hud {
   private stick = byId('stick');
   private actionBtn = byId<HTMLButtonElement>('actionBtn');
   private actionKey = '';
+  private padLayer = byId('padBtns');
+  private padPool = new Map<number, { el: HTMLButtonElement; key: string }>();
   private stickKnob = this.stick.querySelector<HTMLElement>('.knob')!;
   private modal = byId('modal');
   private modalTitle = byId('modalTitle');
@@ -296,6 +311,44 @@ export class Hud {
     this.actionKey = text;
     this.actionBtn.textContent = text;
     this.actionBtn.classList.toggle('on', !!label);
+  }
+
+  /** Places one level-up button per item, reusing them frame to frame, and hides the rest. */
+  padButtons(items: PadButton[]): void {
+    const seen = new Set<number>();
+    for (const item of items) {
+      seen.add(item.index);
+      let entry = this.padPool.get(item.index);
+      if (!entry) {
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'pad-btn';
+        const index = item.index;
+        el.addEventListener('click', () => {
+          this.onPadButton(index);
+          el.blur();
+        });
+        this.padLayer.append(el);
+        entry = { el, key: '' };
+        this.padPool.set(item.index, entry);
+      }
+      const key = `${item.title}|${item.sub}|${item.kind}|${Math.round(item.progress * 50)}`;
+      if (key !== entry.key) {
+        entry.key = key;
+        entry.el.className = `pad-btn ${item.kind}`;
+        entry.el.style.setProperty('--p', String(item.progress));
+        entry.el.innerHTML = '';
+        const title = document.createElement('b');
+        title.textContent = item.title;
+        const sub = document.createElement('span');
+        sub.textContent = item.sub;
+        if (item.kind !== 'xp') sub.prepend(Object.assign(document.createElement('i'), { className: 'coin-dot' }));
+        entry.el.append(title, sub);
+      }
+      entry.el.style.display = '';
+      entry.el.style.transform = `translate(${Math.round(item.x)}px, ${Math.round(item.y)}px) translate(-50%, -50%)`;
+    }
+    for (const [index, entry] of this.padPool) if (!seen.has(index)) entry.el.style.display = 'none';
   }
 
   /** The touch joystick at the base: a ring where the drag started and a knob that follows it. */

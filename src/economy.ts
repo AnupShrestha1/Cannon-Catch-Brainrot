@@ -91,12 +91,20 @@ export function tierUnlocked(save: Save, tier: GachaTier): boolean {
   return save.best >= tier.unlockBest;
 }
 
-/** Spends the gems and rolls a brainrot into the backpack, or returns null if the player can't afford it. */
+/**
+ * Spends the gems and rolls a brainrot into the backpack, or returns null if the player can't afford it.
+ * Hidden pity raises the roll when a tier's counter for a rarity is due, then the counters update.
+ */
 export function pull(save: Save, tier: GachaTier): Owned | null {
   if (save.gems < tier.cost || !tierUnlocked(save, tier)) return null;
   save.gems -= tier.cost;
   let rarity = rollTier(tier);
   if (save.pulls === 0) rarity = Math.max(rarity, FIRST_PULL_RARITY);
+  const counters = (save.pity[tier.id] ??= {});
+  for (const [floor, every] of tier.pity) {
+    if ((counters[floor] ?? 0) + 1 >= every) rarity = Math.max(rarity, floor);
+  }
+  for (const [floor] of tier.pity) counters[floor] = rarity >= floor ? 0 : (counters[floor] ?? 0) + 1;
   save.pulls += 1;
   const got = { name: pickName(rarity), rarity };
   save.inventory.push(got);

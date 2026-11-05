@@ -3,7 +3,7 @@
 // buy upgrades. The flight is scripted rather than simulated, so the apex hits launchHeight() exactly.
 import * as THREE from 'three';
 import { Sfx } from './audio';
-import { Base, CARPET_Z, MACHINE_FRONT } from './base';
+import { Base, CARPET_Z, MACHINE_FRONT, MERGER_FRONT } from './base';
 import { animateShared } from './characters';
 import {
   CHARGE,
@@ -38,6 +38,7 @@ import {
   incomePerSecond,
   levelCost,
   levelReady,
+  countInBackpack,
   merge,
   mergeNeed,
   xpNeeded,
@@ -51,7 +52,7 @@ import {
   upgradeCost,
 } from './economy';
 import { Particles, Streaks } from './fx';
-import { Hud, type ShopItem, type ShopRow } from './hud';
+import { Hud, type PadButton, type ShopItem, type ShopRow } from './hud';
 import { Input } from './input';
 import { BOOK_ZONES, DAILY, bookEntries, dailyCoins, dailyStatus, dayKey, offlineEarnings, zoneComplete } from './meta';
 import { platform } from './platform';
@@ -125,9 +126,11 @@ const CANNON_FOOT = new THREE.Vector3(0, 0, 2.3);
 const HOME_YAW = Math.PI / 2;
 const WALK_SPEED = 9;
 /** Walking within this distance of a slot's centre collects its coins. */
-const COLLECT_RADIUS = 1.7;
-/** How close to the machine's front the player must stand to use it. */
-const MACHINE_REACH = 2.6;
+const COLLECT_RADIUS = 2;
+/** How close to a station's front (gacha or merge) the player must stand to use it. */
+const STATION_REACH = 2.1;
+/** Level-up buttons show for slots this close to the camera. */
+const BUTTON_RANGE = 24;
 /** Radians the base camera turns per pixel dragged. */
 const ORBIT_SPEED = 0.006;
 /** Seconds the machine shakes before a pull's result shows. */
@@ -227,7 +230,10 @@ export class Game {
   private objTarget = new THREE.Vector3();
   /** Seconds left of the machine's shake before the pending pull's result shows. */
   private pulling = 0;
-  private pendingPull: { got: Owned; tier: GachaTier; isNew: boolean } | null = null;
+  private pendingPull: { got: Owned[]; tier: GachaTier; isNew: boolean[] } | null = null;
+  /** The station the player stood at last frame, so walking up to one opens it once. */
+  private lastStation: 'gacha' | 'merge' | null = null;
+  private screen = new THREE.Vector3();
   /** What to do when the current walk arrives. */
   private arrive: (() => void) | null = null;
 
@@ -369,6 +375,7 @@ export class Game {
     onClick(hud.backpackBtn, () => this.openBackpack());
     hud.onBuy = (item) => this.buy(item);
     hud.onAction = () => this.useHere();
+    hud.onPadButton = (i) => this.levelUp(i);
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyT') hud.tunePanel.classList.toggle('hidden');
       if (e.code === 'KeyB' && !hud.modalOpen && (this.state === 'home' || this.state === 'aim')) this.openBackpack();
@@ -856,7 +863,7 @@ export class Game {
 
     if (this.chute === 'open') {
       this.state = 'landed';
-      this.landedT = 1;
+      this.landedT = 0.5;
       this.fx.burst(at, { count: 12, color: 0xd8c3a0, speed: 4, life: 0.7, size: 1, grow: 1.5, flatten: 0.3, up: 0.5 });
       this.sfx.thud(0.35);
       this.hud.toast(this.landing.toUpperCase(), this.landing.startsWith('Perfect') ? 'gold' : 'good');
@@ -875,7 +882,7 @@ export class Game {
     }
 
     this.state = 'landed';
-    this.landedT = 1.9;
+    this.landedT = 1.5;
     this.bounceVy = 9;
     this.bounces = 2;
     this.spin = rand(9, 13) * (Math.random() < 0.5 ? -1 : 1);
@@ -912,16 +919,18 @@ export class Game {
     if (this.landedT <= 0) this.showReveal();
   }
 
-  /** The run's result: gems collected, added to the wallet now so nothing is lost if the tab closes. */
+  /** The run's gems go into the wallet with a toast, and the player heads straight home: no result window. */
   private showReveal(): void {
-    this.state = 'reveal';
-    this.revealT = 0;
     this.save.gems += this.runGems;
     writeSave(this.save);
-    const parts = [`Apex ${Math.round(this.apex)} m`, this.landing];
-    if (this.gemsLost) parts.push(`${this.gemsLost} gems lost`);
-    this.hud.showRunResult(this.runGems, this.save.gems, parts.join(' · '));
-    if (this.runGems > 0) this.sfx.coin();
+    if (this.runGems > 0) {
+      this.hud.toast(`+${formatCoins(this.runGems)} gems`, 'gold big');
+      this.sfx.coin();
+    } else {
+      this.hud.toast('No gems this run', 'small');
+    }
+    if (this.gemsLost) this.hud.toast(`${this.gemsLost} gems lost`, 'bad small');
+    this.goHome();
   }
 
   private clearRun(): void {
@@ -946,16 +955,33 @@ export class Game {
   }
 
   private nearMachine(): boolean {
-    return Math.hypot(MACHINE_FRONT.x - this.px, MACHINE_FRONT.z - this.pz) < MACHINE_REACH;
+    return Math.hypot(MACHINE_FRONT.x - this.px, MACHINE_FRONT.z - this.pz) < STATION_REACH;
   }
 
-  /** The gacha panel: each tier with its price and odds. */
-  private openGacha(): void {
+  private nearMerger(): boolean {
+    return Math.hypot(MERGER_FRONT.x - this.px, MERGER_FRONT.z - this.pz) < STATION_REACH;
+  }
+
+  /** Walking up to the gacha machine or the merge station opens it, once per visit. */
+  private openStationOnArrival(blocked: boolean): void {
+    const station = this.nearMachine() ? 'gacha' : this.nearMerger() ? 'merge' : null;
+    if (station && station !== this.lastStation && !blocked && !this.walking) {
+      if (station === 'gacha') this.openGacha();
+      else this.openMerger();
+    }
+    this.lastStation = station;
+  }
+
+  /** The gacha panel: each tier with its price and odds, and the last pull's results on top. */
+  private openGacha(last: { got: Owned[]; isNew: boolean[] } | null = null): void {
     const s = this.save;
+    const body: HTMLElement[] = [];
+    if (last) body.push(this.resultCards(last.got, last.isNew));
     const have = document.createElement('p');
     have.className = 'gem-line';
     have.textContent = `You have ${formatCoins(s.gems)} gems`;
-    const tiers = GACHA.map((tier) => {
+    body.push(have);
+    for (const tier of GACHA) {
       const el = document.createElement('div');
       el.className = 'gacha-tier';
       if (!tierUnlocked(s, tier)) el.classList.add('locked');
@@ -980,20 +1006,56 @@ export class Game {
         note.textContent = 'Unlocks once a flight reaches Cloud Kingdom.';
         el.append(note);
       }
-      return el;
-    });
-    this.hud.showModal('Gacha machine', [have, ...tiers], [
-      ...GACHA.map((tier) => ({
-        label: tierUnlocked(s, tier) ? `${tier.name} · ${tier.cost} gems` : `${tier.name} · locked`,
-        primary: tierUnlocked(s, tier) && s.gems >= tier.cost,
-        action: () => this.startPull(tier),
-      })),
-      { label: 'Close' },
-    ]);
+      body.push(el);
+    }
+    const buttons: { label: string; primary?: boolean; action?: () => void }[] = [];
+    for (const tier of GACHA) {
+      if (!tierUnlocked(s, tier)) continue;
+      buttons.push({ label: `${tier.name} · ${tier.cost}`, primary: s.gems >= tier.cost, action: () => this.startPull(tier, 1) });
+      if (s.gems >= tier.cost * 10) {
+        buttons.push({ label: `×10 · ${tier.cost * 10}`, primary: true, action: () => this.startPull(tier, 10) });
+      }
+    }
+    buttons.push({ label: 'Close' });
+    this.hud.showModal('Gacha machine', body, buttons);
   }
 
-  /** Spends the gems, shakes the machine, and shows the result once the capsule pops out. */
-  private startPull(tier: GachaTier): void {
+  /** A row of brainrot cards, each marked as on display or in the backpack, and NEW when first pulled. */
+  private resultCards(got: Owned[], isNew: boolean[]): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'result-cards';
+    // One card per character, rarest first, with a count when there are several.
+    const groups = new Map<string, { o: Owned; count: number; isNew: boolean }>();
+    got.forEach((o, i) => {
+      const g = groups.get(o.name) ?? { o, count: 0, isNew: false };
+      g.count++;
+      g.isNew ||= isNew[i];
+      groups.set(o.name, g);
+    });
+    [...groups.values()]
+      .sort((a, b) => b.o.rarity - a.o.rarity)
+      .forEach(({ o, count, isNew: fresh }, i) => {
+        const card = this.hud.characterCard(o.name, o.rarity);
+        card.classList.add('pulled');
+        card.style.animationDelay = `${i * 0.08}s`;
+        if (count > 1) {
+          const badge = document.createElement('span');
+          badge.className = 'count';
+          badge.textContent = `×${count}`;
+          card.append(badge);
+        }
+        const where = document.createElement('div');
+        where.className = 'where';
+        const shown = this.save.pads.some((slot) => slot?.name === o.name);
+        where.textContent = `${fresh ? 'NEW · ' : ''}${shown ? 'On display' : 'In backpack'}`;
+        card.append(where);
+        row.append(card);
+      });
+    return row;
+  }
+
+  /** Spends the gems, shakes the machine, and shows the results once the capsules pop out. */
+  private startPull(tier: GachaTier, count: number): void {
     const s = this.save;
     if (!tierUnlocked(s, tier)) {
       this.hud.toast(`Reach Cloud Kingdom to unlock the ${tier.name}`, 'small');
@@ -1003,10 +1065,15 @@ export class Game {
       this.hud.toast(`Need ${tier.cost - s.gems} more gems`, 'bad small');
       return;
     }
-    const got = pull(s, tier);
-    if (!got) return;
-    const isNew = this.addToBook(got.name);
+    const got: Owned[] = [];
+    for (let i = 0; i < count; i++) {
+      const one = pull(s, tier);
+      if (!one) break;
+      got.push(one);
+    }
+    const isNew = got.map((o) => this.addToBook(o.name));
     this.completeHint('pull');
+    this.autoDisplay();
     writeSave(s);
     this.base.shakeMachine();
     this.sfx.swap();
@@ -1018,35 +1085,146 @@ export class Game {
     const pending = this.pendingPull;
     this.pendingPull = null;
     if (!pending) return;
-    const { got, tier, isNew } = pending;
-    const s = this.save;
-    const rarity = RARITIES[got.rarity];
+    const best = pending.got.reduce((a, b) => (b.rarity > a.rarity ? b : a));
     this.fx.burst(Base.capsuleExit(this.tmp), {
-      count: 20 + got.rarity * 12,
-      color: rarity.color,
-      speed: 8 + got.rarity,
+      count: 20 + best.rarity * 12,
+      color: RARITIES[best.rarity].color,
+      speed: 8 + best.rarity,
       life: 0.9,
       size: 0.6,
       up: 5,
     });
-    this.sfx.pop(got.rarity);
-    this.sfx.chant(got.name);
-    if (got.rarity >= RARE) this.sfx.sparkle();
-    if (got.rarity >= 4) platform.happytime();
-    const card = this.hud.characterCard(got.name, got.rarity);
-    card.classList.add('pulled');
-    const info = document.createElement('p');
-    info.textContent = `${formatCoins(padIncome(s, { rarity: got.rarity }))} coins/s on display${isNew ? ' · NEW in your book!' : ''}`;
-    const empty = s.pads.findIndex((slot) => slot === null);
-    const buttons: { label: string; primary?: boolean; action?: () => void }[] = [];
-    if (empty >= 0) buttons.push({ label: 'Put on display', primary: true, action: () => this.placeFromBackpack(got.name, empty) });
-    if (s.gems >= tier.cost) {
-      buttons.push({ label: `Pull again · ${tier.cost} gems`, primary: empty < 0, action: () => this.startPull(tier) });
+    this.sfx.pop(best.rarity);
+    this.sfx.chant(best.name);
+    if (best.rarity >= RARE) {
+      this.sfx.sparkle();
+      this.hud.toast(`${RARITIES[best.rarity].name.toUpperCase()}!`, 'big', RARITIES[best.rarity].css);
     }
-    buttons.push({ label: `Sell · ${formatCoins(sellValue(s, got))}`, action: () => this.sellFromBackpack(got.name) });
-    buttons.push({ label: 'Keep in backpack' });
-    const title = got.rarity >= RARE ? `${rarity.name.toUpperCase()}!` : `${rarity.name}!`;
-    this.hud.showModal(title, [card, info], buttons);
+    if (best.rarity >= 4) platform.happytime();
+    // Back to the machine's panel with the results on top, so pulling again is one more click.
+    this.openGacha(pending);
+  }
+
+  /**
+   * Fills empty slots from the backpack, best first, and swaps a rarer backpack brainrot in for a level-1
+   * one on display (which goes to the backpack, its coins collected). Nothing levelled is ever moved.
+   */
+  private autoDisplay(): void {
+    const s = this.save;
+    let placed = 0;
+    for (;;) {
+      let k = -1;
+      s.inventory.forEach((o, i) => {
+        if (k < 0 || o.rarity > s.inventory[k].rarity) k = i;
+      });
+      if (k < 0) break;
+      const cand = s.inventory[k];
+      let pad = s.pads.findIndex((slot) => slot === null);
+      if (pad < 0) {
+        s.pads.forEach((slot, i) => {
+          if (!slot || (slot.level ?? 1) > 1 || slot.rarity >= cand.rarity) return;
+          if (pad < 0 || slot.rarity < s.pads[pad]!.rarity) pad = i;
+        });
+        if (pad < 0) break;
+        const old = s.pads[pad]!;
+        s.coins += Math.floor(old.cash);
+        s.inventory.push({ name: old.name, rarity: old.rarity });
+      }
+      s.inventory.splice(k, 1);
+      s.pads[pad] = { name: cand.name, rarity: cand.rarity, cash: 0, level: 1 };
+      this.fx.burst(Base.padPosition(pad, this.tmp).setY(1.2), {
+        count: 16,
+        color: RARITIES[cand.rarity].color,
+        speed: 6,
+        life: 0.8,
+        size: 0.6,
+        up: 4,
+      });
+      placed++;
+    }
+    if (placed) {
+      this.base.sync(s);
+      this.completeHint('place');
+    }
+  }
+
+  /** The merge station: each recipe with how many you have, and a Merge all button. */
+  private openMerger(made: { got: Owned[]; isNew: boolean[] } | null = null): void {
+    const s = this.save;
+    const body: HTMLElement[] = [];
+    if (made && made.got.length) body.push(this.resultCards(made.got, made.isNew));
+    const rules = document.createElement('p');
+    rules.className = 'sub';
+    rules.textContent = 'Merge brainrots from your backpack into one of the next rarity up. Merged ones go on display if they beat what is there.';
+    body.push(rules);
+    let any = false;
+    for (let r = 0; r < RARITIES.length; r++) {
+      const need = mergeNeed(r);
+      if (need === null) continue;
+      const have = countInBackpack(s, r);
+      const ready = have >= need;
+      any ||= ready;
+      const row = document.createElement('div');
+      row.className = 'merge-row';
+      row.style.setProperty('--c', RARITIES[r].css);
+      row.style.setProperty('--p', String(Math.min(1, have / need)));
+      const text = document.createElement('span');
+      text.textContent = `${need} ${RARITIES[r].name} → 1 ${RARITIES[r + 1].name}`;
+      const count = document.createElement('b');
+      count.textContent = `${have}/${need}`;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'Merge';
+      button.disabled = !ready;
+      button.addEventListener('click', () => this.mergeAll(r));
+      row.append(text, count, button);
+      body.push(row);
+    }
+    this.hud.showModal('Merge station', body, [
+      { label: 'Merge all', primary: any, action: () => this.mergeAll(null) },
+      { label: 'Close' },
+    ]);
+  }
+
+  /** Merges one rarity, or everything possible from the bottom up when `only` is null, then reopens the station. */
+  private mergeAll(only: number | null): void {
+    const s = this.save;
+    const got: Owned[] = [];
+    for (let r = 0; r < RARITIES.length; r++) {
+      if (only !== null && r !== only) continue;
+      let one = merge(s, r);
+      while (one) {
+        got.push(one);
+        one = only === null ? merge(s, r) : null;
+      }
+    }
+    if (!got.length) {
+      this.hud.toast('Not enough to merge yet', 'small');
+      this.openMerger();
+      return;
+    }
+    // Merging up the chain can use up earlier results; only show what is still owned.
+    const owned = got.filter((o) => s.inventory.includes(o));
+    const isNew = owned.map((o) => this.addToBook(o.name));
+    this.completeHint('merge');
+    this.autoDisplay();
+    writeSave(s);
+    this.base.stirMerger();
+    const best = owned.reduce((a, b) => (b.rarity > a.rarity ? b : a), owned[0]);
+    if (best) {
+      this.fx.burst(Base.mergerExit(this.tmp), {
+        count: 24 + best.rarity * 10,
+        color: RARITIES[best.rarity].color,
+        speed: 8,
+        life: 0.9,
+        size: 0.6,
+        up: 5,
+      });
+      this.sfx.chant(best.name);
+      if (best.rarity >= 4) platform.happytime();
+    }
+    this.sfx.sparkle();
+    this.openMerger({ got: owned, isNew });
   }
 
   /**
@@ -1089,10 +1267,7 @@ export class Game {
       const need = mergeNeed(r);
       if (need !== null) {
         head.append(
-          button(`Merge ${need} → ${RARITIES[r + 1].name}`, () => {
-            this.mergeRarity(r);
-            reopen();
-          }, items.length < need),
+          button(`Merge ${need} → ${RARITIES[r + 1].name}`, () => this.mergeAll(r), items.length < need),
         );
       }
       const each = sellValue(s, { rarity: r });
@@ -1186,17 +1361,6 @@ export class Game {
     writeSave(s);
   }
 
-  private mergeRarity(rarity: number): void {
-    const got = merge(this.save, rarity);
-    if (!got) return;
-    const isNew = this.addToBook(got.name);
-    this.hud.toast(`Merged into ${got.name}!${isNew ? ' NEW!' : ''}`, '', RARITIES[got.rarity].css);
-    this.sfx.sparkle();
-    this.sfx.chant(got.name);
-    if (got.rarity >= 4) platform.happytime();
-    writeSave(this.save);
-  }
-
   /** Moves a slot's brainrot into the backpack, collecting its coins first. It goes back to level 1. */
   private storePad(i: number): void {
     const s = this.save;
@@ -1249,6 +1413,7 @@ export class Game {
       this.startBoarding();
       return;
     }
+    this.openStationOnArrival(blocked);
     this.updateHomePrompt();
 
     // Now and then a character at the base chants its name.
@@ -1324,6 +1489,7 @@ export class Game {
   /** What E (or the action button) would do here, or null when there's nothing to do. */
   private actionLabel(): string | null {
     if (this.nearMachine()) return `Gacha · ${formatCoins(this.save.gems)} gems`;
+    if (this.nearMerger()) return 'Merge station';
     const pad = this.padUnderfoot();
     if (pad !== null) {
       const slot = this.save.pads[pad];
@@ -1337,6 +1503,10 @@ export class Game {
     if (this.state !== 'home') return;
     if (this.nearMachine()) {
       this.openGacha();
+      return;
+    }
+    if (this.nearMerger()) {
+      this.openMerger();
       return;
     }
     const pad = this.padUnderfoot();
@@ -1411,9 +1581,19 @@ export class Game {
     if (!this.hasHint('collect') && cashPad >= 0) {
       return { text: 'Walk over the slot to collect its coins', target: Base.padPosition(cashPad, this.objTarget) };
     }
+    const mergeable = [0, 1, 2, 3].find((r) => countInBackpack(s, r) >= (mergeNeed(r) ?? Infinity));
+    if (!this.hasHint('merge') && mergeable !== undefined) {
+      return { text: `Walk to the merge station: you have enough ${RARITIES[mergeable].name}s to merge`, target: MERGER_FRONT };
+    }
     if (this.wantsUpgradeHint()) return { text: 'Upgrade your cannon!', target: null };
     if (this.wantsExpandHint()) return { text: 'Your showcase is full! Unlock more slots in Upgrades', target: null };
-    if (this.wantsLevelHint()) return { text: `Stand on a slot and ${press} to level up its brainrot`, target: null };
+    if (this.wantsLevelHint()) {
+      const ready = s.pads.findIndex((slot) => slot !== null && levelReady(slot));
+      return {
+        text: 'Click Level up under your brainrot',
+        target: ready >= 0 ? Base.padPosition(ready, this.objTarget) : null,
+      };
+    }
     if (s.flightNo < 6 && s.gems < basic.cost && !s.inventory.length && empty >= 0) {
       return { text: `Launch to collect gems in the sky (${s.gems}/${basic.cost} for a pull)`, target: CANNON_FOOT };
     }
@@ -1655,7 +1835,7 @@ export class Game {
       {
         label: levelLabel,
         primary: ready && cost !== null && s.coins >= cost,
-        action: () => this.levelUp(i),
+        action: () => this.levelUp(i, true),
       },
       { label: 'Store in backpack', action: () => this.storePad(i) },
       {
@@ -1666,14 +1846,15 @@ export class Game {
     ]);
   }
 
-  private levelUp(i: number): void {
+  /** Levels up a slot's brainrot; from its panel, the panel reopens. */
+  private levelUp(i: number, reopen = false): void {
     const s = this.save;
     const slot = s.pads[i];
     if (!slot) return;
     const cost = levelCost(slot);
     if (cost === null) return;
     if (!levelReady(slot)) {
-      this.hud.toast(`${slot.name} needs more time on its pad`, 'small');
+      this.hud.toast(`${slot.name} needs more XP: it earns XP while on display`, 'small');
     } else if (s.coins < cost) {
       this.hud.toast(`Need ${formatCoins(cost - s.coins)} more coins`, 'bad small');
     } else {
@@ -1693,7 +1874,7 @@ export class Game {
         up: 4,
       });
     }
-    this.openPad(i);
+    if (reopen) this.openPad(i);
   }
 
   private sellPad(i: number): void {
@@ -1783,6 +1964,7 @@ export class Game {
       const name = pickName(reward.rarity);
       s.inventory.push({ name, rarity: reward.rarity });
       this.addToBook(name);
+      this.autoDisplay();
       this.hud.toast(`${RARITIES[reward.rarity].name}: ${name}! It's in your backpack`, '', RARITIES[reward.rarity].css);
       this.sfx.chant(name);
     }
@@ -1922,6 +2104,7 @@ export class Game {
     const free = this.state === 'home' && !this.walking && this.pulling <= 0 && !this.hud.modalOpen;
     this.hud.showAction(free ? this.actionLabel() : null);
     this.updateGuide();
+    this.updatePadButtons(atBase);
     animateShared(this.time);
 
     const shadow = this.env.shadow;
@@ -1954,6 +2137,37 @@ export class Game {
       !upgradeHint &&
       !this.save.pads.some((slot) => slot !== null && slot.cash >= 1);
     this.hud.showBaseButtons(canShop, this.state === 'home', canShop && upgradeHint, launchHint, this.bookRewardWaiting());
+  }
+
+  /** A Level up button under each nearby brainrot, placed on screen under its pedestal's front edge. */
+  private updatePadButtons(atBase: boolean): void {
+    const s = this.save;
+    const show = atBase && !this.hud.modalOpen && !this.hud.shopOpen;
+    const items: PadButton[] = [];
+    if (show) {
+      s.pads.forEach((slot, i) => {
+        if (!slot) return;
+        const cost = levelCost(slot);
+        const need = xpNeeded(slot);
+        if (cost === null || need === null) return;
+        const at = Base.buttonAnchor(i, this.screen);
+        if (at.distanceTo(this.camera.position) > BUTTON_RANGE) return;
+        at.project(this.camera);
+        if (at.z > 1 || Math.abs(at.x) > 1.1 || Math.abs(at.y) > 1.1) return;
+        const progress = Math.min(1, (slot.xp ?? 0) / need);
+        const ready = progress >= 1;
+        items.push({
+          index: i,
+          x: ((at.x + 1) / 2) * window.innerWidth,
+          y: ((1 - at.y) / 2) * window.innerHeight,
+          title: ready ? `Level up → ${(slot.level ?? 1) + 1}` : `Lv ${slot.level ?? 1}`,
+          sub: ready ? formatCoins(cost) : `XP ${Math.floor(progress * 100)}%`,
+          kind: !ready ? 'xp' : s.coins >= cost ? 'go' : 'poor',
+          progress,
+        });
+      });
+    }
+    this.hud.padButtons(items);
   }
 
   /** The green arrows: one bobbing over the objective, one on the ground by the player pointing the way. */

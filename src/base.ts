@@ -1,18 +1,14 @@
 // The showcase beside the cannon: a stone hall with a red carpet down the middle, two rows of 5 pedestals
-// either side of it, and the gacha machine at the far end. Pedestals show their brainrot, a rarity glow, a
-// cash pile and a level badge; locked ones are roped off until the base is expanded. It only draws the save;
-// Game owns the rules.
+// either side of it, and the gacha machine and merge station at the far end. Pedestals show their brainrot,
+// a rarity glow, and a big coin spinning over its head with the coins waiting there; locked ones are roped
+// off until the base is expanded. It only draws the save; Game owns the rules (and the level-up buttons,
+// which are HTML).
 import * as THREE from 'three';
-import { ECONOMY, LEVELS, RARITIES } from './config';
+import { ECONOMY, RARITIES } from './config';
 import { makeCharacter, type CharacterRig } from './characters';
-import { formatCoins, xpNeeded } from './economy';
+import { formatCoins } from './economy';
 import type { PadSlot, Save } from './store';
 import { flat, makeLabel, softTexture, type Label } from './world';
-
-interface Badge {
-  sprite: THREE.Sprite;
-  draw(level: number, progress: number, ready: boolean): void;
-}
 
 interface PadView {
   top: THREE.Mesh;
@@ -27,15 +23,14 @@ interface PadView {
   rig: CharacterRig | null;
   /** What the view currently shows: a name, '' for empty, or '#locked'. */
   key: string;
-  coins: THREE.Mesh[];
+  /** The big coin over the brainrot's head, shown while coins are waiting. */
+  coin: THREE.Group;
   label: Label;
-  badge: Badge;
   shown: number;
   /** 1 right after the pile grows, easing to 0: the label pops on each income tick. */
   pop: number;
   /** 1 right after a character arrives, easing to 0: it lands with a squash. */
   arrive: number;
-  badgeKey: string;
   seed: number;
 }
 
@@ -46,9 +41,13 @@ const FIRST_X = -12.5;
 const STEP_X = 4.3;
 const ROW_OFFSET = 3.4;
 const HALL_END_X = FIRST_X - STEP_X * 4 - 5.5;
-/** Where the gacha machine stands, and where the player stands to use it. */
-export const MACHINE = new THREE.Vector3(HALL_END_X + 1.6, 0, CARPET_Z);
-export const MACHINE_FRONT = new THREE.Vector3(MACHINE.x + 2.6, 0, CARPET_Z);
+/** Where the gacha machine and the merge station stand at the end of the carpet, and where the player stands to use them. */
+export const MACHINE = new THREE.Vector3(HALL_END_X + 1.6, 0, CARPET_Z + 2.4);
+export const MACHINE_FRONT = new THREE.Vector3(MACHINE.x + 2.5, 0, MACHINE.z);
+export const MERGER = new THREE.Vector3(HALL_END_X + 1.6, 0, CARPET_Z - 2.4);
+export const MERGER_FRONT = new THREE.Vector3(MERGER.x + 2.5, 0, MERGER.z);
+/** Height of the coin over a brainrot's head. */
+const COIN_Y = 3.3;
 
 const PAD_TOP = 0.5;
 const pedestalGeo = new THREE.CylinderGeometry(1.45, 1.65, 0.42, 8).translate(0, 0.21, 0);
@@ -56,56 +55,16 @@ const topGeo = new THREE.CylinderGeometry(1.22, 1.22, 0.1, 32).translate(0, 0.45
 const rimGeo = new THREE.TorusGeometry(1.26, 0.08, 6, 40).rotateX(Math.PI / 2).translate(0, 0.48, 0);
 const glowGeo = new THREE.PlaneGeometry(4.6, 4.6);
 const beaconGeo = new THREE.TorusGeometry(0.9, 0.06, 6, 40).rotateX(Math.PI / 2);
-const coinGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.09, 12);
-const coinMat = flat(0xffc21a, { emissive: 0x6b4a00 });
+const coinGeo = new THREE.CylinderGeometry(0.62, 0.62, 0.16, 28).rotateX(Math.PI / 2);
+const coinFaceGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.2, 28).rotateX(Math.PI / 2);
+const coinRimGeo = new THREE.TorusGeometry(0.62, 0.06, 6, 28);
+const coinMat = flat(0xffc21a, { emissive: 0x8a5f00 });
+const coinFaceMat = flat(0xffe066, { emissive: 0x8a6a00 });
+const coinRimMat = flat(0xe0a000, { emissive: 0x5a3c00 });
 const stoneMat = flat(0xf1ebe0);
 const lockedTop = 0x6f7783;
 const emptyTop = 0xdfeaf6;
 const GOLD = 0xffc84a;
-
-/** A small sprite with the character's level and an XP bar that turns gold when a level-up is ready. */
-function makeBadge(): Badge {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 64;
-  const g = canvas.getContext('2d')!;
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }));
-  sprite.scale.set(2.2, 0.55, 1);
-  return {
-    sprite,
-    draw(level, progress, ready) {
-      g.clearRect(0, 0, 256, 64);
-      g.font = '900 34px system-ui, sans-serif';
-      g.textBaseline = 'middle';
-      g.lineWidth = 7;
-      g.strokeStyle = '#1d2340';
-      g.fillStyle = '#ffffff';
-      const text = level >= LEVELS.max ? 'MAX' : `Lv ${level}`;
-      g.strokeText(text, 6, 32);
-      g.fillText(text, 6, 32);
-      if (level >= LEVELS.max) {
-        texture.needsUpdate = true;
-        return;
-      }
-      g.fillStyle = '#1d2340';
-      g.beginPath();
-      g.roundRect(108, 18, 142, 28, 12);
-      g.fill();
-      g.fillStyle = ready ? '#ffc21a' : '#3ccf5a';
-      g.beginPath();
-      g.roundRect(112, 22, Math.max(10, 134 * progress), 20, 9);
-      g.fill();
-      if (ready) {
-        g.font = '900 20px system-ui, sans-serif';
-        g.fillStyle = '#1d2340';
-        g.fillText('UP!', 160, 33);
-      }
-      texture.needsUpdate = true;
-    },
-  };
-}
 
 export class Base {
   private views: PadView[] = [];
@@ -115,6 +74,10 @@ export class Base {
   private capsules: THREE.Mesh[] = [];
   private crank: THREE.Group;
   private shakeT = 0;
+  private merger = new THREE.Group();
+  private swirl = new THREE.Group();
+  private brew!: THREE.MeshLambertMaterial;
+  private mergeT = 0;
 
   constructor(scene: THREE.Scene) {
     scene.add(this.group);
@@ -122,7 +85,24 @@ export class Base {
     this.machine = new THREE.Group();
     this.crank = new THREE.Group();
     this.buildMachine();
+    this.buildMerger();
     for (let i = 0; i < ECONOMY.maxPads; i++) this.addPad(i);
+  }
+
+  /** Where a slot's level-up button sits: the pedestal's front edge, facing the carpet. */
+  static buttonAnchor(i: number, out = new THREE.Vector3()): THREE.Vector3 {
+    Base.padPosition(i, out);
+    return out.set(out.x, 0.1, out.z + (i % 2 === 0 ? -1.75 : 1.75));
+  }
+
+  /** Bubbles the merge station over, for a merge. */
+  stirMerger(): void {
+    this.mergeT = 1;
+  }
+
+  /** Where merged brainrots burst out of the station. */
+  static mergerExit(out = new THREE.Vector3()): THREE.Vector3 {
+    return out.set(MERGER.x, 3.2, MERGER.z);
   }
 
   /** Slots pair up across the carpet: even ones on the near side, odd ones opposite, running away from the cannon. */
@@ -152,7 +132,6 @@ export class Base {
       if (view.rig) this.group.remove(view.rig.group);
       view.rig = null;
       view.key = key;
-      view.badgeKey = '';
       view.shown = -1;
       this.paint(view, slot, locked);
       if (!slot) return;
@@ -177,13 +156,16 @@ export class Base {
     const refreshLabels = this.labelTimer <= 0;
     if (refreshLabels) this.labelTimer = 0.2;
     this.animateMachine(time, realDt);
+    this.animateMerger(time, realDt);
     this.views.forEach((view, i) => {
       const slot = i < save.pads.length ? save.pads[i] : null;
-      if (view.pop > 0) {
-        view.pop = Math.max(0, view.pop - realDt * 4);
-        const s = 0.6 * (1 + view.pop * 0.3);
-        view.label.sprite.scale.set(6 * s, 6 * (96 / 512) * s, 1);
-      }
+      view.pop = Math.max(0, view.pop - realDt * 4);
+      const pop = 1 + view.pop * 0.3;
+      view.label.sprite.scale.set(6 * 0.7 * pop, 6 * (96 / 512) * 0.7 * pop, 1);
+      // The coin turns slowly, bobs, and swells for a moment on each income tick.
+      view.coin.rotation.y = time * 1.2 + view.seed;
+      view.coin.position.y = COIN_Y + Math.sin(time * 1.8 + view.seed) * 0.12;
+      view.coin.scale.setScalar(pop);
       view.beacon.visible = view.key === '';
       if (view.beacon.visible) {
         const p = (time * 0.8 + view.seed) % 1;
@@ -202,15 +184,13 @@ export class Base {
         view.glowMat.opacity = 0.55 + Math.sin(time * 2.2 + view.seed) * 0.2;
       }
       if (!refreshLabels) return;
-      this.drawBadge(view, slot);
       const cash = slot ? Math.floor(slot.cash) : 0;
       if (cash === view.shown) return;
       if (cash > view.shown && view.shown > 0) view.pop = 1;
       view.shown = cash;
       view.label.sprite.visible = cash > 0;
+      view.coin.visible = cash > 0;
       if (cash > 0) view.label.set(`+${formatCoins(cash)}`, '#ffd84a');
-      const stack = cash <= 0 ? 0 : Math.min(view.coins.length, 1 + Math.floor(Math.log2(cash + 1) / 1.5));
-      view.coins.forEach((coin, k) => (coin.visible = k < stack));
     });
   }
 
@@ -231,19 +211,6 @@ export class Base {
     view.glowMat.color.setHex(color);
     // Commons are gray, so their glow would just look like a shadow.
     view.glow.visible = slot.rarity > 0;
-  }
-
-  private drawBadge(view: PadView, slot: PadSlot | null): void {
-    view.badge.sprite.visible = !!slot;
-    if (!slot) return;
-    const level = slot.level ?? 1;
-    const need = xpNeeded(slot);
-    const progress = need === null ? 1 : Math.min(1, (slot.xp ?? 0) / need);
-    const ready = need !== null && progress >= 1;
-    const key = `${level}|${Math.round(progress * 40)}|${ready}`;
-    if (key === view.badgeKey) return;
-    view.badgeKey = key;
-    view.badge.draw(level, progress, ready);
   }
 
   private addPad(i: number): void {
@@ -274,21 +241,17 @@ export class Base {
     );
     beacon.position.set(pos.x, PAD_TOP, pos.z);
     const lock = this.makeLock(pos);
-    const coins = Array.from({ length: 6 }, (_, k) => {
-      const coin = new THREE.Mesh(coinGeo, coinMat);
-      const side = i % 2 === 0 ? 1 : -1;
-      coin.position.set(pos.x + 0.85, PAD_TOP + 0.05 + k * 0.1, pos.z - side * 0.8);
-      coin.visible = false;
-      return coin;
-    });
+    const coin = new THREE.Group();
+    const face = new THREE.Mesh(coinGeo, coinMat);
+    face.castShadow = true;
+    coin.add(face, new THREE.Mesh(coinFaceGeo, coinFaceMat), new THREE.Mesh(coinRimGeo, coinRimMat));
+    coin.position.set(pos.x, COIN_Y, pos.z);
+    coin.visible = false;
     const label = makeLabel();
-    label.sprite.position.set(pos.x, 3.4, pos.z);
-    label.sprite.scale.multiplyScalar(0.6);
+    label.sprite.position.set(pos.x, COIN_Y + 1.05, pos.z);
+    label.sprite.scale.multiplyScalar(0.7);
     label.sprite.visible = false;
-    const badge = makeBadge();
-    badge.sprite.position.set(pos.x, 2.75, pos.z);
-    badge.sprite.visible = false;
-    this.group.add(glow, pedestal, top, rim, beacon, lock, ...coins, label.sprite, badge.sprite);
+    this.group.add(glow, pedestal, top, rim, beacon, lock, coin, label.sprite);
     this.views.push({
       top,
       topMat,
@@ -299,13 +262,11 @@ export class Base {
       lock,
       rig: null,
       key: '?',
-      coins,
+      coin,
       label,
-      badge,
       shown: -1,
       pop: 0,
       arrive: 0,
-      badgeKey: '',
       seed: Math.random() * 10,
     });
   }
@@ -374,7 +335,7 @@ export class Base {
     wall(midX, CARPET_Z + depth / 2, length, 0.35);
     wall(midX, CARPET_Z - depth / 2, length, 0.35);
     wall(far, CARPET_Z, 0.35, depth);
-    const gap = 3.4;
+    const gap = 6.2;
     const side = (depth - gap) / 2;
     wall(near, CARPET_Z + gap / 2 + side / 2, 0.35, side);
     wall(near, CARPET_Z - gap / 2 - side / 2, 0.35, side);
@@ -453,6 +414,59 @@ export class Base {
     sign.sprite.scale.multiplyScalar(0.8);
     m.add(sign.sprite);
     this.group.add(m);
+  }
+
+  /** A purple cauldron on a stand, bubbling with glowing brew, under a MERGE sign. */
+  private buildMerger(): void {
+    const m = this.merger;
+    m.position.copy(MERGER);
+    const purple = flat(0x7a3ff2);
+    const gold = flat(GOLD, { emissive: 0x5a3c00 });
+    const stand = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.4, 1.2, 8), flat(0x3d3552));
+    stand.position.y = 0.6;
+    const pot = new THREE.Mesh(new THREE.SphereGeometry(1.45, 20, 12, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.65), purple);
+    pot.position.y = 2.6;
+    pot.material.side = THREE.DoubleSide;
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.14, 8, 28).rotateX(Math.PI / 2), gold);
+    lip.position.y = 3.25;
+    this.brew = new THREE.MeshLambertMaterial({ color: 0x7dffb0, emissive: 0x2bd47a, emissiveIntensity: 0.8 });
+    const brew = new THREE.Mesh(new THREE.CircleGeometry(1.22, 28).rotateX(-Math.PI / 2), this.brew);
+    brew.position.y = 3.1;
+    // Bubbles that rise out of the brew.
+    for (let i = 0; i < 6; i++) {
+      const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.16 + (i % 3) * 0.06, 8, 6), this.brew);
+      bubble.userData.seed = i * 1.7;
+      this.swirl.add(bubble);
+    }
+    this.swirl.position.y = 3.1;
+    for (const side of [-1, 1]) {
+      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 2.6, 8), gold);
+      pipe.position.set(0.2, 1.6, side * 1.55);
+      m.add(pipe);
+    }
+    m.add(stand, pot, lip, brew, this.swirl);
+    m.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.castShadow = true;
+    });
+    const sign = makeLabel();
+    sign.set('MERGE', '#b9ffd6');
+    sign.sprite.position.y = 5.2;
+    sign.sprite.scale.multiplyScalar(0.8);
+    m.add(sign.sprite);
+    this.group.add(m);
+  }
+
+  private animateMerger(time: number, realDt: number): void {
+    this.mergeT = Math.max(0, this.mergeT - realDt * 1.2);
+    const boil = 1 + this.mergeT * 3;
+    this.brew.emissiveIntensity = 0.7 + Math.sin(time * 3) * 0.15 + this.mergeT;
+    this.merger.position.x = MERGER.x + (this.mergeT > 0 ? Math.sin(time * 50) * 0.05 * this.mergeT : 0);
+    this.swirl.children.forEach((b, i) => {
+      const p = (time * 0.6 * boil + (b.userData.seed as number)) % 1;
+      const a = i * 1.05 + time * 0.8;
+      b.position.set(Math.cos(a) * 0.7, p * 1.4 * boil, Math.sin(a) * 0.7);
+      b.scale.setScalar(1 - p);
+    });
   }
 
   private animateMachine(time: number, realDt: number): void {

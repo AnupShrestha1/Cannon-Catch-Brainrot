@@ -36,6 +36,8 @@ export interface Save {
   gems: number;
   /** Gacha pulls made, for the guaranteed first pull. */
   pulls: number;
+  /** Hidden pity: per gacha tier, pulls since the last of each pity rarity or better. */
+  pity: Record<string, Record<number, number>>;
   /** Showcase slots that are open; locked ones aren't in the array. */
   pads: (PadSlot | null)[];
   /** Brainrots owned but not on a slot. */
@@ -80,6 +82,7 @@ export function defaultSave(): Save {
     coins: 0,
     gems: 0,
     pulls: 0,
+    pity: {},
     pads: Array.from({ length: ECONOMY.startPads }, () => null),
     inventory: [],
     hazards: 'auto',
