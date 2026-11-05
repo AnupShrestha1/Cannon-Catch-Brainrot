@@ -435,7 +435,7 @@ export class Hud {
         card.className = 'tcard';
         card.style.setProperty('--c', r.css);
         card.style.animationDelay = `${i * 0.08}s`;
-        if (item.rarity >= 2) card.classList.add('hint');
+        if (item.rarity >= 2) card.classList.add('tease');
         if (item.rarity >= 3) card.classList.add('holo');
         if (item.rarity === RARITIES.length - 1) card.classList.add('secret');
         const inner = document.createElement('div');
