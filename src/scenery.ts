@@ -34,6 +34,8 @@ const WINDMILL = { x: -26, z: -40 };
 function keepClear(x: number, z: number): boolean {
   if (x > -48 && x < 7 && z > -12 && z < 11) return true;
   if (Math.hypot(x, z) < 6) return true;
+  // The gacha machine and merge station either side of the cannon.
+  if (x > -8 && x < 8 && z > -8 && z < 0) return true;
   if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 2) return true;
   if (Math.hypot(x - COTTAGE.x, z - COTTAGE.z) < 9) return true;
   if (Math.hypot(x - WINDMILL.x, z - WINDMILL.z) < 8) return true;

@@ -84,7 +84,7 @@ export interface GachaTier {
   pity: [number, number][];
 }
 
-/** The gacha machine at the end of the showcase carpet. */
+/** The gacha machine beside the cannon. */
 export const GACHA: GachaTier[] = [
   {
     id: 'basic',

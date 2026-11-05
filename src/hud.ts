@@ -202,13 +202,15 @@ export class Hud {
     this.promptEl.classList.toggle('pulse', pulse && !!text);
   }
 
-  toast(text: string, kind = '', color?: string): void {
+  /** A message that pops up and fades; `ms` shortens it for a quick flash. */
+  toast(text: string, kind = '', color?: string, ms = 1400): void {
     const el = document.createElement('div');
     el.className = `toast outline ${kind}`;
     el.textContent = text;
     if (color) el.style.color = color;
+    if (ms !== 1400) el.style.animationDuration = `${ms}ms`;
     this.toasts.appendChild(el);
-    setTimeout(() => el.remove(), 1400);
+    setTimeout(() => el.remove(), ms);
   }
 
   /** Text that rises from a screen position, for coins earned at a spot in the world. */

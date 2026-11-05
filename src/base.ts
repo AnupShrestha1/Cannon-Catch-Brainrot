@@ -1,5 +1,5 @@
-// The showcase beside the cannon: a stone hall with a red carpet down the middle, two rows of 5 pedestals
-// either side of it, and the gacha machine and merge station at the far end. Pedestals show their brainrot,
+// The showcase beside the cannon: a stone hall with a red carpet down the middle and two rows of 5 pedestals
+// either side of it. The gacha machine and merge station stand either side of the cannon. Pedestals show their brainrot,
 // a rarity glow, and a big coin spinning over its head with the coins waiting there; locked ones are roped
 // off until the base is expanded. It only draws the save; Game owns the rules (and the level-up buttons,
 // which are HTML).
@@ -40,12 +40,17 @@ const ENTRANCE_X = -9;
 const FIRST_X = -12.5;
 const STEP_X = 4.3;
 const ROW_OFFSET = 3.4;
-const HALL_END_X = FIRST_X - STEP_X * 4 - 5.5;
-/** Where the gacha machine and the merge station stand at the end of the carpet, and where the player stands to use them. */
-export const MACHINE = new THREE.Vector3(HALL_END_X + 1.6, 0, CARPET_Z + 2.4);
-export const MACHINE_FRONT = new THREE.Vector3(MACHINE.x + 2.5, 0, MACHINE.z);
-export const MERGER = new THREE.Vector3(HALL_END_X + 1.6, 0, CARPET_Z - 2.4);
-export const MERGER_FRONT = new THREE.Vector3(MERGER.x + 2.5, 0, MERGER.z);
+const HALL_END_X = FIRST_X - STEP_X * 4 - 3;
+/**
+ * The gacha machine and the merge station stand either side of the cannon, a little behind it, facing the
+ * landing spot (+z); the fronts are where the player stands to use them.
+ */
+export const MACHINE = new THREE.Vector3(4.6, 0, -4);
+export const MACHINE_FRONT = new THREE.Vector3(MACHINE.x, 0, MACHINE.z + 2.5);
+export const MERGER = new THREE.Vector3(-4.6, 0, -4);
+export const MERGER_FRONT = new THREE.Vector3(MERGER.x, 0, MERGER.z + 2.5);
+/** Both stations are built facing +x; this turns them to face +z. */
+const STATION_TURN = -Math.PI / 2;
 /** Height of the coin over a brainrot's head. */
 const COIN_Y = 3.3;
 
@@ -119,7 +124,7 @@ export class Base {
 
   /** Where a pulled capsule pops out. */
   static capsuleExit(out = new THREE.Vector3()): THREE.Vector3 {
-    return out.set(MACHINE.x + 1.5, 1.1, MACHINE.z);
+    return out.set(MACHINE.x, 1.1, MACHINE.z + 1.5);
   }
 
   /** Matches pedestals, characters and rarity colours to the save. Slots past save.pads are locked. */
@@ -364,6 +369,7 @@ export class Base {
   private buildMachine(): void {
     const m = this.machine;
     m.position.copy(MACHINE);
+    m.rotation.y = STATION_TURN;
     const red = flat(0xe63946);
     const gold = flat(GOLD, { emissive: 0x5a3c00 });
     const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2, 2.6), red);
@@ -420,6 +426,7 @@ export class Base {
   private buildMerger(): void {
     const m = this.merger;
     m.position.copy(MERGER);
+    m.rotation.y = STATION_TURN;
     const purple = flat(0x7a3ff2);
     const gold = flat(GOLD, { emissive: 0x5a3c00 });
     const stand = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.4, 1.2, 8), flat(0x3d3552));

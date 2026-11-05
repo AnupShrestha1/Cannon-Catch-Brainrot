@@ -44,8 +44,10 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   Cloud Kingdom and 8 in the Storm Layer. One in ten is a big gold gem worth 5 times as much, and now
   and then gems come in pairs. A hazard hit knocks 15% of the run's gems loose. A crash loses 30% of
   them, or 50% without a parachute. There's no result window: on landing the gems go into the wallet
-  with a toast and the player heads straight back to the showcase.
-- **Gacha machine** at the far end of the showcase carpet:
+  with a toast, and the player stays where they landed, ready to walk.
+- **Parachute warning**: if the parachute is still closed as the ground bar's marker nears the end of the
+  gold zone, just before the red crash zone, PARACHUTE NOW! flashes for 0.6 seconds.
+- **Gacha machine**, to the right of the cannon:
   - Basic pull, 10 gems: Common 62%, Uncommon 28%, Rare 8%, Epic 1.8%, Legendary 0.2%.
   - Super pull, 100 gems, unlocked once a flight reaches Cloud Kingdom: Uncommon 35%, Rare 40%, Epic
     18%, Legendary 7%.
@@ -53,11 +55,12 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   - The very first pull is at least Uncommon.
   - Hidden pity, never shown to the player: on Basic pulls, every 15th pull without an Uncommon or better
     is one, and likewise a Rare by 30, an Epic by 60 and a Legendary by 90. On Super pulls: a Rare by 5,
-    an Epic by 12 and a Legendary by 30. Each counter resets when that rarity or better comes up.
+    an Epic by 12 and a Legendary by 30. Each counter resets when that rarity or better comes up, by luck
+    or by pity, so an Uncommon on pull 2 means the next guaranteed one is pull 17, not pull 15.
   - Results go on display by themselves: empty slots fill best first, and a rarer pull swaps out a
     level-1 brainrot (which goes to the backpack with its coins collected). Levelled ones are never moved.
     The machine's panel then reopens with the results on top, so pulling again is one click.
-- **Merge station**, a bubbling cauldron beside the gacha machine: 10 Common → 1 Uncommon, 8 Uncommon →
+- **Merge station**, a bubbling cauldron to the left of the cannon: 10 Common → 1 Uncommon, 8 Uncommon →
   1 Rare, 6 Rare → 1 Epic, 4 Epic → 1 Legendary, from the backpack. A merge gives a random character of
   the next rarity. Merge all runs every recipe from the bottom up in one click, and merged brainrots go
   on display if they beat what's there.
@@ -163,7 +166,7 @@ All first-pass numbers live in `src/config.ts`.
 | `src/economy.ts` | Upgrade costs, income, slots, pulls with hidden pity, merging and selling |
 | `src/meta.ts` | Offline earnings, the daily streak, and collection book pages |
 | `src/platform.ts` | The CrazyGames SDK wrapper |
-| `src/base.ts` | The showcase hall, its pedestals, brainrots and coins, the gacha machine and the merge station |
+| `src/base.ts` | The showcase hall, its pedestals, brainrots and coins, and the gacha machine and merge station by the cannon |
 | `src/characters.ts` | The 10 character models and their idle animations |
 | `src/world.ts` | Sky pieces, cannon, player avatar, gems, hazards, guide arrows, labels |
 | `src/scenery.ts` | Sky dome, ground, hills, mountains, path, lanterns, fence and bunting, swaying trees, cottage, windmill, pond, butterflies |

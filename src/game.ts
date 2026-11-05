@@ -216,6 +216,8 @@ export class Game {
   private apex = 0;
   private chute: Chute = 'closed';
   private chuteScale = 0;
+  /** The last-moment parachute warning has flashed this fall. */
+  private chuteWarned = false;
   private landing = '';
   private recordPassed = false;
   /** Gems picked up this run, and gems knocked loose by hazards or lost in a crash. */
@@ -531,6 +533,7 @@ export class Game {
     this.gFall = this.vTerminal / FLIGHT.terminalReach;
     this.apex = 0;
     this.chute = 'closed';
+    this.chuteWarned = false;
     this.landing = '';
     this.recordPassed = false;
     this.runGems = 0;
@@ -828,6 +831,12 @@ export class Game {
     );
     const urgent = tau < 3.2;
     this.hud.showChute(true, urgent);
+    // A quick flash as the marker nears the end of the gold zone, just before the red crash zone.
+    if (!this.chuteWarned && tau < late + 0.3) {
+      this.chuteWarned = true;
+      this.hud.toast('PARACHUTE NOW!', 'bad big flash', undefined, 600);
+      this.sfx.full();
+    }
     if (urgent && this.save.flightNo <= TUTORIAL.wideChuteFlights) {
       this.hud.prompt(this.input.isTouch ? 'Tap PARACHUTE!' : 'Press Space or click to open your parachute!', true);
     }
@@ -929,7 +938,6 @@ export class Game {
     } else {
       this.hud.toast('No gems this run', 'small');
     }
-    if (this.gemsLost) this.hud.toast(`${this.gemsLost} gems lost`, 'bad small');
     this.goHome();
   }
 
@@ -944,14 +952,16 @@ export class Game {
 
   // ---------------------------------------------------------------- base
 
-  /** Back to the showcase after a run. */
+  /** After a run the player stays where they landed, in control, with the camera behind them. */
   private goHome(): void {
     this.clearRun();
     this.hud.hideReveal();
     writeSave(this.save);
     this.state = 'home';
-    this.camYaw = HOME_YAW;
-    this.walkTo(HOME_SPOT);
+    this.walking = false;
+    this.walkVel.set(0, 0);
+    this.camYaw = 0;
+    this.facing = 0;
   }
 
   private nearMachine(): boolean {
@@ -1236,7 +1246,7 @@ export class Game {
     const reopen = () => this.openBackpack(slot);
     if (!s.inventory.length) {
       const text = document.createElement('p');
-      text.textContent = 'Your backpack is empty. Pull the gacha machine at the end of the carpet to get brainrots.';
+      text.textContent = 'Your backpack is empty. Pull the gacha machine beside the cannon to get brainrots.';
       this.hud.showModal('Backpack', [text], [{ label: 'Close' }]);
       return;
     }
