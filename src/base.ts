@@ -34,26 +34,34 @@ interface PadView {
   seed: number;
 }
 
-/** The carpet runs along -x in line with the cannon (z = 0), from the showcase entrance toward the far end. */
+/**
+ * The base, as in the sketch, laid out along the launch camera's view (-z): the cannon on a round plaza, the
+ * showcase hall straight behind it with its red carpet running up to the cannon, and the gacha machine and
+ * merge station on either side of the plaza facing the cannon.
+ *
+ * The hall is built in its own frame, with the carpet along local -x at local z = CARPET_Z, then turned so
+ * local -x points down world -z: a local (x, z) lands at world (-z, x).
+ */
 export const CARPET_Z = 0;
+const HALL_TURN = -Math.PI / 2;
+/** Radius of the paved plaza around the cannon. */
+export const PLAZA_RADIUS = 11;
 const ENTRANCE_X = -9;
 const FIRST_X = -12.5;
 const STEP_X = 4.3;
 const ROW_OFFSET = 3.4;
 const HALL_END_X = FIRST_X - STEP_X * 4 - 3;
 /**
- * As in the sketch: the carpet leads from the showcase to the cannon, and the gacha machine and the merge
- * station stand either side of the cannon, a little further from the showcase than it is. Both face the
- * showcase (-x); the fronts, where their platforms are, are where the player stands to use them.
+ * The gacha machine (left of the cannon from the launch camera) and the merge station (right), on the plaza's
+ * edge level with the cannon, both facing it. The fronts, where their platforms are, are where the
+ * player stands to use them.
  */
-export const MACHINE = new THREE.Vector3(3.5, 0, 6.5);
-export const MACHINE_FRONT = new THREE.Vector3(MACHINE.x - 2.5, 0, MACHINE.z);
-export const MERGER = new THREE.Vector3(3.5, 0, -6.5);
+export const MACHINE = new THREE.Vector3(-7.5, 0, -0.5);
+export const MACHINE_FRONT = new THREE.Vector3(MACHINE.x + 2.5, 0, MACHINE.z);
+export const MERGER = new THREE.Vector3(7.5, 0, -0.5);
 export const MERGER_FRONT = new THREE.Vector3(MERGER.x - 2.5, 0, MERGER.z);
 /** Radius of the step-on platform in front of each station. */
 export const PLATFORM_RADIUS = 1.25;
-/** Both stations are built facing +x; this turns them to face the showcase (-x). */
-const STATION_TURN = Math.PI;
 /** Height of the coin over a brainrot's head. */
 const COIN_Y = 3.3;
 
@@ -91,6 +99,7 @@ export class Base {
 
   constructor(scene: THREE.Scene) {
     scene.add(this.group);
+    this.buildPlaza();
     this.buildHall();
     this.machine = new THREE.Group();
     this.crank = new THREE.Group();
@@ -101,10 +110,10 @@ export class Base {
     for (let i = 0; i < ECONOMY.maxPads; i++) this.addPad(i);
   }
 
-  /** Where a slot's level-up button sits: the pedestal's front edge, facing the carpet. */
+  /** Where a slot's level-up button sits: right under its brainrot, at the foot of the pedestal. */
   static buttonAnchor(i: number, out = new THREE.Vector3()): THREE.Vector3 {
     Base.padPosition(i, out);
-    return out.set(out.x, 0.1, out.z + (i % 2 === 0 ? -1.75 : 1.75));
+    return out.setY(-0.15);
   }
 
   /** Bubbles the merge station over, for a merge. */
@@ -117,11 +126,13 @@ export class Base {
     return out.set(MERGER.x, 3.2, MERGER.z);
   }
 
-  /** Slots pair up across the carpet: even ones on the near side, odd ones opposite, running away from the cannon. */
+  /** Slots pair up across the carpet (even on the left, odd on the right), running away from the cannon. */
   static padPosition(i: number, out = new THREE.Vector3()): THREE.Vector3 {
     const col = Math.floor(i / 2);
     const side = i % 2 === 0 ? 1 : -1;
-    return out.set(FIRST_X - col * STEP_X, PAD_TOP, CARPET_Z + side * ROW_OFFSET);
+    const lx = FIRST_X - col * STEP_X;
+    const lz = CARPET_Z + side * ROW_OFFSET;
+    return out.set(-lz, PAD_TOP, lx);
   }
 
   /** Shakes the machine and turns its crank, for a pull. */
@@ -131,7 +142,7 @@ export class Base {
 
   /** Where a pulled capsule pops out. */
   static capsuleExit(out = new THREE.Vector3()): THREE.Vector3 {
-    return out.set(MACHINE.x - 1.5, 1.1, MACHINE.z);
+    return out.set(MACHINE.x + 1.5, 1.1, MACHINE.z);
   }
 
   /** Matches pedestals, characters and rarity colours to the save. Slots past save.pads are locked. */
@@ -156,7 +167,7 @@ export class Base {
       rig.group.scale.setScalar(1.3);
       Base.padPosition(i, rig.group.position);
       // Face the carpet.
-      rig.group.rotation.y = i % 2 === 0 ? Math.PI : 0;
+      rig.group.rotation.y = i % 2 === 0 ? Math.PI / 2 : -Math.PI / 2;
       this.group.add(rig.group);
       view.rig = rig;
       view.arrive = 1;
@@ -294,6 +305,8 @@ export class Base {
   private makeLock(pos: THREE.Vector3): THREE.Group {
     const lock = new THREE.Group();
     lock.position.set(pos.x, 0, pos.z);
+    // The rope runs along the row, facing the carpet.
+    lock.rotation.y = Math.PI / 2;
     const postMat = flat(GOLD, { emissive: 0x3a2800 });
     for (const dx of [-1.1, 1.1]) {
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 1.3, 8), postMat);
@@ -315,8 +328,28 @@ export class Base {
   }
 
   /** Stone floor with a border, the red carpet with gold edging, and an arch over the entrance. */
+  /** A paved round plaza around the cannon, with a ring pattern and a low curb. */
+  private buildPlaza(): void {
+    const plaza = new THREE.Mesh(new THREE.CircleGeometry(PLAZA_RADIUS, 48), flat(0xe9dcc3));
+    plaza.rotation.x = -Math.PI / 2;
+    plaza.position.y = 0.035;
+    plaza.receiveShadow = true;
+    const inner = new THREE.Mesh(new THREE.RingGeometry(4.2, 4.6, 48), flat(0xd2bf9a));
+    inner.rotation.x = -Math.PI / 2;
+    inner.position.y = 0.04;
+    const curb = new THREE.Mesh(
+      new THREE.TorusGeometry(PLAZA_RADIUS, 0.22, 6, 64).rotateX(Math.PI / 2),
+      flat(0xcdbb98),
+    );
+    curb.position.y = 0.06;
+    curb.receiveShadow = true;
+    this.group.add(plaza, inner, curb);
+  }
+
   private buildHall(): void {
-    const g = this.group;
+    const g = new THREE.Group();
+    g.rotation.y = HALL_TURN;
+    this.group.add(g);
     const near = ENTRANCE_X;
     const far = HALL_END_X;
     const length = near - far;
@@ -333,14 +366,16 @@ export class Base {
       line.position.set(x, 0.125, CARPET_Z);
       g.add(line);
     }
-    const carpet = new THREE.Mesh(new THREE.BoxGeometry(length + 3, 0.05, 2.8), flat(0xc8102e));
-    carpet.position.set(midX + 1.5, 0.145, CARPET_Z);
+    // The carpet runs on out of the hall, across the plaza, up to the cannon.
+    const run = 6.5;
+    const carpet = new THREE.Mesh(new THREE.BoxGeometry(length + run, 0.05, 2.8), flat(0xc8102e));
+    carpet.position.set(midX + run / 2, 0.145, CARPET_Z);
     carpet.receiveShadow = true;
     g.add(carpet);
     const edgeMat = flat(GOLD, { emissive: 0x4a3200 });
     for (const side of [-1, 1]) {
-      const edge = new THREE.Mesh(new THREE.BoxGeometry(length + 3, 0.06, 0.14), edgeMat);
-      edge.position.set(midX + 1.5, 0.15, CARPET_Z + side * 1.4);
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(length + run, 0.06, 0.14), edgeMat);
+      edge.position.set(midX + run / 2, 0.15, CARPET_Z + side * 1.4);
       g.add(edge);
     }
     // A low wall around the hall, open where the carpet comes in.
@@ -383,7 +418,6 @@ export class Base {
   private buildMachine(): void {
     const m = this.machine;
     m.position.copy(MACHINE);
-    m.rotation.y = STATION_TURN;
     const red = flat(0xe63946);
     const gold = flat(GOLD, { emissive: 0x5a3c00 });
     const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2, 2.6), red);
@@ -468,7 +502,7 @@ export class Base {
   private buildMerger(): void {
     const m = this.merger;
     m.position.copy(MERGER);
-    m.rotation.y = STATION_TURN;
+    m.rotation.y = Math.PI;
     const purple = flat(0x7a3ff2);
     const gold = flat(GOLD, { emissive: 0x5a3c00 });
     const stand = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.4, 1.2, 8), flat(0x3d3552));

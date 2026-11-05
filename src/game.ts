@@ -121,10 +121,10 @@ const BODY_MID = 0.95;
 /** Depth the player drifts to while landing, clear of the cannon at z = 0. */
 const LANDING_Z = 3.5;
 /** Where the player waits in the showcase, just inside the entrance, and where they climb into the cannon. */
-const HOME_SPOT = new THREE.Vector3(-13, 0, CARPET_Z);
+const HOME_SPOT = new THREE.Vector3(CARPET_Z, 0, -12);
 const CANNON_FOOT = new THREE.Vector3(0, 0, 2.3);
-/** The base camera looks down the carpet toward the gacha machine. */
-const HOME_YAW = Math.PI / 2;
+/** The base camera looks down the carpet, into the showcase. */
+const HOME_YAW = 0;
 const WALK_SPEED = 9;
 /** Walking within this distance of a slot's centre collects its coins. */
 const COLLECT_RADIUS = 2;
@@ -1471,8 +1471,9 @@ export class Game {
       const k = damp(12, dt);
       this.walkVel.x += (wantX - this.walkVel.x) * k;
       this.walkVel.y += (wantZ - this.walkVel.y) * k;
-      this.px = clamp(this.px + this.walkVel.x * dt, -45, 12);
-      this.pz = clamp(this.pz + this.walkVel.y * dt, -12, 12);
+      // Inside the base's fence.
+      this.px = clamp(this.px + this.walkVel.x * dt, -16, 16);
+      this.pz = clamp(this.pz + this.walkVel.y * dt, -37, 16);
       this.stepping = this.walkVel.length() > 0.6;
     } else {
       this.walkVel.set(0, 0);

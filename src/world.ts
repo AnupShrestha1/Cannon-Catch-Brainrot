@@ -74,8 +74,8 @@ export function buildEnv(scene: THREE.Scene): Env {
   scene.add(new THREE.HemisphereLight(0xdcefff, 0x5f8a45, 1.05));
   // A warm sun casting soft shadows over the base, the cannon and the trees around them.
   const sun = new THREE.DirectionalLight(0xfff0d6, 1.9);
-  sun.target.position.set(-18, 0, 0);
-  sun.position.set(-18 + 30, 80, 50);
+  sun.target.position.set(0, 0, -10);
+  sun.position.set(30, 80, -10 + 50);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 45, bottom: -45, near: 10, far: 200 });

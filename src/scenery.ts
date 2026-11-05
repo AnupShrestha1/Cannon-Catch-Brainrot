@@ -26,16 +26,16 @@ function groundHeight(x: number, z: number): number {
   return ramp * (5 + Math.sin(x * 0.03) * Math.cos(z * 0.025) * 4 + Math.sin(x * 0.011 + z * 0.017) * 6);
 }
 
-const POND = { x: 24, z: -22, r: 9 };
-const COTTAGE = { x: -60, z: 22 };
-const WINDMILL = { x: -26, z: -40 };
+// The base sits inside a rectangular fence (FENCE); the landmarks frame it from outside: the windmill and the
+// cottage behind it on either side, seen past the cannon from the launch camera, and the pond off to the right.
+const FENCE = { x: 17, front: 17, back: -38, gate: 4 };
+const POND = { x: 34, z: 6, r: 9 };
+const COTTAGE = { x: 30, z: -50 };
+const WINDMILL = { x: -30, z: -54 };
 
-/** Where props may not go: the base and its walkway, the cannon, the pond and the buildings. */
+/** Where props may not go: inside the fence (and a margin), the pond and the buildings. */
 function keepClear(x: number, z: number): boolean {
-  if (x > -48 && x < 7 && z > -12 && z < 11) return true;
-  if (Math.hypot(x, z) < 6) return true;
-  // The gacha machine and merge station either side of the cannon.
-  if (x > -2 && x < 8 && z > -9.5 && z < 9.5) return true;
+  if (Math.abs(x) < FENCE.x + 3 && z > FENCE.back - 3 && z < FENCE.front + 3) return true;
   if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 2) return true;
   if (Math.hypot(x - COTTAGE.x, z - COTTAGE.z) < 9) return true;
   if (Math.hypot(x - WINDMILL.x, z - WINDMILL.z) < 8) return true;
@@ -147,8 +147,8 @@ export function addScenery(scene: THREE.Scene): Scenery {
     tile.receiveShadow = true;
     scene.add(tile);
   };
-  // Straight from the cannon to the showcase entrance, in line with the carpet.
-  path(-4, 0, 5.5, 2.6);
+  // From the gate in the front fence to the plaza.
+  path(0, (FENCE.front + 10) / 2, 3, FENCE.front - 10 + 1);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const up = new THREE.Vector3(0, 1, 0);
@@ -160,13 +160,20 @@ export function addScenery(scene: THREE.Scene): Scenery {
   const postGeo = new THREE.CylinderGeometry(0.09, 0.12, 2.2, 6).translate(0, 1.1, 0);
   const lampGeo = new THREE.BoxGeometry(0.42, 0.5, 0.42).translate(0, 2.35, 0);
   const capGeo = new THREE.ConeGeometry(0.4, 0.3, 4).rotateY(Math.PI / 4).translate(0, 2.75, 0);
-  for (let x = -12; x >= -34; x -= 7) {
-    for (const z of [8.7, -7.4]) {
-      const lamp = new THREE.Group();
-      lamp.add(new THREE.Mesh(postGeo, darkWood), new THREE.Mesh(lampGeo, lampMat), new THREE.Mesh(capGeo, darkWood));
-      lamp.position.set(x, 0, z);
-      scene.add(casts(lamp));
-    }
+  const lampSpots: [number, number][] = [];
+  // Around the plaza, leaving the hall entrance, the two stations and the line from the gate clear (the
+  // base camera sits on that line behind the player).
+  for (const deg of [35, 65, 115, 145, 225, 315]) {
+    const a = (deg * Math.PI) / 180;
+    lampSpots.push([Math.cos(a) * 12, Math.sin(a) * 12]);
+  }
+  // Down both long sides of the showcase.
+  for (let z = -13; z >= -31; z -= 6) lampSpots.push([-8.3, z], [8.3, z]);
+  for (const [x, z] of lampSpots) {
+    const lamp = new THREE.Group();
+    lamp.add(new THREE.Mesh(postGeo, darkWood), new THREE.Mesh(lampGeo, lampMat), new THREE.Mesh(capGeo, darkWood));
+    lamp.position.set(x, 0, z);
+    scene.add(casts(lamp));
   }
 
   // Wooden fence behind the base and along its far end, hung with bunting.
@@ -212,8 +219,13 @@ export function addScenery(scene: THREE.Scene): Scenery {
       scene.add(pole);
     }
   };
-  fence(-3, -9.2, -45, -9.2);
-  fence(-45, -9.2, -45, 8.5);
+  // One rectangle around the whole base, with a gate in the front.
+  const f = FENCE;
+  fence(-f.x, f.front, -f.x, f.back);
+  fence(-f.x, f.back, f.x, f.back);
+  fence(f.x, f.back, f.x, f.front);
+  fence(f.x, f.front, f.gate, f.front);
+  fence(-f.gate, f.front, -f.x, f.front);
   const bunting = new THREE.InstancedMesh(flagGeo, lambert(0xffffff, { side: THREE.DoubleSide }), flags.length);
   flags.forEach((f, i) => {
     q.setFromAxisAngle(up, f.turn);
@@ -288,7 +300,7 @@ export function addScenery(scene: THREE.Scene): Scenery {
   chimney.position.set(1.8, 6, -0.8);
   cottage.add(walls, roof, door, chimney);
   cottage.position.set(COTTAGE.x, 0, COTTAGE.z);
-  cottage.rotation.y = 0.6;
+  cottage.rotation.y = -0.35;
   scene.add(casts(cottage));
   walls.receiveShadow = true;
 
@@ -310,7 +322,7 @@ export function addScenery(scene: THREE.Scene): Scenery {
   hub.add(new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 6), darkWood));
   windmill.add(tower, millCap, hub);
   windmill.position.set(WINDMILL.x, 0, WINDMILL.z);
-  windmill.rotation.y = 0.4;
+  windmill.rotation.y = 0.3;
   scene.add(casts(windmill));
 
   // Scattered props, instanced. `spot` finds a clear place, or null after a few tries.
@@ -318,8 +330,8 @@ export function addScenery(scene: THREE.Scene): Scenery {
     for (let tries = 0; tries < 12; tries++) {
       const a = rand() * Math.PI * 2;
       const r = minR + Math.sqrt(rand()) * (maxR - minR);
-      const x = Math.cos(a) * r - 15;
-      const z = Math.sin(a) * r;
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r - 10;
       if (!keepClear(x, z)) return [x, z];
     }
     return null;
@@ -372,7 +384,8 @@ export function addScenery(scene: THREE.Scene): Scenery {
     (rand() < 0.5 ? pines : rounds).push([at[0], at[1], range(0.8, 1.9)]);
   }
   // A few clusters close to the base so the play area has some shade.
-  for (const [cx, cz] of [[-52, -16], [-8, -18], [12, 16], [-30, 18], [-56, 4]] as const) {
+  // Clusters just outside the fence, at its corners and along its sides, to frame the base.
+  for (const [cx, cz] of [[-25, -40], [25, -36], [-26, 8], [-24, 26], [22, 28], [-27, -16]] as const) {
     for (let k = 0; k < 4; k++) {
       const x = cx + range(-4, 4);
       const z = cz + range(-4, 4);
@@ -438,19 +451,20 @@ export function addScenery(scene: THREE.Scene): Scenery {
     return { y: 0.5 * s, scale: new THREE.Vector3(s * 1.2, s, s), color: pick([0x3e9a4e, 0x47a84f, 0x358a49]) };
   }, true);
 
-  // A flower bed along the front of the showcase.
-  const bed = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.2, 0), lambert(0xffffff), 140);
-  for (let i = 0; i < 140; i++) {
-    const x = -35 + rand() * 25;
-    const z = range(6.7, 7.7);
-    m.compose(new THREE.Vector3(x, 0.3, z), q.identity(), new THREE.Vector3(1, 1, 1));
+  // Flower beds down both long sides of the showcase.
+  const bed = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.2, 0), lambert(0xffffff), 200);
+  for (let i = 0; i < 200; i++) {
+    const side = i % 2 ? 1 : -1;
+    m.compose(new THREE.Vector3(side * range(6.6, 7.4), 0.3, range(-31.5, -10.5)), q.identity(), new THREE.Vector3(1, 1, 1));
     bed.setMatrixAt(i, m);
     bed.setColorAt(i, c.setHex(pick(flowerColors)));
   }
   scene.add(bed);
-  const soil = new THREE.Mesh(new THREE.BoxGeometry(25.5, 0.35, 1.4), lambert(0x6b4a2e));
-  soil.position.set(-22.5, 0.12, 7.2);
-  scene.add(soil);
+  for (const side of [-1, 1]) {
+    const soil = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.35, 21.5), lambert(0x6b4a2e));
+    soil.position.set(side * 7, 0.12, -21);
+    scene.add(soil);
+  }
 
   // Distant hills, then snowy mountains ringing the horizon. The mountains skip fog and carry their own
   // hazy blue, so they stay visible past the fog line.
@@ -496,8 +510,8 @@ export function addScenery(scene: THREE.Scene): Scenery {
       group,
       left,
       right,
-      cx: range(-46, 10),
-      cz: range(-14, 16),
+      cx: range(-13, 13),
+      cz: range(-32, 13),
       r: range(1.5, 4),
       speed: range(0.3, 0.6) * (i % 2 ? 1 : -1),
       phase: rand() * Math.PI * 2,
