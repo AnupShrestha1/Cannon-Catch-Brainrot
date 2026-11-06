@@ -14,6 +14,7 @@ import {
   GEMS,
   GIFTS,
   GIFT_COINS,
+  MERGE,
   MAX_ZONE,
   REBIRTH,
   TRACKS,
@@ -285,3 +286,25 @@ console.log(`  first Legendary on show   ${median('firstLegendary')}`);
 console.log(`  all 10 slots open         ${median('allSlots')}`);
 console.log(`  first Storm Layer run     ${median('stormLayer')}`);
 console.log(`  rebirth unlocks           ${median('stormCannon')}`);
+
+// Gacha value per gem, pity included: a tier that costs more must be worth more per gem, or players should
+// (and will) skip it. Value counts each pull at what it would be worth merged up into Commons.
+const mergeValue = [1];
+for (let r = 1; r < 5; r++) mergeValue[r] = mergeValue[r - 1] * MERGE[r - 1];
+console.log('');
+console.log('Gacha value per 1,000 gems (pity included):');
+for (const tier of GACHA) {
+  const save = defaultSave();
+  save.pulls = 10;
+  save.best = 1_000;
+  save.gems = 2_000_000;
+  const spent = save.gems;
+  const counts = [0, 0, 0, 0, 0, 0, 0];
+  while (save.gems >= tier.cost) counts[pull(save, tier)!.rarity]++;
+  const per = (n: number) => ((n / spent) * 1000).toFixed(2);
+  const value = counts.reduce((sum, n, r) => sum + n * (mergeValue[r] ?? 0), 0);
+  console.log(
+    `  ${tier.name.padEnd(10)} Legendary ${per(counts[4])}, Epic or better ${per(counts[3] + counts[4])}, ` +
+      `merged-up value ${((value / mergeValue[4] / spent) * 1000).toFixed(2)} Legendaries`,
+  );
+}

@@ -98,10 +98,13 @@ export const GACHA: GachaTier[] = [
     id: 'super',
     name: 'Super pull',
     cost: 100,
-    odds: [[1, 0.35], [2, 0.4], [3, 0.18], [4, 0.07]],
+    // Always Rare or better, and worth more per gem than ten Basic pulls on every count: about 1.4× the
+    // Legendaries, 1.5× the Epics and 1.2× the merge value (`npm run sim` prints the comparison). Without
+    // that, Basic's generous pity (a Legendary every 90 pulls, 900 gems) would make Super the worse buy.
+    odds: [[2, 0.5], [3, 0.38], [4, 0.12]],
     unlockBest: 150,
-    // Same idea, scaled to the Super pull's better odds: a Rare at least every 5, an Epic every 12, a Legendary every 30.
-    pity: [[2, 5], [3, 12], [4, 30]],
+    // An Epic or better at least every 4 Super pulls, and a Legendary at least every 10.
+    pity: [[3, 4], [4, 10]],
   },
 ];
 
@@ -220,8 +223,8 @@ export const TRACKS: Track[] = ['cannon', 'finder', 'magnet', 'steering', 'chute
  */
 export const UPGRADES: Record<Track, { name: string; base: number; growth: number; max: number; effect: number }> = {
   // Basic Launch stops at cannon level 37, whose perfect launch stays inside the Storm Layer. The doc goes to 60.
-  // Tuned with `npm run sim` (the doc's 50 × 1.18 let rebirth unlock after 8 minutes): about 64 minutes now.
-  cannon: { name: 'Cannon power', base: 25, growth: 1.47, max: 36, effect: 0 },
+  // Tuned with `npm run sim` (the doc's 50 × 1.18 let rebirth unlock after 8 minutes): about 66 minutes now.
+  cannon: { name: 'Cannon power', base: 25, growth: 1.51, max: 36, effect: 0 },
   finder: { name: 'Gem finder', base: 150, growth: 1.45, max: 20, effect: 0.1 },
   magnet: { name: 'Gem magnet', base: 120, growth: 1.25, max: 25, effect: 0.1 },
   steering: { name: 'Steering', base: 100, growth: 1.22, max: 25, effect: 0.06 },
@@ -244,7 +247,7 @@ export const ECONOMY = {
   maxPads: 10,
   // Retuned with `npm run sim` from the doc's 400 × 3, which let income outrun every cost.
   firstExpansion: 600,
-  expansionGrowth: 5,
+  expansionGrowth: 6,
   /** A pad's cash pile stops growing at this many seconds of its income. */
   padCapSeconds: 600,
   /** Selling a character pays this many seconds of its income. */

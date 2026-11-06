@@ -64,16 +64,19 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - **Gacha machine**, on the left of the cannon. Step on the glowing pink platform in front of it and
   press E (walking past doesn't open anything):
   - Basic pull, 10 gems: Common 62%, Uncommon 28%, Rare 8%, Epic 1.8%, Legendary 0.2%.
-  - Super pull, 100 gems, unlocked once a flight reaches Cloud Kingdom: Uncommon 35%, Rare 40%, Epic
-    18%, Legendary 7%.
+  - Super pull, 100 gems, unlocked once a flight reaches Cloud Kingdom: always Rare or better (Rare 50%,
+    Epic 38%, Legendary 12%). For the same gems it beats ten Basic pulls on every count, with pity
+    included: about 1.4× the Legendaries (one per ~600 gems against ~820), 1.5× the Epics or better, and
+    1.2× the value if everything were merged up. So once it's unlocked, saving for Super is the better
+    buy, and Basic stays the cheap way in.
   - Each tier has a ×10 button once you can afford ten.
   - The first 10 pulls are scripted to include at least two Uncommons and one Rare: the 1st is at least
     Uncommon, the 3rd at least Rare (a glowing card at about 100 s) and the 5th at least Uncommon. The
     rest roll the normal odds and can come out better; from the 11th pull on, it's the normal odds and
     pity only.
   - Hidden pity, never shown to the player: on Basic pulls, every 15th pull without an Uncommon or better
-    is one, and likewise a Rare by 30, an Epic by 60 and a Legendary by 90. On Super pulls: a Rare by 5,
-    an Epic by 12 and a Legendary by 30. Each counter resets when that rarity or better comes up, by luck
+    is one, and likewise a Rare by 30, an Epic by 60 and a Legendary by 90. On Super pulls: an Epic or
+    better by 4 and a Legendary by 10. Each counter resets when that rarity or better comes up, by luck
     or by pity, so an Uncommon on pull 2 means the next guaranteed one is pull 17, not pull 15.
   - Results go on display by themselves: empty slots fill best first, and a rarer pull swaps out a
     level-1 brainrot (which goes to the backpack with its coins collected). Levelled ones are never moved.
@@ -91,7 +94,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   put one on display, or merge a rarity.
 - **Showcase**: a stone hall with a red carpet down the middle and two rows of 5 slots either side,
   laid out like the sketch. 4 slots are open at the start; locked ones are roped off, and each base
-  expansion in Upgrades opens 2 more (600, then 3,000, then 15,000 coins). Empty open slots pulse a
+  expansion in Upgrades opens 2 more (600, then 3,600, then 21,600 coins). Empty open slots pulse a
   ring of light.
 - **Slots**: a brainrot on display earns coins once a second by rarity (Common 1/s up to Legendary 90/s),
   up to 10 minutes' worth. The coins waiting show as a big gold coin spinning slowly over its head, with
@@ -195,17 +198,21 @@ It reports the first two minutes (the hook) and the long game. With the current 
 | 101 s | First brainrot level-up |
 | 2 min | Gift: 20 gems, two more pulls |
 | 2.3 min | First Cloud Kingdom run: new-zone banner, gems worth 3× |
-| 4 min | Super pull unlocked and used |
-| 7 min | First Epic |
-| 8 min | First showcase expansion |
-| 15 min | First Legendary on display |
-| 28 min | All 10 slots open |
-| 40 min | First Storm Layer run |
-| 64 min | Rebirth unlocks |
+| 4.6 min | Super pull unlocked and used |
+| 5 min | First Epic |
+| 7 min | First showcase expansion |
+| 11 min | First Legendary on display |
+| 25 min | All 10 slots open |
+| 37 min | First Storm Layer run |
+| ~65 min | Rebirth unlocks |
 
 By 2 minutes the median player has had 8 rewards (pulls, upgrades and level-ups), has cannon level 5
 and earns about 12 coins a second, and every simulated player has a Rare. Each big milestone after
 that takes roughly twice as long as the one before. Offline earnings aren't modelled.
+
+It also prints each gacha tier's value per 1,000 gems, pity included, so a pricier tier is always
+checked to be worth more per gem (Super: 1.67 Legendaries and 5.6 Epic-or-better per 1,000 gems,
+against Basic's 1.21 and 3.5).
 
 ## Tuning
 
