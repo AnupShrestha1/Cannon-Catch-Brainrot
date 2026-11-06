@@ -2,9 +2,10 @@
 //
 // Every plot is the same base (fence and gate, plaza, cannon, gacha machine, merge station, showcase), built
 // in plot space: cannon at the origin, gate at +z (FENCE.front), showcase down -z. This client always puts its
-// own plot at the world origin, so all of its gameplay, cameras and flights stay in plot space. Today the
-// other five plots are vacant; when multiplayer arrives, the server assigns each player a slot and every
-// client renders the town turned so its own slot sits at the origin (see slotTransform).
+// own plot at the world origin, so all of its gameplay, cameras and flights stay in plot space. The other
+// five plots belong to other players: today bots from the fake server (net.ts); with real multiplayer, the
+// server assigns each player a slot and every client renders the town turned so its own slot sits at the
+// origin (toPlot and fromPlot convert between a plot's space and the world).
 
 /** The fence around one plot, in plot space; the gate is a gap in the front fence. */
 export const FENCE = { x: 17, front: 17, back: -38, gate: 4 };
@@ -50,47 +51,82 @@ export const TOWN = {
   maxZ: STREET.far + FENCE.front - FENCE.back,
 };
 
-/** Where the player can walk: their own plot plus the street (the fence only opens at the gate). */
+/** Where anyone can walk: the whole town. Fences only open at the gates. */
 export const WALK = {
   minX: -STREET.halfLength,
   maxX: STREET.halfLength,
-  minZ: FENCE.back + 1,
-  maxZ: STREET.far - 1,
+  minZ: TOWN.minZ + 1,
+  maxZ: TOWN.maxZ - 1,
 };
 
+/** World → plot space for a slot (cannon at the origin, gate at +z). */
+export function toPlot(slot: PlotSlot, x: number, z: number): [number, number] {
+  const dx = x - slot.x;
+  const dz = z - slot.z;
+  const c = Math.cos(slot.rot);
+  const s = Math.sin(slot.rot);
+  return [dx * c - dz * s, dx * s + dz * c];
+}
+
+/** Plot space → world for a slot. */
+export function fromPlot(slot: PlotSlot, lx: number, lz: number): [number, number] {
+  const c = Math.cos(slot.rot);
+  const s = Math.sin(slot.rot);
+  return [slot.x + lx * c + lz * s, slot.z - lx * s + lz * c];
+}
+
+/** The slot whose fenced plot contains a world point, or null in the street and the gaps between plots. */
+export function plotAt(x: number, z: number): PlotSlot | null {
+  for (const slot of SLOTS) {
+    const [lx, lz] = toPlot(slot, x, z);
+    if (Math.abs(lx) < FENCE.x && lz < FENCE.front && lz > FENCE.back) return slot;
+  }
+  return null;
+}
+
+/** A plot's gate, just inside (in = true) or just outside it, in world space. */
+export function gatePoint(slot: PlotSlot, inside: boolean): [number, number] {
+  return fromPlot(slot, 0, FENCE.front + (inside ? -1.2 : 2));
+}
+
 /**
- * Keeps a step inside the walkable area (the near row of plots and the street) and stops it crossing a plot's
- * fence anywhere but its gate. The far row is across the street, past the walkable edge.
+ * Keeps a step inside the town and stops it crossing any plot's fence except through its gate, from the
+ * street. Each plot's fence is checked in that plot's own space, so the far row (turned to face back across
+ * the street) works the same as the near one.
  */
 export function fenceStep(fromX: number, fromZ: number, x: number, z: number): [number, number] {
   x = Math.min(WALK.maxX, Math.max(WALK.minX, x));
   z = Math.min(WALK.maxZ, Math.max(WALK.minZ, z));
-  // Work relative to the near-row plot the step started by.
-  const cx = Math.max(-PLOT_SPACING, Math.min(PLOT_SPACING, Math.round(fromX / PLOT_SPACING) * PLOT_SPACING));
-  const fx = fromX - cx;
-  let lx = x - cx;
   const margin = 0.6;
-  const wasInside = Math.abs(fx) < FENCE.x && fromZ < FENCE.front;
-  if (wasInside) {
-    // Inside a plot: the side and back fences hold, and the front one does except at the gate.
-    lx = Math.min(FENCE.x - margin, Math.max(-FENCE.x + margin, lx));
-    if (z > FENCE.front - margin && Math.abs(lx) > FENCE.gate - margin) z = FENCE.front - margin;
-  } else if (z < FENCE.front + margin && Math.abs(lx) < FENCE.x + margin) {
-    // Outside: a plot can only be entered through its gate, from the street.
-    const throughGate = Math.abs(lx) < FENCE.gate - margin && Math.abs(fx) < FENCE.gate && fromZ > z - 1;
-    if (!throughGate) {
-      if (fromZ >= FENCE.front + margin) z = FENCE.front + margin;
-      else lx = fx < 0 ? Math.min(lx, -FENCE.x - margin) : Math.max(lx, FENCE.x + margin);
+  for (const slot of SLOTS) {
+    const [fx, fz] = toPlot(slot, fromX, fromZ);
+    let [lx, lz] = toPlot(slot, x, z);
+    const wasInside = Math.abs(fx) < FENCE.x && fz < FENCE.front && fz > FENCE.back;
+    const near = Math.abs(lx) < FENCE.x + margin && lz < FENCE.front + margin && lz > FENCE.back - margin;
+    if (!wasInside && !near) continue;
+    if (wasInside) {
+      // Inside a plot: the side and back fences hold, and the front one does except at the gate.
+      lx = Math.min(FENCE.x - margin, Math.max(-FENCE.x + margin, lx));
+      lz = Math.max(FENCE.back + margin, lz);
+      if (lz > FENCE.front - margin && Math.abs(lx) > FENCE.gate - margin) lz = FENCE.front - margin;
+    } else {
+      // Outside: a plot can only be entered through its gate, from the street.
+      const throughGate = Math.abs(lx) < FENCE.gate - margin && Math.abs(fx) < FENCE.gate && fz > lz - 1;
+      if (!throughGate) {
+        if (fz >= FENCE.front + margin) lz = FENCE.front + margin;
+        else if (fz <= FENCE.back - margin) lz = FENCE.back - margin;
+        else lx = fx < 0 ? Math.min(lx, -FENCE.x - margin) : Math.max(lx, FENCE.x + margin);
+      }
     }
+    [x, z] = fromPlot(slot, lx, lz);
   }
   // The fountain in the middle of the street is solid.
-  x = cx + lx;
-  const fx2 = x - FOUNTAIN.x;
-  const fz2 = z - FOUNTAIN.z;
-  const d = Math.hypot(fx2, fz2);
+  const dx = x - FOUNTAIN.x;
+  const dz = z - FOUNTAIN.z;
+  const d = Math.hypot(dx, dz);
   if (d < FOUNTAIN.r) {
     const k = d > 0.001 ? FOUNTAIN.r / d : 1;
-    return [FOUNTAIN.x + (d > 0.001 ? fx2 : FOUNTAIN.r) * k, FOUNTAIN.z + fz2 * k];
+    return [FOUNTAIN.x + (d > 0.001 ? dx : FOUNTAIN.r) * k, FOUNTAIN.z + dz * k];
   }
   return [x, z];
 }

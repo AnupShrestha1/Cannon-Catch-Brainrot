@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { ECONOMY, RARITIES } from './config';
 import { makeCharacter, type CharacterRig } from './characters';
 import { formatCoins } from './economy';
-import { FENCE, type PlotSlot } from './layout';
+import { FENCE, fromPlot, plotAt, toPlot, type PlotSlot } from './layout';
 import type { PadSlot, Save } from './store';
 import { flat, makeLabel, softTexture, type Label } from './world';
 
@@ -86,8 +86,17 @@ const lockedTop = 0x6f7783;
 const emptyTop = 0xdfeaf6;
 const GOLD = 0xffc84a;
 
-/** Vacant plots share one label for their (never shown) coin counters, so they don't each draw canvases. */
+/** Other players' plots share one label for their (never shown) coin counters, so they don't each draw canvases. */
 let vacantLabel: Label | null = null;
+/** Every LOCKED sign shares one texture. */
+let lockedSign: THREE.SpriteMaterial | null = null;
+
+export interface BaseOptions {
+  /** An unclaimed plot: empty pedestals, no coins, no LOCKED signs. */
+  vacant?: boolean;
+  /** Another player's plot: their brainrots on display, their name over the gate, no coin counters. */
+  owner?: string;
+}
 
 /** Solid things in plot space, for walking: circles [x, z, r] and wall segments [x0, z0, x1, z1]. */
 export interface Solids {
@@ -135,11 +144,59 @@ export function floorAt(x: number, z: number): number {
   return 0.04;
 }
 
+/**
+ * Pushes a world point (a walker of radius r) out of the solid things in whichever plot it's in: the cannon,
+ * the stations, the pedestals and the showcase walls.
+ */
+export function bumpSolids(x: number, z: number, r: number): [number, number] {
+  const slot = plotAt(x, z);
+  if (!slot) return [x, z];
+  let [lx, lz] = toPlot(slot, x, z);
+  const { circles, walls } = plotSolids();
+  for (const [sx, sz, sr] of circles) {
+    const dx = lx - sx;
+    const dz = lz - sz;
+    const d = Math.hypot(dx, dz);
+    const min = sr + r;
+    if (d >= min) continue;
+    if (d < 1e-4) {
+      lz = sz + min;
+      continue;
+    }
+    lx = sx + (dx / d) * min;
+    lz = sz + (dz / d) * min;
+  }
+  for (const [x0, z0, x1, z1] of walls) {
+    const wx = x1 - x0;
+    const wz = z1 - z0;
+    const t = Math.min(1, Math.max(0, ((lx - x0) * wx + (lz - z0) * wz) / (wx * wx + wz * wz)));
+    const nx = lx - (x0 + wx * t);
+    const nz = lz - (z0 + wz * t);
+    const d = Math.hypot(nx, nz);
+    const min = 0.2 + r;
+    if (d >= min || d < 1e-4) continue;
+    lx += (nx / d) * (min - d);
+    lz += (nz / d) * (min - d);
+  }
+  return fromPlot(slot, lx, lz);
+}
+
+/** Floor height under a world point: raised on platforms and in the showcases, street paving elsewhere. */
+export function floorWorld(x: number, z: number): number {
+  const slot = plotAt(x, z);
+  if (!slot) return 0.06;
+  const [lx, lz] = toPlot(slot, x, z);
+  return floorAt(lx, lz);
+}
+
 export class Base {
   private views: PadView[] = [];
   private group = new THREE.Group();
   /** An unclaimed plot: empty pedestals, no coins, no LOCKED signs. Nothing on it changes. */
   private vacant: boolean;
+  /** Another player's plot: shows their brainrots but none of the owner-only UI (coin piles and counters). */
+  private remote: boolean;
+  private scene: THREE.Scene;
   private labelTimer = 0;
   private machine: THREE.Group;
   private capsules: THREE.Mesh[] = [];
@@ -156,15 +213,19 @@ export class Base {
    * Builds a plot's base. Without a slot it's this client's own plot, at the world origin; with one, it's
    * placed at that slot, and `vacant` leaves it unclaimed.
    */
-  constructor(scene: THREE.Scene, slot: PlotSlot | null = null, vacant = false) {
-    this.vacant = vacant;
+  constructor(scene: THREE.Scene, slot: PlotSlot | null = null, options: BaseOptions = {}) {
+    this.scene = scene;
+    this.vacant = !!options.vacant;
+    this.remote = !this.vacant && !!options.owner;
     if (slot) {
       this.group.position.set(slot.x, 0, slot.z);
       this.group.rotation.y = slot.rot;
     }
     scene.add(this.group);
     this.buildPlaza();
-    this.buildGateSign(vacant ? 'OPEN PLOT' : 'YOUR BASE', vacant ? '#c9ced6' : '#ffd84a');
+    if (this.vacant) this.buildGateSign('OPEN PLOT', '#c9ced6');
+    else if (options.owner) this.buildGateSign(`${options.owner.toUpperCase()}'S BASE`, '#9dfcff');
+    else this.buildGateSign('YOUR BASE', '#ffd84a');
     this.buildHall();
     this.machine = new THREE.Group();
     this.crank = new THREE.Group();
@@ -173,6 +234,16 @@ export class Base {
     this.addPlatform(MACHINE_FRONT, 0xff5fa2, 'GACHA');
     this.addPlatform(MERGER_FRONT, 0x8a5cff, 'MERGE');
     for (let i = 0; i < ECONOMY.maxPads; i++) this.addPad(i);
+  }
+
+  /** Shows or hides the brainrots on display: other players' plots hide theirs when the player is far away. */
+  setDetail(on: boolean): void {
+    for (const view of this.views) if (view.rig) view.rig.group.visible = on;
+  }
+
+  /** Takes the whole plot out of the scene (its owner left, or a new one arrived). */
+  dispose(): void {
+    this.scene.remove(this.group);
   }
 
   /** Where a slot's level-up button sits: right under its brainrot, at the foot of the pedestal. */
@@ -211,7 +282,7 @@ export class Base {
   }
 
   /** Matches pedestals, characters and rarity colours to the save. Slots past save.pads are locked. */
-  sync(save: Save): void {
+  sync(save: Pick<Save, 'pads'>): void {
     if (this.vacant) return;
     this.views.forEach((view, i) => {
       const locked = i >= save.pads.length;
@@ -225,9 +296,12 @@ export class Base {
       this.paint(view, slot, locked);
       if (!slot) return;
       const rig = makeCharacter(slot.rarity, slot.name);
-      rig.figure.traverse((o) => {
-        if (o instanceof THREE.Mesh) o.castShadow = true;
-      });
+      // Only the player's own brainrots cast shadows; other players' are drawn as cheaply as possible.
+      if (!this.remote) {
+        rig.figure.traverse((o) => {
+          if (o instanceof THREE.Mesh) o.castShadow = true;
+        });
+      }
       rig.cloud.visible = false;
       rig.halo.scale.multiplyScalar(0.8);
       rig.group.scale.setScalar(1.3);
@@ -240,7 +314,7 @@ export class Base {
     });
   }
 
-  update(save: Save, time: number, realDt: number): void {
+  update(save: Pick<Save, 'pads'>, time: number, realDt: number): void {
     this.labelTimer -= realDt;
     const refreshLabels = this.labelTimer <= 0;
     if (refreshLabels) this.labelTimer = 0.2;
@@ -291,7 +365,7 @@ export class Base {
       view.rig.figure.position.y = bounce * 0.08 + view.arrive * 1.5;
       view.glowMat.opacity = 0.55 + Math.sin(time * 2.2 + view.seed) * 0.2;
     }
-    if (!refreshLabels) return;
+    if (!refreshLabels || this.remote) return;
     const cash = slot ? Math.floor(slot.cash) : 0;
     if (cash === view.shown) return;
     if (cash > view.shown && view.shown > 0) view.pop = 1;
@@ -354,6 +428,29 @@ export class Base {
     coin.add(face, new THREE.Mesh(coinFaceGeo, coinFaceMat), new THREE.Mesh(coinRimGeo, coinRimMat));
     coin.position.set(pos.x, COIN_Y, pos.z);
     coin.visible = false;
+    if (this.remote) {
+      // Another player's slot: the pedestal, its glow and lock, but no coin pile or counter.
+      vacantLabel ??= makeLabel();
+      this.group.add(glow, pedestal, top, rim, beacon, lock);
+      this.views.push({
+        top,
+        topMat,
+        rimMat,
+        glow,
+        glowMat,
+        beacon,
+        lock,
+        rig: null,
+        key: '?',
+        coin,
+        label: vacantLabel,
+        shown: 0,
+        pop: 0,
+        arrive: 0,
+        seed: Math.random() * 10,
+      });
+      return;
+    }
     if (this.vacant) {
       beacon.visible = false;
       this.group.add(pedestal, top, rim);
@@ -419,11 +516,15 @@ export class Base {
     rope.rotation.z = Math.PI;
     rope.position.y = 1.72;
     rope.scale.y = 0.35;
-    const sign = makeLabel();
-    sign.set('LOCKED', '#c9ced6');
-    sign.sprite.position.y = 2.25;
-    sign.sprite.scale.multiplyScalar(0.36);
-    lock.add(rope, sign.sprite);
+    if (!lockedSign) {
+      const label = makeLabel();
+      label.set('LOCKED', '#c9ced6');
+      lockedSign = label.sprite.material;
+    }
+    const sign = new THREE.Sprite(lockedSign);
+    sign.scale.set(6 * 0.36, 6 * (96 / 512) * 0.36, 1);
+    sign.position.y = 2.25;
+    lock.add(rope, sign);
     return lock;
   }
 

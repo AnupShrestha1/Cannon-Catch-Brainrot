@@ -47,14 +47,32 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   with a toast, and the player stays where they landed, ready to walk.
 - **Parachute warning**: if the parachute is still closed as the ground bar's marker gets within 0.6
   seconds of the red crash zone (the last part of the gold zone), PARACHUTE NOW! flashes for 1.2 seconds.
-- **Town, ready for multiplayer** (`src/layout.ts`): six plots in two rows of three, facing each other
-  across a shared street. Every plot is the same base, built in plot space (cannon at the origin, gate
-  toward the street). This client's plot is the middle of the near row, at the world origin, so its
-  gameplay, cameras and flights are unchanged; the other five are vacant ("OPEN PLOT" over the gate:
-  empty pedestals, no coins) until a server assigns players to slots. The street has a fountain in the
-  middle, lanterns along both kerbs and leaderboard boards (placeholders) in the gaps between plots.
-  You can walk out through your gate into the street; fences hold everywhere else, and the fountain is
-  solid. Launching from outside walks you back in through your gate to the cannon.
+- **Town** (`src/layout.ts`): six plots in two rows of three, facing each other across a shared street.
+  Every plot is the same base, built in plot space (cannon at the origin, gate toward the street);
+  `toPlot` and `fromPlot` convert to and from the world. This client's plot is the middle of the near
+  row, at the world origin, so its gameplay, cameras and flights are unchanged. The street has a
+  fountain in the middle, lanterns along both kerbs and two live leaderboards (Top Earners, Top Flyers)
+  in the gaps between plots. Fences hold everywhere but the gates, for every plot, and the fountain is
+  solid; launching from someone else's plot or the street walks you back through your gate.
+- **Fake multiplayer** (`src/net.ts`, `src/remote.ts`): a pretend server fills the other plots with
+  bots that play by the real rules, using the same pull, merge, upgrade and level code and costs as you.
+  - Each bot has a name, an outfit and a name tag, and joins with some progress already made (from
+    brand new to about an hour in), played out offline by the same loop as the economy simulator.
+  - Bots walk their plots, admire their showcase, stroll out into the street, launch from their own
+    cannons (up, free fall, parachute), pull at their gacha machine, merge, buy upgrades and level up,
+    and now and then rebirth. Their gems come from the same gem rows a real flight passes.
+  - The feed (bottom left) shows the server's news: joins and leaves, Epic and Legendary pulls and
+    merges, new zones, rebirths, and a little chat. Your own big pulls and new zones go to the feed
+    too, and bots react to your Legendaries. The online counter shows the server name and player count.
+  - Bots come and go: some leave after a few minutes, their plot turns into an OPEN PLOT, and someone
+    new takes it a minute later.
+  - You can visit: walk into anyone's plot through their gate ("Visiting Mia's base"), and the owner
+    may say hi. Walk up to one of their brainrots and press E to see its level and income and give it a
+    👍 (they'll thank you). Their machines are theirs, though.
+  - The game only reads what a real server would send (player snapshots and events) and sends what a
+    real client would (its stats, visits, likes, big moments), so a real server can replace `net.ts`.
+  - To keep the frame rate up, other players' brainrots are only drawn when you're in their plot or at
+    its gate, without shadows, and every plot's fence posts, poles and lanterns are drawn in batches.
 - **Base layout**, following the sketch and lined up with the launch camera: the cannon stands on a round
   paved plaza; the showcase hall is straight behind it, its red carpet running across the plaza to the
   cannon; the gacha machine (left) and merge station (right) stand on the plaza's edge facing the cannon.
@@ -233,6 +251,8 @@ All first-pass numbers live in `src/config.ts`.
 | `src/characters.ts` | The 10 character models and their idle animations |
 | `src/world.ts` | Sky pieces, cannon, player avatar, gems, hazards, guide arrows, labels |
 | `src/layout.ts` | The town: plot slots, the street, fences and walking limits, for multiplayer |
+| `src/net.ts` | The fake multiplayer server: bot players on the real economy, events, chat, standings |
+| `src/remote.ts` | Draws other players (avatars, name tags, poses, parachutes) and their plots from server snapshots |
 | `src/scenery.ts` | Sky dome, ground, hills, mountains, path, lanterns, fence and bunting, swaying trees, cottage, windmill, pond, butterflies |
 | `src/fx.ts` | Particle bursts and wind streaks |
 | `src/hud.ts` | HTML overlay: wallet and gems, altitude, run gems, meters, dock, shop, modals, level-up buttons, tuning panel |

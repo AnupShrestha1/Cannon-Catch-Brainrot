@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { ZONES, zoneIndexAt } from './config';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { addScenery, makeSkyDome } from './scenery';
+import { addScenery, makeSkyDome, type BoardRow } from './scenery';
 
 export const flat = (color: number, extra: THREE.MeshLambertMaterialParameters = {}) =>
   new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
@@ -68,6 +68,8 @@ export interface Env {
   updateDecor(cameraY: number): void;
   /** Animates the scenery and recolours the sky dome and fog for the current height. */
   updateScenery(t: number, sky: THREE.Color, fog: THREE.Fog, camera: THREE.Vector3): void;
+  /** Redraws a leaderboard in the street (0: left, 1: right). */
+  drawBoard(index: number, title: string, rows: BoardRow[]): void;
 }
 
 export function buildEnv(scene: THREE.Scene): Env {
@@ -154,6 +156,9 @@ export function buildEnv(scene: THREE.Scene): Env {
         cloud.visible = cloud.position.y > 22;
       }
     },
+    drawBoard(index, title, rows) {
+      scenery.drawBoard(index, title, rows);
+    },
     updateScenery(t, sky, fog, camera) {
       scenery.update(t);
       horizon.copy(sky).lerp(white, 0.3);
@@ -204,18 +209,28 @@ function faceTexture(): THREE.Texture {
  * A blocky avatar with rounded edges: square head with a drawn face, a cap, a T-shirt, jeans and sneakers.
  * The player faces away from the camera (-z), so the camera sees their back and the parachute pack.
  */
-export function makePlayer(): PlayerRig {
+/** A player's colours. */
+export interface Outfit {
+  skin: number;
+  shirt: number;
+  pants: number;
+  cap: number;
+}
+
+export const DEFAULT_OUTFIT: Outfit = { skin: 0xf7c873, shirt: 0xff7a1a, pants: 0x2f5fc4, cap: 0xe63946 };
+
+export function makePlayer(outfit: Outfit = DEFAULT_OUTFIT): PlayerRig {
   const group = new THREE.Group();
   const body = new THREE.Group();
   body.position.y = 0.9;
   group.add(body);
 
   const rounded = (w: number, h: number, d: number, r = 0.07) => new RoundedBoxGeometry(w, h, d, 2, r);
-  const skin = new THREE.MeshLambertMaterial({ color: 0xf7c873 });
-  const shirt = new THREE.MeshLambertMaterial({ color: 0xff7a1a });
-  const pants = new THREE.MeshLambertMaterial({ color: 0x2f5fc4 });
+  const skin = new THREE.MeshLambertMaterial({ color: outfit.skin });
+  const shirt = new THREE.MeshLambertMaterial({ color: outfit.shirt });
+  const pants = new THREE.MeshLambertMaterial({ color: outfit.pants });
   const shoe = new THREE.MeshLambertMaterial({ color: 0x24263a });
-  const cap = new THREE.MeshLambertMaterial({ color: 0xe63946 });
+  const cap = new THREE.MeshLambertMaterial({ color: outfit.cap });
 
   const torso = new THREE.Mesh(rounded(0.82, 0.72, 0.42), shirt);
   const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.83, 0.12, 0.43), new THREE.MeshLambertMaterial({ color: 0xffffff }));

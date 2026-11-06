@@ -2029,3 +2029,75 @@ button.primary,
     background-position: 300% 50%;
   }
 }
+
+/* ---------------------------------------------------------------- multiplayer: online count and feed */
+
+#online {
+  padding: 4px 12px;
+  font-size: 14px;
+  color: #b9ffcb;
+}
+
+#online::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 2px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--green);
+}
+
+#feed {
+  position: absolute;
+  left: max(14px, env(safe-area-inset-left));
+  bottom: calc(max(18px, env(safe-area-inset-bottom)) + 96px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: min(420px, 70vw);
+}
+
+.feed-line {
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: rgba(29, 22, 64, 0.62);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  animation: feed-in 0.25s ease-out;
+  transition: opacity 1s;
+}
+
+.feed-line b {
+  color: #9dfcff;
+  font-weight: 700;
+}
+
+.feed-line.news span {
+  font-weight: 700;
+}
+
+.feed-line.old {
+  opacity: 0;
+}
+
+@media (max-width: 640px) {
+  #feed {
+    bottom: calc(max(108px, env(safe-area-inset-bottom)) + 74px);
+    font-size: 12px;
+  }
+
+  #online {
+    display: none;
+  }
+}
+
+@keyframes feed-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}

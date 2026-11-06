@@ -95,6 +95,9 @@ export class Hud {
   private actionBtn = byId<HTMLButtonElement>('actionBtn');
   private actionKey = '';
   private padLayer = byId('padBtns');
+  private feedEl = byId('feed');
+  private onlineEl = byId('online');
+  private onlineKey = '';
   private revealEl = byId('cardReveal');
   private revealHead = byId('revealHead');
   private revealRow = this.revealEl.querySelector<HTMLElement>('.tcards')!;
@@ -349,6 +352,33 @@ export class Hud {
     this.actionKey = text;
     this.actionBtn.textContent = text;
     this.actionBtn.classList.toggle('on', !!label);
+  }
+
+  /**
+   * The server feed: chat and big moments from everyone, newest at the bottom, each fading after a while.
+   * `kind` 'chat' shows "name: text"; anything else shows "name text" as an announcement.
+   */
+  feed(name: string, text: string, kind: string, color?: string): void {
+    const line = document.createElement('div');
+    line.className = `feed-line ${kind === 'chat' ? 'chat' : 'news'}`;
+    const who = document.createElement('b');
+    who.textContent = kind === 'chat' ? `${name}:` : name;
+    const what = document.createElement('span');
+    what.textContent = ` ${text}`;
+    if (color) what.style.color = color;
+    line.append(who, what);
+    this.feedEl.append(line);
+    while (this.feedEl.children.length > 6) this.feedEl.firstElementChild?.remove();
+    setTimeout(() => line.classList.add('old'), 9000);
+    setTimeout(() => line.remove(), 10000);
+  }
+
+  /** How many players are on the server, and its name. */
+  setOnline(count: number, server: string): void {
+    const key = `${count}|${server}`;
+    if (key === this.onlineKey) return;
+    this.onlineKey = key;
+    this.onlineEl.textContent = `${server} · ${count}/6 online`;
   }
 
   /** Places one level-up button per item, reusing them frame to frame, and hides the rest. */

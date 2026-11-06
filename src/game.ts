@@ -3,10 +3,12 @@
 // buy upgrades. The flight is scripted rather than simulated, so the apex hits launchHeight() exactly.
 import * as THREE from 'three';
 import { Sfx } from './audio';
-import { Base, CARPET_Z, MACHINE_FRONT, MERGER_FRONT, PLATFORM_RADIUS, floorAt, plotSolids } from './base';
+import { Base, CARPET_Z, MACHINE_FRONT, MERGER_FRONT, PLATFORM_RADIUS, bumpSolids, floorWorld } from './base';
 import { animateShared } from './characters';
 import { brainrotIcon } from './icons';
-import { FENCE, OWN_SLOT, PLOT_SPACING, SLOTS, fenceStep } from './layout';
+import { OWN_SLOT, SLOTS, fenceStep, fromPlot, gatePoint, plotAt } from './layout';
+import { FakeServer, describePad } from './net';
+import { RemoteView } from './remote';
 import {
   CHARGE,
   CHUTE,
@@ -59,7 +61,7 @@ import { Hud, type PadButton, type RevealItem, type ShopItem, type ShopRow } fro
 import { Input } from './input';
 import { BOOK_ZONES, DAILY, bookEntries, dailyCoins, dailyStatus, dayKey, offlineEarnings, zoneComplete } from './meta';
 import { platform } from './platform';
-import { clearSave, loadSave, writeSave, type Owned, type Save } from './store';
+import { clearSave, loadSave, writeSave, type Owned, type PadSlot, type Save } from './store';
 import {
   buildEnv,
   makeBird,
@@ -162,8 +164,12 @@ export class Game {
   private camera = new THREE.PerspectiveCamera(60, 1, 0.1, 900);
   private env: Env;
   private base: Base;
-  /** The other plots in the town: vacant until multiplayer gives them owners. */
-  private neighbors: Base[] = [];
+  /** The (fake) multiplayer server, and the other players and plots drawn from it. */
+  private server = new FakeServer();
+  private remote: RemoteView;
+  /** The other player's plot the local player is standing in, or null. */
+  private visiting: number | null = null;
+  private boardTimer = 0;
   private player: PlayerRig;
   private fx: Particles;
   private streaks: Streaks;
@@ -275,9 +281,9 @@ export class Game {
     this.scene.fog = new THREE.Fog(0x8fd3ff, 90, 420);
     this.env = buildEnv(this.scene);
     this.base = new Base(this.scene);
+    this.remote = new RemoteView(this.scene, this.server);
     for (const slot of SLOTS) {
       if (slot.index === OWN_SLOT) continue;
-      this.neighbors.push(new Base(this.scene, slot, true));
       const cannon = this.env.cannon.clone();
       cannon.position.set(slot.x, 0, slot.z);
       cannon.rotation.y = slot.rot;
@@ -508,7 +514,7 @@ export class Game {
     this.updateGems(dt);
     this.updateBirds(dt);
     this.base.update(this.save, this.time, realDt);
-    for (const plot of this.neighbors) plot.update(this.save, this.time, realDt);
+    this.updateServer(realDt);
     this.fx.update(dt);
     this.updateVisuals(realDt, dt);
     // The reveal screen and the shop are breaks in play.
@@ -722,6 +728,7 @@ export class Game {
     if (first) {
       this.slowmo = Math.max(this.slowmo, 0.5);
       this.sfx.sparkle();
+      this.server.reportLocal({ kind: 'zone', text: `reached ${z.name}!` });
     } else {
       this.sfx.ding();
     }
@@ -1128,6 +1135,10 @@ export class Game {
     });
     this.sfx.swap();
     if (best.rarity >= 4) platform.happytime();
+    if (best.rarity >= 3) {
+      const r = RARITIES[best.rarity];
+      this.server.reportLocal({ kind: 'pull', text: `pulled ${r.name === 'Epic' ? 'an' : 'a'} ${r.name.toUpperCase()} ${best.name}!`, rarity: best.rarity });
+    }
     // Flip the cards, then back to the machine's panel so pulling again is one more click.
     const title = pending.got.length > 1 ? `Tap the cards to flip them!` : 'Tap the card to flip it!';
     this.hud.revealCards(this.revealItems(pending.got, pending.isNew), title, (item) => this.onCardFlip(item), () =>
@@ -1469,6 +1480,7 @@ export class Game {
       this.startBoarding();
       return;
     }
+    this.updateVisit();
     this.updateHomePrompt();
 
     // Now and then a character at the base chants its name.
@@ -1517,7 +1529,7 @@ export class Game {
       this.walkVel.y += (wantZ - this.walkVel.y) * k;
       // Fences hold except at the gates; the street joins the plots.
       [this.px, this.pz] = fenceStep(this.px, this.pz, this.px + this.walkVel.x * dt, this.pz + this.walkVel.y * dt);
-      [this.px, this.pz] = this.bumpSolids(this.px, this.pz);
+      [this.px, this.pz] = bumpSolids(this.px, this.pz, PLAYER_RADIUS);
       this.stepping = this.walkVel.length() > 0.6;
     } else {
       this.walkVel.set(0, 0);
@@ -1525,46 +1537,116 @@ export class Game {
     if (this.input.consumeKey('KeyE') || this.input.consumeKey('Enter')) this.useHere();
   }
 
-  /** Pushes a point out of the cannon, the stations, the pedestals and the showcase walls of the plot it's in. */
-  private bumpSolids(x: number, z: number): [number, number] {
-    if (z > FENCE.front) return [x, z];
-    const cx = clamp(Math.round(x / PLOT_SPACING) * PLOT_SPACING, -PLOT_SPACING, PLOT_SPACING);
-    let lx = x - cx;
-    let lz = z;
-    const { circles, walls } = plotSolids();
-    for (const [sx, sz, r] of circles) {
-      const dx = lx - sx;
-      const dz = lz - sz;
-      const d = Math.hypot(dx, dz);
-      const min = r + PLAYER_RADIUS;
-      if (d >= min) continue;
-      if (d < 1e-4) {
-        lz = sz + min;
-        continue;
+  // ---------------------------------------------------------------- multiplayer (fake server)
+
+  /** Runs the server, draws the other players, and passes on its events, standings and player count. */
+  private updateServer(realDt: number): void {
+    this.server.setLocal({ name: 'You', income: incomePerSecond(this.save), best: this.save.best });
+    this.server.update(realDt);
+    this.remote.update(this.time, realDt, this.px, this.pz);
+    for (const e of this.server.drain()) this.hud.feed(e.name, e.text, e.kind, e.color);
+    this.hud.setOnline(this.server.online, this.server.name);
+    this.boardTimer -= realDt;
+    if (this.boardTimer <= 0) {
+      this.boardTimer = 2;
+      const all = this.server.standings();
+      const rows = (sorted: typeof all, value: (p: (typeof all)[number]) => string) =>
+        sorted.map((p) => ({ name: p.name, value: value(p), you: p.you }));
+      this.env.drawBoard(0, 'TOP EARNERS', rows([...all].sort((a, b) => b.income - a.income), (p) => `${formatCoins(p.income)}/s`));
+      this.env.drawBoard(1, 'TOP FLYERS', rows([...all].sort((a, b) => b.best - a.best), (p) => `${Math.round(p.best)} m`));
+    }
+  }
+
+  /** Notices the player walking into someone else's plot: a toast, and the owner may say hi. */
+  private updateVisit(): void {
+    const here = plotAt(this.px, this.pz);
+    const index = here && here.index !== OWN_SLOT ? here.index : null;
+    if (index === this.visiting) return;
+    this.visiting = index;
+    if (index === null) return;
+    const owner = this.remote.ownerOf(index);
+    if (owner) {
+      this.hud.toast(`Visiting ${owner.name}'s base`, 'small');
+      this.server.visit(owner.id);
+    } else {
+      this.hud.toast('An open plot, waiting for a player', 'small');
+    }
+  }
+
+  /** The brainrot on another player's showcase the player is standing next to, or null. */
+  private visitPad(): { index: number; pad: PadSlot } | null {
+    if (this.visiting === null) return null;
+    const owner = this.remote.ownerOf(this.visiting);
+    if (!owner) return null;
+    const slot = SLOTS[this.visiting];
+    let best: { index: number; pad: PadSlot } | null = null;
+    let bestD = COLLECT_RADIUS;
+    owner.pads.forEach((pad, i) => {
+      if (!pad) return;
+      const local = Base.padPosition(i, this.tmp);
+      const [x, z] = fromPlot(slot, local.x, local.z);
+      const d = Math.hypot(x - this.px, z - this.pz);
+      if (d < bestD) {
+        bestD = d;
+        best = { index: i, pad };
       }
-      lx = sx + (dx / d) * min;
-      lz = sz + (dz / d) * min;
+    });
+    return best;
+  }
+
+  /** Whether the player stands on one of the platforms in another player's plot. */
+  private onVisitPlatform(): boolean {
+    if (this.visiting === null) return false;
+    const slot = SLOTS[this.visiting];
+    return [MACHINE_FRONT, MERGER_FRONT].some((f) => {
+      const [x, z] = fromPlot(slot, f.x, f.z);
+      return Math.hypot(x - this.px, z - this.pz) < PLATFORM_RADIUS;
+    });
+  }
+
+  private visitLabel(): string | null {
+    const owner = this.visiting !== null ? this.remote.ownerOf(this.visiting) : null;
+    if (!owner) return null;
+    if (this.onVisitPlatform()) return `${owner.name}'s machine`;
+    const near = this.visitPad();
+    return near ? `View ${near.pad.name}` : null;
+  }
+
+  /** E while visiting: look at a brainrot on their showcase (and like it), or learn their machines are theirs. */
+  private useVisit(): void {
+    const owner = this.visiting !== null ? this.remote.ownerOf(this.visiting) : null;
+    if (!owner) {
+      this.hud.toast('Nobody owns this plot yet', 'small');
+      return;
     }
-    for (const [x0, z0, x1, z1] of walls) {
-      const wx = x1 - x0;
-      const wz = z1 - z0;
-      const t = clamp(((lx - x0) * wx + (lz - z0) * wz) / (wx * wx + wz * wz), 0, 1);
-      const nx = lx - (x0 + wx * t);
-      const nz = lz - (z0 + wz * t);
-      const d = Math.hypot(nx, nz);
-      const min = 0.2 + PLAYER_RADIUS;
-      if (d >= min || d < 1e-4) continue;
-      lx += (nx / d) * (min - d);
-      lz += (nz / d) * (min - d);
+    if (this.onVisitPlatform()) {
+      this.hud.toast(`Only ${owner.name} can use their machines`, 'small');
+      return;
     }
-    return [cx + lx, lz];
+    const near = this.visitPad();
+    if (!near) {
+      this.hud.toast(`Walk up to one of ${owner.name}'s brainrots to look at it`, 'small');
+      return;
+    }
+    const card = this.hud.characterCard(near.pad.name, near.pad.rarity);
+    const info = document.createElement('p');
+    info.textContent = describePad(near.pad, owner);
+    this.hud.showModal(near.pad.name, [card, info], [
+      {
+        label: '👍 Nice!',
+        primary: true,
+        action: () => {
+          this.server.like(owner.id);
+          this.hud.feed('You', `liked ${owner.name}'s ${near.pad.name}`, 'news');
+        },
+      },
+      { label: 'Close' },
+    ]);
   }
 
   /** Height of the floor under the player: raised on the platforms, the showcase floor and its carpet. */
   private floorHere(): number {
-    if (this.pz > FENCE.front) return 0.06;
-    const cx = clamp(Math.round(this.px / PLOT_SPACING) * PLOT_SPACING, -PLOT_SPACING, PLOT_SPACING);
-    return floorAt(this.px - cx, this.pz);
+    return floorWorld(this.px, this.pz);
   }
 
   /** The nearest open slot the player is standing at, or null. */
@@ -1593,6 +1675,7 @@ export class Game {
 
   /** What E (or the action button) would do here, or null when there's nothing to do. */
   private actionLabel(): string | null {
+    if (this.visiting !== null) return this.visitLabel();
     if (this.onPlatform(MACHINE_FRONT)) return `Gacha · ${formatCoins(this.save.gems)} gems`;
     if (this.onPlatform(MERGER_FRONT)) return 'Merge station';
     const pad = this.padUnderfoot();
@@ -1611,6 +1694,10 @@ export class Game {
 
   private useHere(): void {
     if (this.state !== 'home') return;
+    if (this.visiting !== null) {
+      this.useVisit();
+      return;
+    }
     if (this.onPlatform(MACHINE_FRONT)) {
       this.openGacha();
       return;
@@ -1732,18 +1819,23 @@ export class Game {
     this.guideTarget = target;
   }
 
-  /** Walks to the cannon, out through the gate of a neighbour's plot and in through our own if need be. */
+  /** Walks to the cannon: out through the gate of whatever plot the player is visiting, and in through our own. */
   private startBoarding(): void {
     this.state = 'boarding';
     this.guideTarget = null;
     this.hud.prompt('');
     const stops: THREE.Vector3[] = [];
-    const inOwnPlot = Math.abs(this.px) < FENCE.x && this.pz < FENCE.front;
-    if (!inOwnPlot) {
-      const cx = Math.round(this.px / PLOT_SPACING) * PLOT_SPACING;
-      const inOtherPlot = cx !== 0 && Math.abs(this.px - cx) < FENCE.x && this.pz < FENCE.front;
-      if (inOtherPlot) stops.push(new THREE.Vector3(cx, 0, FENCE.front - 1), new THREE.Vector3(cx, 0, FENCE.front + 2));
-      stops.push(new THREE.Vector3(0, 0, FENCE.front + 2), new THREE.Vector3(0, 0, FENCE.front - 1));
+    const own = SLOTS[OWN_SLOT];
+    const here = plotAt(this.px, this.pz);
+    if (here !== own) {
+      if (here) {
+        const [ix, iz] = gatePoint(here, true);
+        const [ox, oz] = gatePoint(here, false);
+        stops.push(new THREE.Vector3(ix, 0, iz), new THREE.Vector3(ox, 0, oz));
+      }
+      const [ox, oz] = gatePoint(own, false);
+      const [ix, iz] = gatePoint(own, true);
+      stops.push(new THREE.Vector3(ox, 0, oz), new THREE.Vector3(ix, 0, iz));
     }
     stops.push(CANNON_FOOT);
     const next = () => {

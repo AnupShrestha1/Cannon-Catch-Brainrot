@@ -96,9 +96,19 @@ function grassTexture(): THREE.Texture {
   return tex;
 }
 
+/** One row on a leaderboard. */
+export interface BoardRow {
+  name: string;
+  value: string;
+  /** The local player's row, highlighted. */
+  you: boolean;
+}
+
 export interface Scenery {
   /** Moves the windmill, butterflies, wind and water. `t` is seconds since start. */
   update(t: number): void;
+  /** Redraws one of the street's leaderboards (0: left, 1: right). */
+  drawBoard(index: number, title: string, rows: BoardRow[]): void;
 }
 
 export function addScenery(scene: THREE.Scene): Scenery {
@@ -152,11 +162,20 @@ export function addScenery(scene: THREE.Scene): Scenery {
   const postGeo = new THREE.CylinderGeometry(0.09, 0.12, 2.2, 6).translate(0, 1.1, 0);
   const lampGeo = new THREE.BoxGeometry(0.42, 0.5, 0.42).translate(0, 2.35, 0);
   const capGeo = new THREE.ConeGeometry(0.4, 0.3, 4).rotateY(Math.PI / 4).translate(0, 2.75, 0);
-  const lamp = (x: number, z: number) => {
+  /** Lanterns at these points, drawn as three batches (post, lamp, cap) rather than three meshes each. */
+  const lamps = (spots: [number, number][]) => {
     const g = new THREE.Group();
-    g.add(new THREE.Mesh(postGeo, darkWood), new THREE.Mesh(lampGeo, lampMat), new THREE.Mesh(capGeo, darkWood));
-    g.position.set(x, 0, z);
-    return casts(g);
+    for (const [geo, mat] of [
+      [postGeo, darkWood],
+      [lampGeo, lampMat],
+      [capGeo, darkWood],
+    ] as const) {
+      const mesh = new THREE.InstancedMesh(geo, mat, spots.length);
+      spots.forEach(([x, z], i) => mesh.setMatrixAt(i, m.makeTranslation(x, 0, z)));
+      mesh.castShadow = true;
+      g.add(mesh);
+    }
+    return g;
   };
   const fencePost = new THREE.BoxGeometry(0.25, 1.2, 0.25);
   const flagGeo = new THREE.BufferGeometry();
@@ -180,23 +199,24 @@ export function addScenery(scene: THREE.Scene): Scenery {
     g.add(path);
     // Lanterns around the plaza, leaving the hall entrance, the two stations and the line from the gate clear
     // (the base camera sits on that line behind the player), and down both long sides of the showcase.
+    const spots: [number, number][] = [];
     for (const deg of [35, 65, 115, 145, 225, 315]) {
       const ang = (deg * Math.PI) / 180;
-      g.add(lamp(Math.cos(ang) * 12, Math.sin(ang) * 12));
+      spots.push([Math.cos(ang) * 12, Math.sin(ang) * 12]);
     }
-    for (let z = -13; z >= -31; z -= 6) g.add(lamp(-8.3, z), lamp(8.3, z));
-    // The fence, with bunting sagging between tall poles every 7 m.
+    for (let z = -13; z >= -31; z -= 6) spots.push([-8.3, z], [8.3, z]);
+    g.add(lamps(spots));
+    // The fence, with bunting sagging between tall poles every 7 m. Posts and poles are batched.
     const flags: { x: number; y: number; z: number; turn: number }[] = [];
+    const postSpots: [number, number][] = [];
+    const poleSpots: [number, number][] = [];
     const fence = (x0: number, z0: number, x1: number, z1: number) => {
       const length = Math.hypot(x1 - x0, z1 - z0);
       const posts = Math.max(2, Math.round(length / 2.5) + 1);
       const turn = -Math.atan2(z1 - z0, x1 - x0);
       for (let i = 0; i < posts; i++) {
         const t = i / (posts - 1);
-        const post = new THREE.Mesh(fencePost, wood);
-        post.position.set(x0 + (x1 - x0) * t, 0.6, z0 + (z1 - z0) * t);
-        post.castShadow = true;
-        g.add(post);
+        postSpots.push([x0 + (x1 - x0) * t, z0 + (z1 - z0) * t]);
       }
       for (const y of [0.45, 0.95]) {
         const rail = new THREE.Mesh(new THREE.BoxGeometry(length, 0.12, 0.1), wood);
@@ -215,11 +235,7 @@ export function addScenery(scene: THREE.Scene): Scenery {
       }
       for (let sp = 0; sp <= spans; sp++) {
         const t = sp / spans;
-        const pole = new THREE.Mesh(postGeo, wood);
-        pole.scale.y = 1.15;
-        pole.position.set(x0 + (x1 - x0) * t, 0, z0 + (z1 - z0) * t);
-        pole.castShadow = true;
-        g.add(pole);
+        poleSpots.push([x0 + (x1 - x0) * t, z0 + (z1 - z0) * t]);
       }
     };
     const f = FENCE;
@@ -228,6 +244,12 @@ export function addScenery(scene: THREE.Scene): Scenery {
     fence(f.x, f.back, f.x, f.front);
     fence(f.x, f.front, f.gate, f.front);
     fence(-f.gate, f.front, -f.x, f.front);
+    const postMesh = new THREE.InstancedMesh(fencePost, wood, postSpots.length);
+    postSpots.forEach(([x, z], i) => postMesh.setMatrixAt(i, m.makeTranslation(x, 0.6, z)));
+    const poleMesh = new THREE.InstancedMesh(postGeo, wood, poleSpots.length);
+    poleSpots.forEach(([x, z], i) => poleMesh.setMatrixAt(i, m.makeScale(1, 1.15, 1).setPosition(x, 0, z)));
+    postMesh.castShadow = poleMesh.castShadow = true;
+    g.add(postMesh, poleMesh);
     const bunting = new THREE.InstancedMesh(flagGeo, flagMat, flags.length);
     flags.forEach((fl, i) => {
       q.setFromAxisAngle(up, fl.turn);
@@ -269,10 +291,12 @@ export function addScenery(scene: THREE.Scene): Scenery {
     kerb.position.set(0, 0.08, z);
     scene.add(kerb);
   }
+  const streetLamps: [number, number][] = [];
   for (let x = -STREET.halfLength + 6; x <= STREET.halfLength - 6; x += 12) {
     if (Math.abs(x) < 7 || [-40, 0, 40].some((px) => Math.abs(x - px) < 6)) continue;
-    scene.add(lamp(x, STREET.near + 1.6), lamp(x, STREET.far - 1.6));
+    streetLamps.push([x, STREET.near + 1.6], [x, STREET.far - 1.6]);
   }
+  scene.add(lamps(streetLamps));
   const fountain = new THREE.Group();
   fountain.position.set(0, 0, STREET_MID);
   const basin = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.7, 0.7, 24), lambert(0xe9dcc3));
@@ -294,6 +318,7 @@ export function addScenery(scene: THREE.Scene): Scenery {
   fountain.add(basin, fountainWater, column, bowl, spout);
   scene.add(casts(fountain));
   const boardMat = lambert(0x3d2a6b);
+  const boards: ((title: string, rows: BoardRow[]) => void)[] = [];
   for (const x of [-20, 20]) {
     const board = new THREE.Group();
     board.position.set(x, 0, FENCE.front - 4);
@@ -308,19 +333,32 @@ export function addScenery(scene: THREE.Scene): Scenery {
     trim.position.y = 5.2;
     board.add(panel, trim);
     const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 176;
+    canvas.width = 512;
+    canvas.height = 348;
     const g2 = canvas.getContext('2d')!;
-    g2.fillStyle = '#3d2a6b';
-    g2.fillRect(0, 0, 256, 176);
-    g2.textAlign = 'center';
-    g2.fillStyle = '#ffd84a';
-    g2.font = '900 30px system-ui, sans-serif';
-    g2.fillText(x < 0 ? 'TOP RICHEST' : 'TOP FLYERS', 128, 40);
-    g2.fillStyle = '#ffffff';
-    g2.font = '700 20px system-ui, sans-serif';
-    for (let row = 0; row < 3; row++) g2.fillText(`${row + 1}.  — — —`, 128, 84 + row * 30);
     const tex = new THREE.CanvasTexture(canvas);
+    boards.push((title, rows) => {
+      g2.fillStyle = '#3d2a6b';
+      g2.fillRect(0, 0, 512, 348);
+      g2.textAlign = 'center';
+      g2.fillStyle = '#ffd84a';
+      g2.font = '900 46px system-ui, sans-serif';
+      g2.fillText(title, 256, 56);
+      g2.font = '700 34px system-ui, sans-serif';
+      rows.slice(0, 5).forEach((row, i) => {
+        const y = 112 + i * 50;
+        if (row.you) {
+          g2.fillStyle = 'rgba(255, 216, 74, 0.25)';
+          g2.fillRect(14, y - 36, 484, 46);
+        }
+        g2.fillStyle = row.you ? '#ffd84a' : '#ffffff';
+        g2.textAlign = 'left';
+        g2.fillText(`${i + 1}. ${row.name}`, 28, y);
+        g2.textAlign = 'right';
+        g2.fillText(row.value, 484, y);
+      });
+      tex.needsUpdate = true;
+    });
     tex.colorSpace = THREE.SRGBColorSpace;
     const face = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 2.85), new THREE.MeshBasicMaterial({ map: tex }));
     face.position.set(0, 3.6, 0.14);
@@ -604,6 +642,9 @@ export function addScenery(scene: THREE.Scene): Scenery {
   });
 
   return {
+    drawBoard(index, title, rows) {
+      boards[index]?.(title, rows);
+    },
     update(t: number) {
       wind.value = t;
       hub.rotation.z = -t * 0.6;
