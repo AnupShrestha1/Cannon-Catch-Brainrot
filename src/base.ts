@@ -533,17 +533,18 @@ export class Base {
   private buildGateSign(text: string, color: string): void {
     const postMat = flat(0x9a6a3c);
     for (const side of [-1, 1]) {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.45, 4.2, 0.45), postMat);
-      post.position.set(side * (FENCE.gate + 0.3), 2.1, FENCE.front);
+      // Tall, so the beam stays above the camera when the player stands just inside the gate.
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.45, 6.6, 0.45), postMat);
+      post.position.set(side * (FENCE.gate + 0.3), 3.3, FENCE.front);
       post.castShadow = true;
       this.group.add(post);
     }
     const beam = new THREE.Mesh(new THREE.BoxGeometry(FENCE.gate * 2 + 1.4, 0.7, 0.4), flat(this.vacant ? 0x8a8f99 : 0xc8102e));
-    beam.position.set(0, 4.3, FENCE.front);
+    beam.position.set(0, 6.6, FENCE.front);
     beam.castShadow = true;
     const sign = makeLabel();
     sign.set(text, color);
-    sign.sprite.position.set(0, 5.2, FENCE.front);
+    sign.sprite.position.set(0, 7.5, FENCE.front);
     sign.sprite.scale.multiplyScalar(0.75);
     this.group.add(beam, sign.sprite);
   }

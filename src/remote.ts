@@ -13,7 +13,53 @@ const DETAIL_RANGE = 14;
 interface Avatar {
   rig: PlayerRig;
   tag: Label;
+  /** What the name tag shows now (the name, or the name with AFK). */
+  tagText: string;
+  bubble: THREE.Sprite;
+  drawBubble: (text: string) => void;
+  bubbleText: string;
   phase: number;
+}
+
+/** A speech bubble: a white rounded box with dark text and a little tail, drawn on a canvas. */
+function makeBubble(): { sprite: THREE.Sprite; draw: (text: string) => void } {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const g = canvas.getContext('2d')!;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }));
+  sprite.scale.set(4, 1, 1);
+  sprite.position.y = 3.35;
+  sprite.visible = false;
+  return {
+    sprite,
+    draw(text) {
+      g.clearRect(0, 0, 512, 128);
+      g.font = '700 40px Fredoka, system-ui, sans-serif';
+      const shown = text.length > 34 ? `${text.slice(0, 33)}…` : text;
+      const w = Math.min(500, g.measureText(shown).width + 44);
+      const x = (512 - w) / 2;
+      g.fillStyle = '#ffffff';
+      g.strokeStyle = '#1d1640';
+      g.lineWidth = 6;
+      g.beginPath();
+      g.roundRect(x, 8, w, 84, 26);
+      g.moveTo(240, 90);
+      g.lineTo(256, 118);
+      g.lineTo(272, 90);
+      g.fill();
+      g.stroke();
+      g.fillStyle = '#ffffff';
+      g.fillRect(242, 84, 28, 8);
+      g.fillStyle = '#1d1640';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(shown, 256, 52);
+      texture.needsUpdate = true;
+    },
+  };
 }
 
 interface Plot {
@@ -60,9 +106,10 @@ export class RemoteView {
         tag.set(p.name, '#ffffff');
         tag.sprite.scale.multiplyScalar(0.5);
         tag.sprite.position.y = 2.6;
-        rig.group.add(tag.sprite);
+        const bubble = makeBubble();
+        rig.group.add(tag.sprite, bubble.sprite);
         this.scene.add(rig.group);
-        avatar = { rig, tag, phase: Math.random() * 10 };
+        avatar = { rig, tag, tagText: p.name, bubble: bubble.sprite, drawBubble: bubble.draw, bubbleText: '', phase: Math.random() * 10 };
         this.avatars.set(p.id, avatar);
       }
       this.pose(avatar, p, time, dt);
@@ -106,6 +153,17 @@ export class RemoteView {
     rig.group.visible = p.pose !== 'hidden';
     rig.group.position.set(p.x, p.y, p.z);
     rig.group.rotation.y = p.pose === 'walk' || p.pose === 'idle' ? p.facing : 0;
+    // Name tag (with AFK when they're away) and speech bubble.
+    const tagText = p.afk ? `${p.name} · AFK` : p.name;
+    if (tagText !== avatar.tagText) {
+      avatar.tagText = tagText;
+      avatar.tag.set(tagText, p.afk ? '#c9ced6' : '#ffffff');
+    }
+    if (p.bubble !== avatar.bubbleText) {
+      avatar.bubbleText = p.bubble;
+      if (p.bubble) avatar.drawBubble(p.bubble);
+    }
+    avatar.bubble.visible = !!p.bubble && rig.group.visible;
     rig.chute.visible = p.chute > 0.02;
     rig.chute.scale.setScalar(p.chute);
     const k = 1 - Math.exp(-14 * dt);
@@ -113,11 +171,18 @@ export class RemoteView {
     let armSwing = 0;
     let legSwing = 0;
     let spread = 0;
-    if (p.pose === 'walk') {
-      avatar.phase += dt * 10;
+    const airborne = p.jump > 0.05;
+    if (airborne) {
+      // Mid-jump: knees tucked, arms out.
+      armOut = 1.1;
+      legSwing = 0.6;
+    } else if (p.pose === 'walk') {
+      // The stride keeps time with their speed.
+      avatar.phase += dt * Math.max(4, p.speed * 1.4);
+      const amp = Math.min(1, p.speed / 6);
       armOut = 0.15;
-      armSwing = Math.sin(avatar.phase) * 0.7;
-      legSwing = Math.sin(avatar.phase) * 0.8;
+      armSwing = Math.sin(avatar.phase) * 0.7 * amp;
+      legSwing = Math.sin(avatar.phase) * 0.8 * amp;
     } else if (p.pose === 'up') {
       armOut = 2.9;
     } else if (p.pose === 'fall') {
@@ -131,7 +196,7 @@ export class RemoteView {
       spread = 0.3;
     }
     rig.body.rotation.x += ((p.pose === 'fall' ? -1.1 : 0) - rig.body.rotation.x) * k;
-    rig.body.position.y = 0.9 + (p.pose === 'walk' ? Math.abs(Math.sin(avatar.phase)) * 0.08 : 0);
+    rig.body.position.y = 0.9 + (p.pose === 'walk' && !airborne ? Math.abs(Math.sin(avatar.phase)) * 0.08 : 0);
     rig.arms.forEach((arm, i) => {
       const side = i === 0 ? -1 : 1;
       arm.rotation.z += (side * armOut - arm.rotation.z) * k;
@@ -139,7 +204,8 @@ export class RemoteView {
     });
     rig.legs.forEach((leg, i) => {
       const side = i === 0 ? -1 : 1;
-      leg.rotation.x += (side * legSwing - leg.rotation.x) * k;
+      const want = airborne ? -legSwing : side * legSwing;
+      leg.rotation.x += (want - leg.rotation.x) * k;
       leg.rotation.z += (side * spread - leg.rotation.z) * k;
     });
   }

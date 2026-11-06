@@ -1,6 +1,14 @@
-// A fake multiplayer server. The other five plots are played by bots that use the real game rules (the same
-// pull, merge, upgrade and level code and the same costs as the player), walk their own plots, launch from their
-// own cannons and chat a little. Bots come and go, and each joins with some progress already made.
+// A fake multiplayer server, simulating a real lobby of this kind of game. The other five plots are played by
+// bots that use the real game rules (the same pull, merge, upgrade and level code and the same costs as the
+// player) and behave like people:
+//
+// - They move like players: they run with momentum, curve through corners, turn at a limited rate, jump a lot
+//   while running, look around when they stop, step around each other and get themselves unstuck.
+// - The lobby lives: you usually join with three to five others; people leave after realistic sessions (often
+//   going AFK first), and matchmaking fills a free slot within seconds to a minute. Newcomers spawn in the
+//   street and walk to their plot; some are brand new, most are returning with saved progress.
+// - They talk: speech bubbles over heads, short question-and-answer threads, hellos and goodbyes, reactions to
+//   big pulls, and comments when they visit someone's base (yours included).
 //
 // The game only talks to this through the shape a real server would have: snapshots of the other players (who,
 // which slot, where, doing what, what's on display, their stats), a stream of events (joins, leaves, big pulls,
@@ -24,7 +32,7 @@ import {
   trackBoost,
   upgradeCost,
 } from './economy';
-import { FOUNTAIN, OWN_SLOT, SLOTS, STREET, fromPlot, gatePoint, toPlot, type PlotSlot } from './layout';
+import { FOUNTAIN, OWN_SLOT, SLOTS, STREET, fromPlot, gatePoint, plotAt, toPlot, type PlotSlot } from './layout';
 import { defaultSave, type Owned, type PadSlot, type Save } from './store';
 import type { Outfit } from './world';
 
@@ -41,8 +49,16 @@ export interface RemotePlayer {
   z: number;
   facing: number;
   pose: Pose;
+  /** Ground speed, for the stride. */
+  speed: number;
+  /** Height of a jump above the floor (0 when not jumping). */
+  jump: number;
   /** How open their parachute is, 0 to 1. */
   chute: number;
+  /** Away from keyboard: standing still, tagged AFK. */
+  afk: boolean;
+  /** What they said last, while it's still showing over their head ('' for nothing). */
+  bubble: string;
   /** Their showcase. */
   pads: (PadSlot | null)[];
   income: number;
@@ -57,6 +73,8 @@ export interface ServerEvent {
   text: string;
   /** CSS colour for the highlight, e.g. a rarity colour. */
   color?: string;
+  /** Where it happened, for effects (a leaving player's puff). */
+  at?: [number, number, number];
 }
 
 /** The local player, as the server sees them. */
@@ -64,11 +82,18 @@ export interface LocalPlayer {
   name: string;
   income: number;
   best: number;
+  /** Their best brainrot on display, for visitors to talk about. */
+  favorite: string;
 }
+
+/** Players in one server, the local player included. */
+export const CAPACITY = 6;
 
 const NAMES = [
   'Mia', 'Leo_77', 'PastaKing', 'Zoe', 'BrainrotBob', 'Luca', 'NinaNoodle', 'Kai', 'SkyDiver99', 'Ari',
   'Gigi', 'Tito_Toast', 'MoonMax', 'Pip', 'CannonCarla', 'Remy', 'Juno', 'Ollie_Op', 'Sunny', 'Vito',
+  'xXSkyLordXx', 'bean', 'Noodle_Ninja', 'tungtung', 'Lily.exe', 'GelatoGuy', 'FrostyFox', 'zappy', 'Benji',
+  'cocoa_puff', 'MaxPower', 'IvyLeaf', 'DinoDan', 'pixel_pam',
 ];
 const OUTFITS: Outfit[] = [
   { skin: 0xf7c873, shirt: 0x3ccf5a, pants: 0x2b2b3a, cap: 0xffd23f },
@@ -78,30 +103,41 @@ const OUTFITS: Outfit[] = [
   { skin: 0xf2d0a8, shirt: 0xffd23f, pants: 0x8a5cff, cap: 0x3ccf5a },
   { skin: 0x8a5a3a, shirt: 0xffffff, pants: 0xe63946, cap: 0x1d1640 },
   { skin: 0xf7c873, shirt: 0x1fc8b4, pants: 0xff7a1a, cap: 0x8a5cff },
+  { skin: 0xd9a066, shirt: 0x1d1640, pants: 0x6b6b7a, cap: 0xff7a1a },
 ];
+
+/** Lines people say out of nowhere. */
 const IDLE_CHAT = [
-  'anyone got a Legendary yet?',
-  'gg',
-  'this cannon is so op',
-  'how do u get a secret??',
-  'brb',
-  'my hippo is lvl 5 lol',
-  'storm layer is scary',
-  'super pulls are worth it fr',
-  'merging 10 commons rn',
-  'who has the most coins',
-  'perfect launch!!',
-  'the fountain is pretty',
+  'gg', 'this cannon is so op', 'storm layer is scary', 'super pulls are worth it fr', 'merging 10 commons rn',
+  'perfect launch!!', 'lol', 'my hippo is lvl 5', 'the fountain is pretty', 'bruh i crashed', 'so close to legendary',
+  'who wants to see my base', 'brb', 'im so rich lol', 'just got cloud kingdom',
 ];
+/** Questions, and answers another player gives a few seconds later. */
+const THREADS: [string, string[]][] = [
+  ['how do u get gems', ['launch higher, cloud kingdom gems are x3', 'fly through them lol']],
+  ['is super pull worth it', ['yes always rare or better', 'ya way better than basic']],
+  ['anyone wanna trade', ['no trading yet lol', 'trade what']],
+  ['whats the best brainrot', ['frigorifero fenicottero 100%', 'the hippo with the helicopter']],
+  ['how do u level up brainrots', ['click level up under them', 'wait for the xp bar then click']],
+  ['wheres the merge thing', ['purple pot next to ur cannon', 'right of the cannon']],
+  ['how high can u go', ['storm layer at like 400m', 'idk 400 something']],
+  ['what does rebirth do', ['more money forever', 'x1.5 income but u restart']],
+];
+const WELCOME = ['hi', 'hii', 'welcome!', 'yo', 'hey {name}', 'hi {name} 👋'];
+const BYE = ['gtg bye', 'bye guys', 'cya', 'gotta go eat', 'bye!'];
 const GREETINGS = ['hi!! 👋', 'welcome to my base!', 'hey there 😄', 'check out my brainrots!', "don't steal anything lol"];
-const WOW = ['WOW 😱', 'so lucky!!', 'gg nice pull', 'omg a legendary', 'no way!'];
+const WOW = ['WOW 😱', 'so lucky!!', 'gg', 'omg a legendary', 'no way!', 'lucky'];
 const THANKS = ['thanks!! 😄', 'ty! took forever', 'hehe thanks', '❤️'];
+const VISIT_COMMENTS = ['nice base', 'how did u get {fav}', 'cool {fav}!', 'ur base is cool', 'wow {fav}'];
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const pick = <T>(list: readonly T[]) => list[Math.floor(Math.random() * list.length)];
-const WALK_SPEED = 6.5;
 const RADIUS = 0.45;
 const MUZZLE_Y = 3.2;
+/** How long a speech bubble stays up. */
+const BUBBLE_SECONDS = 5;
+const JUMP_SPEED = 9;
+const GRAVITY = 30;
 
 interface Flight {
   phase: 'charge' | 'up' | 'down' | 'land';
@@ -116,12 +152,28 @@ interface Flight {
 interface Bot extends RemotePlayer {
   save: Save;
   slotRef: PlotSlot;
+  /** Where it's heading, as world points; the steering cuts corners between them. */
   path: [number, number][];
   arrive: (() => void) | null;
   wait: number;
   flight: Flight | null;
-  /** Seconds online until this bot leaves (Infinity: it stays). */
-  leaveIn: number;
+  vx: number;
+  vz: number;
+  /** This player's running speed; some are faster than others. */
+  runSpeed: number;
+  jumpV: number;
+  /** Seconds of making no headway, for getting unstuck. */
+  stuck: number;
+  /** Where it's looking while it stands still, and when it looks somewhere else. */
+  lookAt: number;
+  lookIn: number;
+  spin: number;
+  bubbleTtl: number;
+  /** Seconds left in this session; going AFK first, then gone. */
+  session: number;
+  afkFor: number;
+  nextAfkIn: number;
+  leaving: boolean;
   greetCooldown: number;
 }
 
@@ -249,22 +301,53 @@ function headStart(save: Save, minutes: number): void {
   }
 }
 
+
+/** How long a player stays this session: a quick look, a normal session, or in for the long haul. */
+function sessionLength(): number {
+  const r = Math.random();
+  if (r < 0.3) return rand(180, 480);
+  if (r < 0.75) return rand(480, 1200);
+  return rand(1200, 3600);
+}
+
+/** "a RARE", "an EPIC". */
+function withArticle(rarity: number): string {
+  const name = RARITIES[rarity].name;
+  return `${/^[AEIOU]/.test(name) ? 'an' : 'a'} ${name.toUpperCase()}`;
+}
+
+/** The best brainrot on a showcase, or null. */
+function favoriteOf(pads: (PadSlot | null)[]): PadSlot | null {
+  return pads.reduce<PadSlot | null>((a, b) => (b && (!a || b.rarity > a.rarity) ? b : a), null);
+}
+
+/** Turns an angle toward a target by at most `step`, the short way round. */
+function turnToward(from: number, to: number, step: number): number {
+  const diff = Math.atan2(Math.sin(to - from), Math.cos(to - from));
+  return from + Math.max(-step, Math.min(step, diff));
+}
+
 export class FakeServer {
   readonly name = `Sky-${Math.floor(rand(1000, 9999))}`;
   private bots: Bot[] = [];
   private events: ServerEvent[] = [];
   private nextId = 1;
-  private chatIn = rand(25, 50);
-  private joinIn: { slot: PlotSlot; at: number }[] = [];
+  private chatIn = rand(12, 30);
+  private joins: { slot: PlotSlot; at: number }[] = [];
+  private later: { at: number; run: () => void }[] = [];
   private time = 0;
-  private local: LocalPlayer = { name: 'You', income: 0, best: 0 };
+  private local: LocalPlayer = { name: 'You', income: 0, best: 0, favorite: '' };
+  /** Lines said lately, so nobody repeats them for a while. */
+  private recent: string[] = [];
 
   constructor() {
-    // Four of the five other plots start taken; one opens up later.
-    const free = SLOTS.filter((s) => s.index !== OWN_SLOT);
-    const empty = pick(free);
-    for (const slot of free) if (slot !== empty) this.addBot(slot, false);
-    this.joinIn.push({ slot: empty, at: rand(40, 90) });
+    // You usually join a server that already has three to five people in it; the rest fill up soon.
+    const free = SLOTS.filter((s) => s.index !== OWN_SLOT).sort(() => Math.random() - 0.5);
+    const others = pick([3, 4, 4, 5, 5]);
+    free.forEach((slot, i) => {
+      if (i < others) this.addBot(slot, false);
+      else this.joins.push({ slot, at: rand(10, 45) });
+    });
   }
 
   /** Everyone else on the server. */
@@ -283,7 +366,7 @@ export class FakeServer {
     return this.bots.length + 1;
   }
 
-  /** The local player's stats, for the leaderboards. */
+  /** The local player's stats, for the leaderboards and for visitors to talk about. */
   setLocal(local: LocalPlayer): void {
     this.local = local;
   }
@@ -299,92 +382,184 @@ export class FakeServer {
   /** The local player walked into someone's plot. */
   visit(id: number): void {
     const bot = this.bots.find((b) => b.id === id);
-    if (!bot || bot.greetCooldown > 0) return;
+    if (!bot || bot.greetCooldown > 0 || bot.afk) return;
     bot.greetCooldown = 90;
-    setTimeout(() => this.say(bot, pick(GREETINGS)), rand(600, 1800));
+    this.after(rand(0.6, 1.8), () => this.say(bot, pick(GREETINGS)));
   }
 
   /** The local player liked one of a bot's brainrots. */
   like(id: number): void {
     const bot = this.bots.find((b) => b.id === id);
-    if (bot) setTimeout(() => this.say(bot, pick(THANKS)), rand(500, 1500));
+    if (bot && !bot.afk) this.after(rand(0.5, 1.5), () => this.say(bot, pick(THANKS)));
   }
 
-  /** Something big happened to the local player; the server tells everyone. */
+  /** Something big happened to the local player; the server tells everyone, and someone may react. */
   reportLocal(event: { kind: 'pull' | 'zone'; text: string; rarity?: number }): void {
     const color = event.rarity !== undefined ? RARITIES[event.rarity].css : undefined;
     this.events.push({ kind: event.kind, name: this.local.name, text: event.text, color });
-    if (event.kind === 'pull' && (event.rarity ?? 0) >= 4 && this.bots.length) {
-      const bot = pick(this.bots);
-      setTimeout(() => this.say(bot, pick(WOW)), rand(900, 2500));
-    }
+    if (event.kind === 'pull' && (event.rarity ?? 0) >= 4) this.react();
   }
 
   update(dt: number): void {
     this.time += dt;
-    for (const bot of [...this.bots]) this.step(bot, dt);
-    // Someone says something now and then.
-    this.chatIn -= dt;
-    if (this.chatIn <= 0 && this.bots.length) {
-      this.chatIn = rand(35, 90);
-      this.say(pick(this.bots), pick(IDLE_CHAT));
+    for (const job of [...this.later]) {
+      if (this.time < job.at) continue;
+      this.later.splice(this.later.indexOf(job), 1);
+      job.run();
     }
-    for (const j of [...this.joinIn]) {
+    for (const bot of [...this.bots]) this.step(bot, dt);
+    this.chatter(dt);
+    for (const j of [...this.joins]) {
       if (this.time < j.at) continue;
-      this.joinIn.splice(this.joinIn.indexOf(j), 1);
+      this.joins.splice(this.joins.indexOf(j), 1);
       this.addBot(j.slot, true);
     }
   }
 
-  private say(bot: Bot, text: string): void {
-    if (!this.bots.includes(bot)) return;
-    this.events.push({ kind: 'chat', name: bot.name, text });
+  // ---------------------------------------------------------------- the lobby
+
+  private after(seconds: number, run: () => void): void {
+    this.later.push({ at: this.time + seconds, run });
   }
 
-  private addBot(slot: PlotSlot, announce: boolean): void {
+  private addBot(slot: PlotSlot, joining: boolean): void {
     const used = new Set(this.bots.map((b) => b.name));
     const name = pick(NAMES.filter((n) => !used.has(n)));
+    // Everyone in the lobby looks different.
+    const worn = new Set(this.bots.map((b) => b.outfit));
+    const outfit = pick(OUTFITS.filter((o) => !worn.has(o)));
     const save = defaultSave();
-    // A mix of newcomers and veterans.
-    const minutes = pick([0, 3, 8, 15, 25, 40, 60]);
-    headStart(save, minutes);
-    const [x, z] = fromPlot(slot, rand(-6, 6), rand(3, 8));
+    // Most players come back to saved progress; some are brand new. People already here have been playing.
+    const returning = !joining || Math.random() < 0.65;
+    if (returning) headStart(save, pick([3, 8, 15, 25, 40, 60, 90]));
+    // Newcomers appear in the street by the fountain and walk to their plot; people already here are home.
+    const a = rand(0, Math.PI * 2);
+    const [x, z] = joining
+      ? [FOUNTAIN.x + Math.cos(a) * (FOUNTAIN.r + rand(1, 2.5)), FOUNTAIN.z + Math.sin(a) * (FOUNTAIN.r + rand(1, 2.5))]
+      : fromPlot(slot, rand(-6, 6), rand(3, 8));
     const bot: Bot = {
       id: this.nextId++,
       name,
       slot: slot.index,
       slotRef: slot,
-      outfit: pick(OUTFITS),
+      outfit,
       x,
-      y: 0,
+      y: floorWorld(x, z),
       z,
-      facing: 0,
+      facing: rand(-Math.PI, Math.PI),
       pose: 'idle',
+      speed: 0,
+      jump: 0,
       chute: 0,
+      afk: false,
+      bubble: '',
       pads: save.pads,
-      income: 0,
+      income: incomePerSecond(save),
       best: save.best,
       rebirths: save.rebirths,
       cannon: save.cannon,
       save,
       path: [],
       arrive: null,
-      wait: rand(0.5, 3),
+      wait: rand(0.3, 2),
       flight: null,
-      // Some bots stay all session; others leave after a while.
-      leaveIn: Math.random() < 0.4 ? rand(240, 720) : Infinity,
+      vx: 0,
+      vz: 0,
+      runSpeed: rand(7, 9.5),
+      jumpV: 0,
+      stuck: 0,
+      lookAt: 0,
+      lookIn: 0,
+      spin: 0,
+      bubbleTtl: 0,
+      // Someone already here is partway through their session.
+      session: sessionLength() * (joining ? 1 : rand(0.15, 1)),
+      afkFor: 0,
+      nextAfkIn: rand(240, 900),
+      leaving: false,
       greetCooldown: 0,
     };
     this.bots.push(bot);
-    if (announce) this.events.push({ kind: 'join', name, text: 'joined the game' });
+    if (!joining) return;
+    this.events.push({ kind: 'join', name, text: 'joined the game', at: [x, 1, z] });
+    // Walk home through the gate.
+    const [ox, oz] = gatePoint(slot, false);
+    const [ix, iz] = gatePoint(slot, true);
+    this.go(bot, [[ox, oz], [ix, iz], this.at(bot, rand(-5, 5), rand(4, 9))], () => (bot.wait = rand(0.5, 2)));
+    // A couple of people say hi.
+    const others = this.bots.filter((b) => b !== bot && !b.afk).sort(() => Math.random() - 0.5);
+    others.slice(0, Math.random() < 0.5 ? 1 : 2).forEach((other, i) => {
+      this.after(rand(2, 4) + i * rand(1, 3), () => this.say(other, pick(WELCOME).replace('{name}', name)));
+    });
   }
 
   private removeBot(bot: Bot): void {
+    if (!this.bots.includes(bot)) return;
     this.bots.splice(this.bots.indexOf(bot), 1);
-    this.events.push({ kind: 'leave', name: bot.name, text: 'left the game' });
-    // Someone new takes the plot after a while.
-    this.joinIn.push({ slot: bot.slotRef, at: this.time + rand(30, 75) });
+    this.events.push({ kind: 'leave', name: bot.name, text: 'left the game', at: [bot.x, bot.y + 1, bot.z] });
+    // Matchmaking fills the slot: usually within a minute, now and then it stays open a while.
+    const wait = Math.random() < 0.8 ? rand(10, 45) : rand(60, 140);
+    this.joins.push({ slot: bot.slotRef, at: this.time + wait });
   }
+
+  /** At the end of their session: half go AFK for a bit first, some say bye, then they're gone. */
+  private startLeaving(bot: Bot): void {
+    bot.leaving = true;
+    if (Math.random() < 0.5) {
+      bot.afk = true;
+      bot.afkFor = rand(30, 90);
+      bot.path = [];
+      bot.arrive = null;
+      return;
+    }
+    if (Math.random() < 0.6) this.say(bot, pick(BYE));
+    this.after(rand(1.5, 4), () => this.removeBot(bot));
+  }
+
+  // ---------------------------------------------------------------- talking
+
+  private say(bot: Bot, text: string): void {
+    if (!this.bots.includes(bot)) return;
+    bot.bubble = text;
+    bot.bubbleTtl = BUBBLE_SECONDS;
+    this.events.push({ kind: 'chat', name: bot.name, text });
+    this.recent.push(text);
+    if (this.recent.length > 12) this.recent.shift();
+  }
+
+  /** Someone who isn't AFK, other than `not`. */
+  private someone(not?: Bot): Bot | null {
+    const pool = this.bots.filter((b) => b !== not && !b.afk && !b.leaving);
+    return pool.length ? pick(pool) : null;
+  }
+
+  /** A big pull somewhere: half the time, someone says something. */
+  private react(not?: Bot): void {
+    const bot = this.someone(not);
+    if (bot && Math.random() < 0.6) this.after(rand(1, 3), () => this.say(bot, pick(WOW)));
+  }
+
+  /** Every so often: a question someone else answers, or a passing remark. */
+  private chatter(dt: number): void {
+    this.chatIn -= dt;
+    if (this.chatIn > 0) return;
+    this.chatIn = rand(20, 55);
+    const asker = this.someone();
+    if (!asker) return;
+    if (Math.random() < 0.45) {
+      const threads = THREADS.filter(([q]) => !this.recent.includes(q));
+      if (!threads.length) return;
+      const [q, answers] = pick(threads);
+      this.say(asker, q);
+      const answerer = this.someone(asker);
+      if (answerer) this.after(rand(2.5, 5.5), () => this.say(answerer, pick(answers)));
+    } else {
+      const lines = IDLE_CHAT.filter((l) => !this.recent.includes(l));
+      if (lines.length) this.say(asker, pick(lines));
+    }
+  }
+
+  // ---------------------------------------------------------------- each player, each frame
 
   private step(bot: Bot, dt: number): void {
     const s = bot.save;
@@ -396,20 +571,48 @@ export class FakeServer {
     bot.rebirths = s.rebirths;
     bot.pads = s.pads;
     bot.greetCooldown = Math.max(0, bot.greetCooldown - dt);
-    bot.leaveIn -= dt;
-    if (bot.leaveIn <= 0 && !bot.flight && !bot.path.length) {
-      this.removeBot(bot);
-      return;
-    }
+    bot.bubbleTtl -= dt;
+    if (bot.bubbleTtl <= 0) bot.bubble = '';
     if (bot.flight) {
       this.fly(bot, dt);
       return;
     }
+    // Jumps, wherever they are.
+    if (bot.jumpV !== 0 || bot.jump > 0) {
+      bot.jump += bot.jumpV * dt;
+      bot.jumpV -= GRAVITY * dt;
+      if (bot.jump <= 0) {
+        bot.jump = 0;
+        bot.jumpV = 0;
+      }
+    }
+    bot.y = floorWorld(bot.x, bot.z) + bot.jump;
+    bot.session -= dt;
+    if (bot.session <= 0 && !bot.leaving) this.startLeaving(bot);
+    if (bot.afk) {
+      this.idle(bot, dt, true);
+      bot.afkFor -= dt;
+      if (bot.afkFor <= 0) {
+        bot.afk = false;
+        if (bot.leaving) this.removeBot(bot);
+      }
+      return;
+    }
+    if (bot.leaving) {
+      this.idle(bot, dt, false);
+      return;
+    }
+    bot.nextAfkIn -= dt;
+    if (bot.nextAfkIn <= 0 && !bot.path.length) {
+      // Stepped away from the keyboard for a minute or two.
+      bot.nextAfkIn = rand(300, 900);
+      bot.afk = true;
+      bot.afkFor = rand(40, 120);
+      return;
+    }
     if (bot.wait > 0) {
       bot.wait -= dt;
-      bot.pose = 'idle';
-      bot.chute = Math.max(0, bot.chute - dt * 2);
-      bot.y = floorWorld(bot.x, bot.z);
+      this.idle(bot, dt, false);
       return;
     }
     if (bot.path.length) {
@@ -422,26 +625,88 @@ export class FakeServer {
     else this.decide(bot);
   }
 
+  /** Standing still: slowing to a stop, looking around, the odd jump or spin. */
+  private idle(bot: Bot, dt: number, afk: boolean): void {
+    const k = Math.exp(-10 * dt);
+    bot.vx *= k;
+    bot.vz *= k;
+    bot.speed = Math.hypot(bot.vx, bot.vz);
+    bot.pose = 'idle';
+    if (afk) return;
+    bot.lookIn -= dt;
+    if (bot.lookIn <= 0) {
+      bot.lookIn = rand(0.8, 2.8);
+      bot.lookAt = bot.facing + rand(-1.4, 1.4);
+    }
+    if (bot.spin > 0) {
+      bot.spin -= dt;
+      bot.facing += 9 * dt;
+    } else {
+      bot.facing = turnToward(bot.facing, bot.lookAt, 3 * dt);
+      if (Math.random() < dt * 0.02) bot.spin = rand(0.5, 1.2);
+    }
+    if (bot.jump === 0 && Math.random() < dt * 0.08) bot.jumpV = JUMP_SPEED;
+  }
+
+  /**
+   * Running along the path with momentum: aiming a little ahead so corners are cut into curves, easing in
+   * and out, turning at a limited rate, stepping around other players and around anything it gets stuck on.
+   */
   private walk(bot: Bot, dt: number): void {
+    while (bot.path.length > 1 && Math.hypot(bot.path[0][0] - bot.x, bot.path[0][1] - bot.z) < 2.2) bot.path.shift();
     const [tx, tz] = bot.path[0];
     const dx = tx - bot.x;
     const dz = tz - bot.z;
     const d = Math.hypot(dx, dz);
-    bot.pose = 'walk';
-    if (d < 0.3) {
+    const last = bot.path.length === 1;
+    if (last && d < 0.4) {
       bot.path.shift();
       return;
     }
-    const stepLen = Math.min(d, WALK_SPEED * dt);
-    let nx = bot.x + (dx / d) * stepLen;
-    let nz = bot.z + (dz / d) * stepLen;
-    [nx, nz] = bumpSolids(nx, nz, RADIUS);
-    // Stuck against something: skip to the next waypoint rather than grind on it.
-    if (Math.hypot(nx - bot.x, nz - bot.z) < stepLen * 0.2) bot.path.shift();
-    bot.x = nx;
-    bot.z = nz;
-    bot.y = floorWorld(bot.x, bot.z);
-    bot.facing = Math.atan2(-dx, -dz);
+    const want = bot.runSpeed * (last ? Math.min(1, d / 2.5) : 1);
+    // A gentle weave on long stretches, the way people drift when they run, fading out near the target.
+    const weave = Math.sin(this.time * 1.3 + bot.id * 2.3) * 0.28 * Math.min(1, Math.max(0, (d - 3) / 4));
+    const wx = dx / d - (dz / d) * weave;
+    const wz = dz / d + (dx / d) * weave;
+    const wl = Math.hypot(wx, wz);
+    const k = 1 - Math.exp(-5 * dt);
+    bot.vx += ((wx / wl) * want - bot.vx) * k;
+    bot.vz += ((wz / wl) * want - bot.vz) * k;
+    // Give other players a little room.
+    for (const other of this.bots) {
+      if (other === bot || other.flight) continue;
+      const ox = bot.x - other.x;
+      const oz = bot.z - other.z;
+      const od = Math.hypot(ox, oz);
+      if (od > 0.01 && od < 1.4) {
+        bot.vx += (ox / od) * (1.4 - od) * 6 * dt;
+        bot.vz += (oz / od) * (1.4 - od) * 6 * dt;
+      }
+    }
+    const fromX = bot.x;
+    const fromZ = bot.z;
+    [bot.x, bot.z] = bumpSolids(bot.x + bot.vx * dt, bot.z + bot.vz * dt, RADIUS);
+    const moved = Math.hypot(bot.x - fromX, bot.z - fromZ);
+    bot.speed = moved / Math.max(dt, 1e-4);
+    // Stuck on something: try a sidestep, then give up on that waypoint.
+    if (moved < want * dt * 0.25) {
+      bot.stuck += dt;
+      if (bot.stuck > 0.5) {
+        bot.stuck = 0;
+        if (bot.path.length > 1 || Math.random() < 0.5) {
+          const side = Math.random() < 0.5 ? 1 : -1;
+          bot.path.unshift([bot.x - (dz / d) * 2 * side, bot.z + (dx / d) * 2 * side]);
+        } else {
+          bot.path.shift();
+        }
+      }
+    } else {
+      bot.stuck = 0;
+    }
+    if (bot.speed > 0.4) bot.facing = turnToward(bot.facing, Math.atan2(-bot.vx, -bot.vz), 10 * dt);
+    // Players jump a lot while they run.
+    if (bot.jump === 0 && Math.random() < dt * 0.3) bot.jumpV = JUMP_SPEED;
+    bot.pose = bot.speed > 0.5 ? 'walk' : 'idle';
   }
 
   /** A point in the bot's own plot, in world space. */
@@ -449,23 +714,35 @@ export class FakeServer {
     return fromPlot(bot.slotRef, lx, lz);
   }
 
-  /** Waypoints from where the bot is to a plot-space point, through the showcase entrance when that's needed. */
-  private route(bot: Bot, lx: number, lz: number): [number, number][] {
-    const [, hz] = toPlot(bot.slotRef, bot.x, bot.z);
-    const inHall = hz < -9;
+  /** Waypoints to a point in a plot, through the showcase entrance when that's needed. */
+  private route(bot: Bot, lx: number, lz: number, slot: PlotSlot = bot.slotRef): [number, number][] {
+    const here = plotAt(bot.x, bot.z);
+    const inHall = here === slot && toPlot(slot, bot.x, bot.z)[1] < -9;
     const toHall = lz < -9;
     const path: [number, number][] = [];
-    if (inHall !== toHall) path.push(this.at(bot, 0, -8), this.at(bot, 0, -10));
-    path.push(this.at(bot, lx, lz));
+    if (inHall !== toHall) path.push(fromPlot(slot, 0, -8), fromPlot(slot, 0, -10.5));
+    path.push(fromPlot(slot, lx, lz));
     return path;
   }
 
-  private go(bot: Bot, path: [number, number][], then: () => void): void {
+  /** Sets off along waypoints, with a little sideways wander added to long stretches so no two trips match. */
+  private go(bot: Bot, points: [number, number][], then: () => void): void {
+    const path: [number, number][] = [];
+    let [px, pz] = [bot.x, bot.z];
+    for (const [x, z] of points) {
+      const len = Math.hypot(x - px, z - pz);
+      if (len > 7) {
+        const off = rand(-1.6, 1.6);
+        path.push([(px + x) / 2 - ((z - pz) / len) * off, (pz + z) / 2 + ((x - px) / len) * off]);
+      }
+      path.push([x, z]);
+      [px, pz] = [x, z];
+    }
     bot.path = path;
     bot.arrive = then;
   }
 
-  /** What to do next: pull if it can afford one, merge if it can, otherwise launch, wander, admire or stroll. */
+  /** What to do next: pull if it can afford one, merge if it can, otherwise launch, potter about, or visit. */
   private decide(bot: Bot): void {
     const s = bot.save;
     shop(s, 3);
@@ -476,12 +753,16 @@ export class FakeServer {
     const tier = [...GACHA].reverse().find((t) => tierUnlocked(s, t) && s.gems >= t.cost);
     if (tier) {
       this.go(bot, this.route(bot, MACHINE_FRONT.x, MACHINE_FRONT.z), () => {
-        bot.wait = 1.6;
+        bot.wait = rand(1.4, 2.4);
         const got = pullAll(s);
         const best = got.reduce<Owned | null>((a, b) => (!a || b.rarity > a.rarity ? b : a), null);
         if (best && best.rarity >= 3) {
           const r = RARITIES[best.rarity];
-          this.events.push({ kind: 'pull', name: bot.name, text: `pulled ${r.name === 'Epic' ? 'an' : 'a'} ${r.name.toUpperCase()} ${best.name}!`, color: r.css });
+          this.events.push({ kind: 'pull', name: bot.name, text: `pulled ${withArticle(best.rarity)} ${best.name}!`, color: r.css });
+          if (best.rarity >= 4) {
+            this.after(1, () => this.say(bot, pick(['LETS GOOO', 'YESSS', 'finally!!', 'omg omg'])));
+            this.react(bot);
+          }
         }
       });
       return;
@@ -489,45 +770,85 @@ export class FakeServer {
     const mergeable = [0, 1, 2, 3].some((r) => s.inventory.filter((o) => o.rarity === r).length >= (mergeNeed(r) ?? Infinity));
     if (mergeable) {
       this.go(bot, this.route(bot, MERGER_FRONT.x, MERGER_FRONT.z), () => {
-        bot.wait = 1.4;
+        bot.wait = rand(1.2, 2);
         const made = mergeAll(s);
         const best = made.reduce<Owned | null>((a, b) => (!a || b.rarity > a.rarity ? b : a), null);
         if (best && best.rarity >= 3) {
           const r = RARITIES[best.rarity];
-          this.events.push({ kind: 'merge', name: bot.name, text: `merged a ${r.name.toUpperCase()} ${best.name}!`, color: r.css });
+          this.events.push({ kind: 'merge', name: bot.name, text: `merged ${withArticle(best.rarity)} ${best.name}!`, color: r.css });
         }
       });
       return;
     }
     const roll = Math.random();
-    if (roll < 0.55) {
+    if (roll < 0.45) {
       // To the cannon and up.
       this.go(bot, this.route(bot, 0, 2.6), () => this.launch(bot));
-    } else if (roll < 0.72) {
+    } else if (roll < 0.6) {
       // Admire something on display.
       const filled = s.pads.map((p, i) => (p ? i : -1)).filter((i) => i >= 0);
-      const i = filled.length ? pick(filled) : 0;
-      const pad = Base.padPosition(i);
-      this.go(bot, this.route(bot, pad.x > 0 ? pad.x - 2.3 : pad.x + 2.3, pad.z), () => (bot.wait = rand(2, 5)));
-    } else if (roll < 0.88) {
-      // Wander the plaza.
+      const pad = Base.padPosition(filled.length ? pick(filled) : 0);
+      this.go(bot, this.route(bot, pad.x > 0 ? pad.x - 2.4 : pad.x + 2.4, pad.z), () => (bot.wait = rand(2, 5)));
+    } else if (roll < 0.74) {
+      // Potter about the plaza.
       const a = rand(0, Math.PI * 2);
       const r = rand(3.5, 8.5);
       this.go(bot, this.route(bot, Math.cos(a) * r, Math.abs(Math.sin(a)) * r + 1), () => (bot.wait = rand(1.5, 4)));
+    } else if (roll < 0.84) {
+      this.stroll(bot);
     } else {
-      // A stroll out into the street and back.
-      const [ix, iz] = gatePoint(bot.slotRef, true);
-      const [ox, oz] = gatePoint(bot.slotRef, false);
-      let sx = rand(-STREET.halfLength + 6, STREET.halfLength - 6);
-      const sz = rand(STREET.near + 3, STREET.far - 3);
-      if (Math.hypot(sx - FOUNTAIN.x, sz - FOUNTAIN.z) < FOUNTAIN.r + 1) sx += FOUNTAIN.r * 2;
-      const back = this.at(bot, rand(-4, 4), rand(4, 9));
-      this.go(bot, [...this.route(bot, 0, 10), [ix, iz], [ox, oz], [sx, sz]], () => {
-        bot.wait = rand(2, 5);
-        bot.arrive = () => this.go(bot, [[ox, oz], [ix, iz], back], () => (bot.wait = rand(1, 3)));
-      });
+      this.visitSomeone(bot);
     }
   }
+
+  /** Out into the street for a look around, and back. */
+  private stroll(bot: Bot): void {
+    const [ix, iz] = gatePoint(bot.slotRef, true);
+    const [ox, oz] = gatePoint(bot.slotRef, false);
+    let sx = rand(-STREET.halfLength + 6, STREET.halfLength - 6);
+    const sz = rand(STREET.near + 3, STREET.far - 3);
+    if (Math.hypot(sx - FOUNTAIN.x, sz - FOUNTAIN.z) < FOUNTAIN.r + 1) sx += FOUNTAIN.r * 2;
+    this.go(bot, [...this.route(bot, 0, 10), [ix, iz], [ox, oz], [sx, sz]], () => {
+      bot.wait = rand(2, 5);
+      bot.arrive = () => this.goHome(bot);
+    });
+  }
+
+  /** Over to someone else's base (often the local player's), a look around and maybe a comment, then home. */
+  private visitSomeone(bot: Bot): void {
+    const hosts = [...this.bots.filter((b) => b !== bot).map((b) => b.slotRef), SLOTS[OWN_SLOT], SLOTS[OWN_SLOT]];
+    const host = pick(hosts);
+    const [ix, iz] = gatePoint(bot.slotRef, true);
+    const [ox, oz] = gatePoint(bot.slotRef, false);
+    const [hox, hoz] = gatePoint(host, false);
+    const [hix, hiz] = gatePoint(host, true);
+    const inside = Math.random() < 0.6 ? fromPlot(host, rand(-6, 6), rand(4, 9)) : fromPlot(host, rand(-1, 1), rand(-12, -20));
+    const viaHall = toPlot(host, inside[0], inside[1])[1] < -9 ? [fromPlot(host, 0, -8)] : [];
+    this.go(bot, [...this.route(bot, 0, 10), [ix, iz], [ox, oz], [hox, hoz], [hix, hiz], ...viaHall, inside], () => {
+      bot.wait = rand(3, 7);
+      if (Math.random() < 0.6) {
+        // Talk about the host's best brainrot, or just the base if there's nothing on show.
+        const yours = host.index === OWN_SLOT;
+        const hostBot = this.bots.find((b) => b.slotRef === host);
+        const fav = yours ? this.local.favorite : favoriteOf(hostBot?.pads ?? [])?.name ?? '';
+        const lines = fav ? VISIT_COMMENTS : VISIT_COMMENTS.filter((l) => !l.includes('{fav}'));
+        this.after(rand(0.5, 2), () => this.say(bot, pick(lines).replace('{fav}', fav)));
+      }
+      bot.arrive = () => {
+        const out: [number, number][] = [...viaHall.reverse(), [hix, hiz], [hox, hoz]];
+        this.go(bot, out, () => this.goHome(bot));
+      };
+    });
+  }
+
+  /** From the street back in through the gate to the plaza. */
+  private goHome(bot: Bot): void {
+    const [ox, oz] = gatePoint(bot.slotRef, false);
+    const [ix, iz] = gatePoint(bot.slotRef, true);
+    this.go(bot, [[ox, oz], [ix, iz], this.at(bot, rand(-5, 5), rand(4, 9))], () => (bot.wait = rand(1, 3)));
+  }
+
+  // ---------------------------------------------------------------- flights
 
   /** Into the cannon, a short charge, then the flight. */
   private launch(bot: Bot): void {
@@ -535,6 +856,8 @@ export class FakeServer {
     bot.x = x;
     bot.z = z;
     bot.y = MUZZLE_Y;
+    bot.vx = bot.vz = 0;
+    bot.jump = bot.jumpV = 0;
     bot.pose = 'hidden';
     const roll = Math.random();
     const bonus = roll < 0.25 ? CHARGE.perfectBonus : roll < 0.65 ? CHARGE.greenBonus : 0;
@@ -545,7 +868,8 @@ export class FakeServer {
 
   private fly(bot: Bot, dt: number): void {
     const f = bot.flight!;
-    f.t -= f.phase === 'charge' || f.phase === 'land' ? dt : 0;
+    bot.speed = 0;
+    if (f.phase === 'charge' || f.phase === 'land') f.t -= dt;
     if (f.phase === 'charge') {
       if (f.t <= 0) {
         f.phase = 'up';
@@ -558,14 +882,12 @@ export class FakeServer {
       bot.chute = Math.max(0, bot.chute - dt * 2);
       if (f.t <= 0) {
         bot.flight = null;
-        bot.wait = 0.5;
+        bot.wait = 0.4;
         this.landed(bot, f.apex);
       }
       return;
     }
-    const [lx0] = toPlot(bot.slotRef, bot.x, bot.z);
-    let lx = lx0;
-    let [, lz] = toPlot(bot.slotRef, bot.x, bot.z);
+    let [lx, lz] = toPlot(bot.slotRef, bot.x, bot.z);
     if (f.phase === 'up') {
       f.t += dt;
       const k = Math.min(1, f.t / f.tUp);
@@ -595,7 +917,7 @@ export class FakeServer {
     bot.facing = 0;
   }
 
-  /** Gems from the run, a new zone maybe, and a walk off the landing spot. */
+  /** Gems from the run, a new zone maybe. */
   private landed(bot: Bot, apex: number): void {
     const s = bot.save;
     const beforeZone = Math.min(zoneIndexAt(s.best), MAX_ZONE);

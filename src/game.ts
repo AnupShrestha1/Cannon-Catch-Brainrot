@@ -1541,10 +1541,17 @@ export class Game {
 
   /** Runs the server, draws the other players, and passes on its events, standings and player count. */
   private updateServer(realDt: number): void {
-    this.server.setLocal({ name: 'You', income: incomePerSecond(this.save), best: this.save.best });
+    const fav = this.save.pads.reduce<PadSlot | null>((a, b) => (b && (!a || b.rarity > a.rarity) ? b : a), null);
+    this.server.setLocal({ name: 'You', income: incomePerSecond(this.save), best: this.save.best, favorite: fav?.name ?? '' });
     this.server.update(realDt);
     this.remote.update(this.time, realDt, this.px, this.pz);
-    for (const e of this.server.drain()) this.hud.feed(e.name, e.text, e.kind, e.color);
+    for (const e of this.server.drain()) {
+      this.hud.feed(e.name, e.text, e.kind, e.color);
+      // Players appear and vanish in a puff.
+      if (e.at && (e.kind === 'join' || e.kind === 'leave')) {
+        this.fx.burst(this.tmp.set(...e.at), { count: 22, color: 0xffffff, speed: 4, life: 0.9, size: 1.1, grow: 1.6, up: 2 });
+      }
+    }
     this.hud.setOnline(this.server.online, this.server.name);
     this.boardTimer -= realDt;
     if (this.boardTimer <= 0) {

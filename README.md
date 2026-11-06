@@ -54,19 +54,31 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   fountain in the middle, lanterns along both kerbs and two live leaderboards (Top Earners, Top Flyers)
   in the gaps between plots. Fences hold everywhere but the gates, for every plot, and the fountain is
   solid; launching from someone else's plot or the street walks you back through your gate.
-- **Fake multiplayer** (`src/net.ts`, `src/remote.ts`): a pretend server fills the other plots with
-  bots that play by the real rules, using the same pull, merge, upgrade and level code and costs as you.
-  - Each bot has a name, an outfit and a name tag, and joins with some progress already made (from
-    brand new to about an hour in), played out offline by the same loop as the economy simulator.
-  - Bots walk their plots, admire their showcase, stroll out into the street, launch from their own
-    cannons (up, free fall, parachute), pull at their gacha machine, merge, buy upgrades and level up,
-    and now and then rebirth. Their gems come from the same gem rows a real flight passes.
-  - The feed (bottom left) shows the server's news: joins and leaves, Epic and Legendary pulls and
-    merges, new zones, rebirths, and a little chat. Your own big pulls and new zones go to the feed
-    too, and bots react to your Legendaries. The online counter shows the server name and player count.
-  - Bots come and go: some leave after a few minutes, their plot turns into an OPEN PLOT, and someone
-    new takes it a minute later.
-  - You can visit: walk into anyone's plot through their gate ("Visiting Mia's base"), and the owner
+- **Fake multiplayer** (`src/net.ts`, `src/remote.ts`): a pretend server simulates a real lobby. The
+  other plots are played by bots that use the real rules (the same pull, merge, upgrade and level code
+  and costs as you).
+  - **They move like players.** They run with momentum, ease in and out, curve through corners (aiming
+    a little ahead along their route), turn at a limited rate and weave slightly on long runs. Each has
+    its own running speed. They jump a lot while running, look around when they stop, spin now and then,
+    give each other room, and sidestep or give up on a waypoint when they get stuck.
+  - **The lobby lives.** The server holds 6. You usually join with three to five others, and
+    matchmaking fills a free slot within 10 to 45 seconds (now and then it stays open for a minute or
+    two). Sessions last from a few minutes to an hour; about half of the leavers go AFK first (their tag
+    reads "Name · AFK"), some say "gtg bye", then they vanish in a puff. Players also go AFK for a minute
+    or two mid-session. Newcomers appear in a puff by the fountain and walk to their plot through the
+    gate; most return to saved progress, some are brand new.
+  - **They talk.** Speech bubbles over their heads and lines in the feed: hellos for newcomers,
+    questions that someone else answers a few seconds later ("how do u get gems" / "launch higher,
+    cloud kingdom gems are x3"), passing remarks, "LETS GOOO" on their own Legendaries and "lucky" on
+    other people's (yours included), and nobody repeats a line for a while.
+  - **They visit.** Bots stroll the street and visit each other's bases and yours, walking in through the
+    gate, looking around and sometimes commenting on the best brainrot there ("how did u get Frigorifero
+    Fenicottero").
+  - Each bot joins with progress played out offline by the same loop as the economy simulator, launches
+    from its own cannon (up, free fall, parachute), pulls, merges, buys upgrades, levels up and rebirths.
+  - The feed (bottom left) shows joins and leaves, Epic and Legendary pulls and merges, new zones,
+    rebirths and chat. The online counter shows the server name and player count.
+  - You can visit too: walk into anyone's plot through their gate ("Visiting Mia's base"), and the owner
     may say hi. Walk up to one of their brainrots and press E to see its level and income and give it a
     👍 (they'll thank you). Their machines are theirs, though.
   - The game only reads what a real server would send (player snapshots and events) and sends what a
