@@ -16,6 +16,7 @@ import {
   GACHA,
   GEMS,
   GIFTS,
+  GIFT_COINS,
   HAZARD_SPACING,
   LEVELS,
   MAX_ZONE,
@@ -224,6 +225,8 @@ export class Game {
   private chuteWarned = false;
   private landing = '';
   private recordPassed = false;
+  /** The highest zone this run has announced, so each one is celebrated once on the way up. */
+  private zoneShown = 0;
   /** Gems picked up this run, and gems knocked loose by hazards or lost in a crash. */
   private runGems = 0;
   private gemsLost = 0;
@@ -550,6 +553,7 @@ export class Game {
     this.chuteWarned = false;
     this.landing = '';
     this.recordPassed = false;
+    this.zoneShown = 0;
     this.runGems = 0;
     this.gemsLost = 0;
     this.vx = 0;
@@ -689,6 +693,7 @@ export class Game {
     if (this.state === 'fall' && chuteRequested && this.chute === 'closed') this.openChute();
     this.collide();
 
+    if (this.state === 'ascent') this.announceZone();
     if (this.state === 'ascent' && !this.recordPassed && this.save.best > 5 && this.py > this.save.best) {
       this.recordPassed = true;
       this.hud.toast('NEW RECORD!', 'gold');
@@ -698,6 +703,27 @@ export class Game {
     if (this.py <= 0) {
       this.py = 0;
       this.land();
+    }
+  }
+
+  /**
+   * Entering a new zone on the way up: its name and gem value, bigger (with a sparkle and a moment of slow
+   * motion) the first time the player has ever reached it.
+   */
+  private announceZone(): void {
+    const zone = Math.min(zoneIndexAt(this.py), MAX_ZONE);
+    if (zone <= this.zoneShown) return;
+    this.zoneShown = zone;
+    const first = this.save.best < ZONES[zone].from;
+    const z = ZONES[zone];
+    const css = `#${z.gemColor.toString(16).padStart(6, '0')}`;
+    this.hud.toast(first ? `NEW ZONE: ${z.name.toUpperCase()}!` : z.name.toUpperCase(), first ? 'big' : '', css);
+    this.hud.toast(`Gems worth ×${z.gems}`, 'small', css);
+    if (first) {
+      this.slowmo = Math.max(this.slowmo, 0.5);
+      this.sfx.sparkle();
+    } else {
+      this.sfx.ding();
     }
   }
 
@@ -1769,7 +1795,7 @@ export class Game {
       if (gainXp(slot, realDt)) this.hud.toast(`${slot.name} can level up!`, 'good small');
     }
     this.sessionT += realDt;
-    const next = GIFTS.at[this.giftIndex];
+    const next = GIFTS[this.giftIndex]?.at;
     this.hud.setGift(next === undefined ? null : next - this.sessionT);
     this.saveTimer -= realDt;
     if (this.saveTimer <= 0) {
@@ -1783,13 +1809,16 @@ export class Game {
     }
   }
 
+  /** A session gift: gems, coins or both. */
   private claimGift(): void {
-    const next = GIFTS.at[this.giftIndex];
-    if (next === undefined || this.sessionT < next) return;
+    const gift = GIFTS[this.giftIndex];
+    if (!gift || this.sessionT < gift.at) return;
     this.giftIndex++;
-    const reward = Math.max(GIFTS.min, Math.round(incomePerSecond(this.save) * GIFTS.incomeSeconds));
-    this.save.coins += reward;
-    this.hud.toast(`Gift! +${formatCoins(reward)} coins`, 'gold');
+    const coins = gift.incomeSeconds > 0 ? Math.max(GIFT_COINS.min, Math.round(incomePerSecond(this.save) * gift.incomeSeconds)) : 0;
+    this.save.coins += coins;
+    this.save.gems += gift.gems;
+    const parts = [gift.gems ? `+${gift.gems} gems` : '', coins ? `+${formatCoins(coins)} coins` : ''].filter(Boolean);
+    this.hud.toast(`Gift! ${parts.join(' ')}`, 'gold');
     this.sfx.ding();
     writeSave(this.save);
   }

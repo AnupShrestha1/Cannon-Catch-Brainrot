@@ -1,5 +1,5 @@
 // Coins, gems, upgrades, pads, the gacha, merging and selling: pure rules over the save.
-import { ECONOMY, FIRST_PULL_RARITY, LEVELS, MERGE, RARITIES, REBIRTH, ROSTER, UPGRADES, rollTier, type GachaTier, type Track } from './config';
+import { ECONOMY, LEVELS, MERGE, RARITIES, REBIRTH, ROSTER, STARTER_PULLS, UPGRADES, rollTier, type GachaTier, type Track } from './config';
 import type { Owned, PadSlot, Save } from './store';
 
 export function upgradesBought(save: Save, track: Track): number {
@@ -99,7 +99,7 @@ export function pull(save: Save, tier: GachaTier): Owned | null {
   if (save.gems < tier.cost || !tierUnlocked(save, tier)) return null;
   save.gems -= tier.cost;
   let rarity = rollTier(tier);
-  if (save.pulls === 0) rarity = Math.max(rarity, FIRST_PULL_RARITY);
+  rarity = Math.max(rarity, STARTER_PULLS[save.pulls + 1] ?? 0);
   const counters = (save.pity[tier.id] ??= {});
   for (const [floor, every] of tier.pity) {
     if ((counters[floor] ?? 0) + 1 >= every) rarity = Math.max(rarity, floor);

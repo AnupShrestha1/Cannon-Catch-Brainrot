@@ -67,7 +67,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   - Super pull, 100 gems, unlocked once a flight reaches Cloud Kingdom: Uncommon 35%, Rare 40%, Epic
     18%, Legendary 7%.
   - Each tier has a ×10 button once you can afford ten.
-  - The very first pull is at least Uncommon.
+  - Beginner's luck: the 1st pull is at least Uncommon and the 3rd at least Rare.
   - Hidden pity, never shown to the player: on Basic pulls, every 15th pull without an Uncommon or better
     is one, and likewise a Rare by 30, an Epic by 60 and a Legendary by 90. On Super pulls: a Rare by 5,
     an Epic by 12 and a Legendary by 30. Each counter resets when that rarity or better comes up, by luck
@@ -88,7 +88,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   put one on display, or merge a rarity.
 - **Showcase**: a stone hall with a red carpet down the middle and two rows of 5 slots either side,
   laid out like the sketch. 4 slots are open at the start; locked ones are roped off, and each base
-  expansion in Upgrades opens 2 more (1,000, then 5,000, then 25,000 coins). Empty open slots pulse a
+  expansion in Upgrades opens 2 more (600, then 3,000, then 15,000 coins). Empty open slots pulse a
   ring of light.
 - **Slots**: a brainrot on display earns coins once a second by rarity (Common 1/s up to Legendary 90/s),
   up to 10 minutes' worth. The coins waiting show as a big gold coin spinning slowly over its head, with
@@ -103,8 +103,12 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   arrow bobs over the next place to go (a station's platform, coins to collect, a brainrot ready to
   level up), and a gold
   arrow with a dark outline on the ground by the player points the way. When the next step is a
-  button (Upgrades, Launch), that button bounces instead. From flight 4, the apex
+  button (Upgrades, Launch), that button bounces instead. From flight 2, the apex
   shows the next zone's gem value and the cannon level that reaches it.
+- **New zones**: entering a zone on the way up shows its name and gem value; the first time ever, it's a
+  big NEW ZONE banner with a sparkle and a moment of slow motion. The cannon's first levels climb fast
+  (90 m at level 1, 155 m at level 6), so a good launch reaches Cloud Kingdom within the first few
+  minutes; after that, each level adds less (410 m at level 28).
 - **Upgrades**: cannon power (to level 37 in this build), gem finder (+10% gems per pickup each), gem
   magnet (+10% grab radius each), steering (+6% turn speed each), parachute (+5% safe window each), and
   showcase slots.
@@ -115,7 +119,9 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - Daily rewards: a 7-day login streak (coins, a Rare on day 3, an Epic on day 7, both to the backpack).
 - Collection book: every character as a silhouette until pulled, with a one-time reward per completed
   page (500, 5,000 and 50,000 coins).
-- Session gifts unlock at 5, 10, 20 and 40 minutes of play.
+- Session gifts: 20 gems at 2 minutes (two more pulls, to keep a new player going), then 30 gems and a
+  minute of income at 5 minutes, 50 gems and 2 minutes at 10, 100 gems (a Super pull) and 2 minutes at
+  20, and 200 gems and 4 minutes at 40.
 - Each pull, and now and then a brainrot on display, chants its name with the browser's text-to-speech.
 
 Older saves carry over: catches that were being carried go to the backpack, and bases bigger than 10
@@ -176,9 +182,27 @@ each milestone over 200 simulated players. Try other numbers without editing the
 SIM='{"cannon":{"growth":1.3},"gems":{"bigChance":0.2}}' npm run sim
 ```
 
-With the current numbers: first pull after flight 1, first cannon upgrade at about 1 minute, first Cloud
-Kingdom run at about 6 minutes, first Legendary on display at about 24 minutes, all 10 slots open at
-about 40 minutes, and rebirth unlocked at about 88 minutes. Offline earnings aren't modelled.
+It reports the first two minutes (the hook) and the long game. With the current numbers:
+
+| When | What happens |
+| --- | --- |
+| 33 s | First pull (an Uncommon or better) |
+| 67 s | First cannon upgrade |
+| 100 s | Third pull: a guaranteed Rare, the first glowing card |
+| 101 s | First brainrot level-up |
+| 2 min | Gift: 20 gems, two more pulls |
+| 2.3 min | First Cloud Kingdom run: new-zone banner, gems worth 3× |
+| 4 min | Super pull unlocked and used |
+| 7 min | First Epic |
+| 8 min | First showcase expansion |
+| 15 min | First Legendary on display |
+| 28 min | All 10 slots open |
+| 40 min | First Storm Layer run |
+| 64 min | Rebirth unlocks |
+
+By 2 minutes the median player has had 8 rewards (pulls, upgrades and level-ups), has cannon level 5
+and earns about 12 coins a second, and every simulated player has a Rare. Each big milestone after
+that takes roughly twice as long as the one before. Offline earnings aren't modelled.
 
 ## Tuning
 

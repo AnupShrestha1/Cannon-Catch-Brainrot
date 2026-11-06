@@ -105,8 +105,11 @@ export const GACHA: GachaTier[] = [
   },
 ];
 
-/** The very first pull is at least this rarity, so a new player's first brainrot feels good. */
-export const FIRST_PULL_RARITY = 1;
+/**
+ * Beginner's luck, by pull number: the 1st pull is at least Uncommon and the 3rd at least Rare, so a new
+ * player's first two minutes include a glowing Rare card.
+ */
+export const STARTER_PULLS: Record<number, number> = { 1: 1, 3: 2 };
 
 /** Merging: this many of a rarity make one random character of the next rarity up. Legendary is the top for now. */
 export const MERGE: Record<number, number> = { 0: 10, 1: 8, 2: 6, 3: 4 };
@@ -122,7 +125,8 @@ export function rollTier(tier: GachaTier): number {
 
 // Normal-launch apex per cannon level, log-linear between these anchors, so each zone's level
 // in the design doc is the first level whose normal launch reaches it.
-const HEIGHT_ANCHORS: [number, number][] = [[1, 90], [12, 155], [28, 410], [45, 820], [60, 1550]];
+// The first few levels climb fast, so a good launch reaches Cloud Kingdom within the first few minutes.
+const HEIGHT_ANCHORS: [number, number][] = [[1, 90], [6, 155], [28, 410], [45, 820], [60, 1550]];
 
 export function launchHeight(level: number): number {
   const l = Math.min(60, Math.max(1, level));
@@ -197,7 +201,7 @@ export const TUTORIAL = {
   noDropFlights: 3,
   wideChuteFlights: 2,
   /** From this flight, the apex shows the next locked zone and the cannon level it needs. */
-  goalFromFlight: 4,
+  goalFromFlight: 2,
 };
 
 /** Share of the run's gems lost in a crash. */
@@ -213,8 +217,8 @@ export const TRACKS: Track[] = ['cannon', 'finder', 'magnet', 'steering', 'chute
  */
 export const UPGRADES: Record<Track, { name: string; base: number; growth: number; max: number; effect: number }> = {
   // Basic Launch stops at cannon level 37, whose perfect launch stays inside the Storm Layer. The doc goes to 60.
-  // Retuned with `npm run sim` from the doc's 50 × 1.18: rebirth now unlocks after about 63 minutes, not 8.
-  cannon: { name: 'Cannon power', base: 25, growth: 1.5, max: 36, effect: 0 },
+  // Tuned with `npm run sim` (the doc's 50 × 1.18 let rebirth unlock after 8 minutes): about 64 minutes now.
+  cannon: { name: 'Cannon power', base: 25, growth: 1.47, max: 36, effect: 0 },
   finder: { name: 'Gem finder', base: 150, growth: 1.45, max: 20, effect: 0.1 },
   magnet: { name: 'Gem magnet', base: 120, growth: 1.25, max: 25, effect: 0.1 },
   steering: { name: 'Steering', base: 100, growth: 1.22, max: 25, effect: 0.06 },
@@ -236,7 +240,7 @@ export const ECONOMY = {
   padStep: 2,
   maxPads: 10,
   // Retuned with `npm run sim` from the doc's 400 × 3, which let income outrun every cost.
-  firstExpansion: 1000,
+  firstExpansion: 600,
   expansionGrowth: 5,
   /** A pad's cash pile stops growing at this many seconds of its income. */
   padCapSeconds: 600,
@@ -248,7 +252,24 @@ export const ECONOMY = {
  * Character levels: each adds `incomeBonus`; level 2 costs `firstCostSeconds` of base income, then ×`growth`.
  * A level also needs XP, earned by time on a pad: `xpFirstSeconds` for level 2, then ×`xpGrowth`.
  */
-export const LEVELS = { max: 10, incomeBonus: 0.25, firstCostSeconds: 30, growth: 1.6, xpFirstSeconds: 60, xpGrowth: 1.5 };
+export const LEVELS = { max: 10, incomeBonus: 0.25, firstCostSeconds: 30, growth: 1.6, xpFirstSeconds: 30, xpGrowth: 1.6 };
 
-/** Session gifts at these seconds of play; each pays this many seconds of income, at least `min`. */
-export const GIFTS = { at: [300, 600, 1200, 2400], incomeSeconds: 120, min: 100 };
+export interface Gift {
+  /** Seconds of play in this session before it can be claimed. */
+  at: number;
+  /** Gems it gives. */
+  gems: number;
+  /** Seconds of current income it pays in coins (0 for none), at least GIFT_COINS.min when it pays coins. */
+  incomeSeconds: number;
+}
+
+/** Session gifts, in order. */
+export const GIFTS: Gift[] = [
+  // At 2 minutes: two more pulls, to keep a new player going.
+  { at: 120, gems: 20, incomeSeconds: 0 },
+  { at: 300, gems: 30, incomeSeconds: 60 },
+  { at: 600, gems: 50, incomeSeconds: 120 },
+  { at: 1200, gems: 100, incomeSeconds: 120 },
+  { at: 2400, gems: 200, incomeSeconds: 240 },
+];
+export const GIFT_COINS = { min: 100 };

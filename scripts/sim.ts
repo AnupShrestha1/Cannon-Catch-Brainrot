@@ -13,6 +13,7 @@ import {
   GACHA,
   GEMS,
   GIFTS,
+  GIFT_COINS,
   MAX_ZONE,
   REBIRTH,
   TRACKS,
@@ -53,12 +54,29 @@ const GRAB_RATE = 0.6;
 
 interface Milestones {
   firstPull: number;
+  thirdPull: number;
+  firstRare: number;
   firstUpgrade: number;
+  firstLevelUp: number;
   cloudKingdom: number;
+  superPull: number;
+  firstExpansion: number;
+  firstEpic: number;
   firstLegendary: number;
   allSlots: number;
   stormLayer: number;
   stormCannon: number;
+}
+
+/** What a player has at the 2-minute mark: the hook window. */
+interface AtTwo {
+  pulls: number;
+  bestRarity: number;
+  income: number;
+  cannon: number;
+  levelUps: number;
+  /** Pulls, cannon upgrades and level-ups: rewarding moments in the first 2 minutes. */
+  rewards: number;
 }
 
 /** Gems a run passes, placed the way Game.spawnRun places them (pairs and big gems on average). */
@@ -148,20 +166,32 @@ function shop(save: Save): void {
   }
 }
 
-function simulate(minutes: number): Milestones {
+function simulate(minutes: number): { m: Milestones; two: AtTwo } {
   const save = defaultSave();
-  const m: Milestones = {
-    firstPull: NaN,
-    firstUpgrade: NaN,
-    cloudKingdom: NaN,
-    firstLegendary: NaN,
-    allSlots: NaN,
-    stormLayer: NaN,
-    stormCannon: NaN,
-  };
+  const m = Object.fromEntries(
+    [
+      'firstPull',
+      'thirdPull',
+      'firstRare',
+      'firstUpgrade',
+      'firstLevelUp',
+      'cloudKingdom',
+      'superPull',
+      'firstExpansion',
+      'firstEpic',
+      'firstLegendary',
+      'allSlots',
+      'stormLayer',
+      'stormCannon',
+    ].map((k) => [k, NaN]),
+  ) as unknown as Milestones;
   const mark = (key: keyof Milestones, t: number) => {
     if (Number.isNaN(m[key])) m[key] = t;
   };
+  const two: AtTwo = { pulls: 0, bestRarity: -1, income: 0, cannon: 1, levelUps: 0, rewards: 0 };
+  let levelUps = 0;
+  let upgrades = 0;
+  let bestRarity = -1;
   let t = 0;
   let gift = 0;
   while (t < minutes * 60) {
@@ -172,8 +202,9 @@ function simulate(minutes: number): Milestones {
     save.coins += incomePerSecond(save) * runTime;
     for (const slot of save.pads) if (slot) gainXp(slot, runTime);
     t += runTime;
-    if (gift < GIFTS.at.length && t >= GIFTS.at[gift]) {
-      save.coins += Math.max(GIFTS.min, incomePerSecond(save) * GIFTS.incomeSeconds);
+    while (gift < GIFTS.length && t >= GIFTS[gift].at) {
+      save.coins += Math.max(GIFT_COINS.min, incomePerSecond(save) * GIFTS[gift].incomeSeconds);
+      save.gems += GIFTS[gift].gems;
       gift++;
     }
 
@@ -184,30 +215,73 @@ function simulate(minutes: number): Milestones {
     if (apex >= 150) mark('cloudKingdom', t);
     if (apex >= REBIRTH.unlockHeight) mark('stormLayer', t);
 
-    const pullsBefore = save.pulls;
+    const before = { pulls: save.pulls, pads: save.pads.length, levels: levelsOf(save), cannon: save.cannon };
+    const superBefore = save.pity.super ? 1 : 0;
     gacha(save);
-    if (save.pulls > 0 && pullsBefore === 0) mark('firstPull', t);
+    for (const slot of save.pads) if (slot) bestRarity = Math.max(bestRarity, slot.rarity);
+    for (const o of save.inventory) bestRarity = Math.max(bestRarity, o.rarity);
+    if (save.pulls > 0) mark('firstPull', t);
+    if (save.pulls >= 3) mark('thirdPull', t);
+    if (bestRarity >= 2) mark('firstRare', t);
+    if (bestRarity >= 3) mark('firstEpic', t);
+    if (save.pity.super && !superBefore) mark('superPull', t);
     if (save.pads.some((slot) => slot && slot.rarity >= 4)) mark('firstLegendary', t);
     shop(save);
     if (save.cannon > 1) mark('firstUpgrade', t);
+    if (levelsOf(save) > before.levels) mark('firstLevelUp', t);
+    if (save.pads.length > ECONOMY.startPads) mark('firstExpansion', t);
     if (save.pads.length >= ECONOMY.maxPads) mark('allSlots', t);
     if (save.cannon >= REBIRTH.cannonLevel) mark('stormCannon', t);
+    levelUps += Math.max(0, levelsOf(save) - before.levels);
+    upgrades += save.cannon - before.cannon;
+    if (t <= 120) {
+      two.pulls = save.pulls;
+      two.bestRarity = bestRarity;
+      two.income = incomePerSecond(save);
+      two.cannon = save.cannon;
+      two.levelUps = levelUps;
+      two.rewards = save.pulls + upgrades + levelUps;
+    }
   }
-  return m;
+  return { m, two };
 }
 
-const runs = Array.from({ length: 200 }, () => simulate(240));
+/** Levels gained by everything on display, for counting level-ups. */
+function levelsOf(save: Save): number {
+  return save.pads.reduce((n, slot) => n + (slot ? (slot.level ?? 1) - 1 : 0), 0);
+}
+
+const results = Array.from({ length: 300 }, () => simulate(240));
+const runs = results.map((r) => r.m);
 const median = (key: keyof Milestones) => {
   const values = runs.map((r) => r[key]).filter((v) => !Number.isNaN(v)).sort((a, b) => a - b);
   if (!values.length) return 'not reached';
   const mid = values[Math.floor(values.length / 2)];
-  return `${(mid / 60).toFixed(1)} min${values.length < runs.length ? ` (${values.length}/${runs.length} runs)` : ''}`;
+  const text = mid < 120 ? `${Math.round(mid)} s` : `${(mid / 60).toFixed(1)} min`;
+  return `${text}${values.length < runs.length ? ` (${values.length}/${runs.length} runs)` : ''}`;
 };
-console.log('Median time to each milestone over 200 simulated players, 4 hours each:');
-console.log(`  first gacha pull          ${median('firstPull')}   target: after flight 1`);
-console.log(`  first cannon upgrade      ${median('firstUpgrade')}   target: by minute 2`);
-console.log(`  first Cloud Kingdom run   ${median('cloudKingdom')}   target: by minute 5`);
+const mid = (pick: (two: AtTwo) => number) => {
+  const values = results.map((r) => pick(r.two)).sort((a, b) => a - b);
+  return values[Math.floor(values.length / 2)];
+};
+const share = (test: (two: AtTwo) => boolean) => `${Math.round((results.filter((r) => test(r.two)).length / results.length) * 100)}%`;
+const RARITY = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret'];
+console.log(`Median over ${results.length} simulated players, 4 hours each.`);
+console.log('');
+console.log('The first 2 minutes (the hook):');
+console.log(`  first gacha pull          ${median('firstPull')}`);
+console.log(`  first cannon upgrade      ${median('firstUpgrade')}`);
+console.log(`  third pull                ${median('thirdPull')}`);
+console.log(`  first Rare                ${median('firstRare')}`);
+console.log(`  first brainrot level-up   ${median('firstLevelUp')}`);
+console.log(`  at 2 min: ${mid((x) => x.pulls)} pulls, ${mid((x) => x.rewards)} rewards, cannon Lv ${mid((x) => x.cannon)}, ${mid((x) => x.income)} coins/s, best ${RARITY[mid((x) => x.bestRarity)] ?? 'none'}; ${share((x) => x.bestRarity >= 2)} have a Rare`);
+console.log('');
+console.log('The long game:');
+console.log(`  first Cloud Kingdom run   ${median('cloudKingdom')}`);
+console.log(`  first Super pull          ${median('superPull')}`);
+console.log(`  first slot expansion      ${median('firstExpansion')}`);
+console.log(`  first Epic                ${median('firstEpic')}`);
 console.log(`  first Legendary on show   ${median('firstLegendary')}`);
 console.log(`  all 10 slots open         ${median('allSlots')}`);
 console.log(`  first Storm Layer run     ${median('stormLayer')}`);
-console.log(`  rebirth unlocks           ${median('stormCannon')}   target: 60 to 90 min`);
+console.log(`  rebirth unlocks           ${median('stormCannon')}`);
