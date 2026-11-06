@@ -99,6 +99,7 @@ export function pull(save: Save, tier: GachaTier): Owned | null {
   if (save.gems < tier.cost || !tierUnlocked(save, tier)) return null;
   save.gems -= tier.cost;
   let rarity = rollTier(tier);
+  // The scripted start (first 10 pulls), then the normal odds and pity.
   rarity = Math.max(rarity, STARTER_PULLS[save.pulls + 1] ?? 0);
   const counters = (save.pity[tier.id] ??= {});
   for (const [floor, every] of tier.pity) {

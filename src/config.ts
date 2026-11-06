@@ -106,10 +106,13 @@ export const GACHA: GachaTier[] = [
 ];
 
 /**
- * Beginner's luck, by pull number: the 1st pull is at least Uncommon and the 3rd at least Rare, so a new
- * player's first two minutes include a glowing Rare card.
+ * The scripted start: within the first 10 pulls a player is guaranteed at least two Uncommons and one Rare,
+ * by pull number. The 1st is their first brainrot, the 3rd lands as a glowing Rare at about 100 s, and the
+ * 5th comes from the 2-minute gift. The other pulls roll the normal odds (and can come out better); from
+ * the 11th pull on it's the normal odds and pity only.
  */
-export const STARTER_PULLS: Record<number, number> = { 1: 1, 3: 2 };
+export const STARTER_PULLS: Record<number, number> = { 1: 1, 3: 2, 5: 1 };
+export const STARTER_PULL_COUNT = 10;
 
 /** Merging: this many of a rarity make one random character of the next rarity up. Legendary is the top for now. */
 export const MERGE: Record<number, number> = { 0: 10, 1: 8, 2: 6, 3: 4 };

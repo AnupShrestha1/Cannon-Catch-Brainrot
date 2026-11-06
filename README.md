@@ -67,7 +67,10 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   - Super pull, 100 gems, unlocked once a flight reaches Cloud Kingdom: Uncommon 35%, Rare 40%, Epic
     18%, Legendary 7%.
   - Each tier has a ×10 button once you can afford ten.
-  - Beginner's luck: the 1st pull is at least Uncommon and the 3rd at least Rare.
+  - The first 10 pulls are scripted to include at least two Uncommons and one Rare: the 1st is at least
+    Uncommon, the 3rd at least Rare (a glowing card at about 100 s) and the 5th at least Uncommon. The
+    rest roll the normal odds and can come out better; from the 11th pull on, it's the normal odds and
+    pity only.
   - Hidden pity, never shown to the player: on Basic pulls, every 15th pull without an Uncommon or better
     is one, and likewise a Rare by 30, an Epic by 60 and a Legendary by 90. On Super pulls: a Rare by 5,
     an Epic by 12 and a Legendary by 30. Each counter resets when that rarity or better comes up, by luck
