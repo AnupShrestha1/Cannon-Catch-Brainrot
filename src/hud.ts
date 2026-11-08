@@ -49,6 +49,7 @@ export interface TuningHooks {
   changed(): void;
   addCoins(amount: number): void;
   addGems(amount: number): void;
+  setSpeed(scale: number): void;
   resetAll(): void;
 }
 
@@ -1004,6 +1005,26 @@ export class Hud {
         btn.blur();
       });
     }
+    // Playtest speed-up, x1 to x20 (not saved, so a reload is back to x1).
+    const speed = byId<HTMLInputElement>('speedIn');
+    speed.addEventListener('input', () => {
+      byId('speedVal').textContent = `×${speed.value}`;
+      hooks.setSpeed(Number(speed.value));
+    });
+    speed.addEventListener('change', () => speed.blur());
+    // Active play time, in game time (what a player at normal speed would have played) and real time.
+    const clock = (s: number) => {
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = Math.floor(s % 60);
+      return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m ${String(sec).padStart(2, '0')}s`;
+    };
+    const showTime = () => {
+      byId('playVal').textContent = clock(save.playTime ?? 0);
+      byId('playReal').textContent = `(real ${clock(save.playReal ?? 0)})`;
+    };
+    showTime();
+    window.setInterval(showTime, 500);
     // Reset wipes the save, so it takes a second tap within 3 seconds.
     const resetBtn = byId<HTMLButtonElement>('resetBtn');
     let resetTimer = 0;

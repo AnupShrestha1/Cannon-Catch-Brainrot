@@ -515,10 +515,42 @@ const boltGeo = new THREE.BoxGeometry(0.18, 1.6, 0.18);
 /** A dark thundercloud with a lightning bolt that flickers beneath it. */
 const meteorRockMat = flat(0x5a4436);
 const meteorCraterMat = flat(0x3a2a22);
-const meteorFlameMat = new THREE.MeshBasicMaterial({ color: 0xff8a2b, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending });
-const meteorCoreMat = new THREE.MeshBasicMaterial({ color: 0xfff1a8, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
+const satBodyMat = flat(0xd9a531, { emissive: 0x3a2600 });
+const satPanelMat = flat(0x2a4fa8, { emissive: 0x0a1640 });
+const satFrameMat = flat(0xc9ced8);
 
-/** A meteor for the Edge of Space: a tumbling cratered rock trailing a blazing tail. */
+/** A satellite for the Edge of Space: a gold-foil body, two blue solar wings and a dish, turning slowly. */
+export function makeSatellite(): BirdRig {
+  const group = new THREE.Group();
+  const sat = new THREE.Group();
+  sat.add(new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), satBodyMat));
+  for (const side of [-1, 1]) {
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 8).rotateZ(Math.PI / 2), satFrameMat);
+    arm.position.x = side * 0.7;
+    // The panels face the camera (the flight is seen from the side).
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.8, 0.06), satPanelMat);
+    panel.position.x = side * 1.7;
+    // Thin frame lines across the panel, like solar cells.
+    for (let i = -1; i <= 1; i++) {
+      const line = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.82, 0.08), satFrameMat);
+      line.position.set(side * 1.7 + i * 0.4, 0, 0);
+      sat.add(line);
+    }
+    sat.add(arm, panel);
+  }
+  const dish = new THREE.Mesh(new THREE.SphereGeometry(0.42, 18, 10, 0, Math.PI * 2, 0, Math.PI / 3), satFrameMat);
+  dish.position.y = 0.95;
+  dish.rotation.x = Math.PI;
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 6), satFrameMat);
+  mast.position.y = 0.6;
+  const blink = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff3b3b }));
+  blink.position.set(0, -0.5, 0);
+  sat.add(dish, mast, blink);
+  group.add(sat);
+  return { group, wings: [], spinner: sat, flash: blink };
+}
+
+/** A meteor for Outer Space: a tumbling cratered rock. */
 export function makeMeteor(): BirdRig {
   const group = new THREE.Group();
   const rock = new THREE.Group();
@@ -532,16 +564,7 @@ export function makeMeteor(): BirdRig {
     crater.scale.setScalar(0.6 + (i % 2) * 0.4);
     rock.add(crater);
   }
-  // The blazing tail streams up and back behind it.
-  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.8, 3.2, 20, 1, true), meteorFlameMat);
-  tail.position.set(0, 1.9, 0);
-  const core = new THREE.Mesh(new THREE.ConeGeometry(0.45, 2, 16, 1, true), meteorCoreMat);
-  core.position.set(0, 1.3, 0);
-  const glow = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: softTexture(), color: 0xff7a2b, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
-  );
-  glow.scale.setScalar(3.4);
-  group.add(rock, tail, core, glow);
+  group.add(rock);
   return { group, wings: [], spinner: rock };
 }
 

@@ -267,10 +267,10 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   Edge of Space and the cannon stops at that rebirth's level (25); after it, the Edge of Space is reached at
   about cannon Lv 31 (a perfect launch from about Lv 27).
 - **Edge of Space** (650 m and up): the fourth area. The sky turns deep navy, the haze clears and stars come
-  out, the clouds are left below, and gems are worth 45 each. Its hazards are meteors: cratered rocks
-  tumbling across with a blazing tail. The Galaxy machine (700 m) unlocks up here.
+  out, the clouds are left below, and gems are worth 45 each. Its hazards are satellites: gold-foil
+  bodies with blue solar wings, drifting across. The Galaxy machine (700 m) unlocks up here.
 - **Outer Space** (1,000 m and up): the end-game area, opened by the third rebirth and reached around cannon
-  Lv 36 (the cannon now goes to Lv 51). The sky is nearly black and full of stars, meteors fly, and its gems
+  Lv 36 (the cannon now goes to Lv 51). The sky is nearly black and full of stars, meteors (cratered rocks) tumble across, and its gems
   are celestial: worth 150 each, shimmering through every colour.
 - **Celestial**: the end-game rarity, above Mythic. It's never pulled from a machine: the only way to get one
   is to merge 5 Mythics. Each earns 3,000 coins/s (a Mythic earns 350). Two characters: Galattico Gufo, an
@@ -439,8 +439,10 @@ against Basic's 1.21 and 3.5).
 
 ## Tuning
 
-Press **T** (or the Tune button) for the tuning panel: cannon level (1–37 in this build), hazards, coin
-buttons (+1K to +1B), gem buttons (+10 to +10K), and a full reset that needs a second tap. **M** mutes.
+Press **T** (or the Tune button) for the tuning panel: cannon level, a game-speed slider (×1 to ×20, not
+saved), active play time (game time, which counts sped-up time, and real time; only while the tab is on
+screen), hazards, coin buttons (+1K to +1B), gem buttons (+10 to +10K), and a full reset that needs a
+second tap. **M** mutes.
 All first-pass numbers live in `src/config.ts`.
 
 ## Code map

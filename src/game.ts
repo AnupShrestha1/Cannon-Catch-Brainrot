@@ -103,6 +103,7 @@ import {
   makePlane,
   makeStormCloud,
   makeMeteor,
+  makeSatellite,
   makePlayer,
   skyColorAt,
   type BirdRig,
@@ -130,12 +131,13 @@ interface Gem {
   seed: number;
 }
 
-type HazardKind = 'bird' | 'plane' | 'storm' | 'meteor';
+type HazardKind = 'bird' | 'plane' | 'storm' | 'satellite' | 'meteor';
 
 const HAZARDS: Record<HazardKind, { radius: number; speed: [number, number]; toast: string }> = {
   bird: { radius: FLIGHT.hazardRadius, speed: [4, 7], toast: 'BONK!' },
   plane: { radius: 1.4, speed: [9, 13], toast: 'WHAM!' },
   storm: { radius: 1.9, speed: [0.6, 1.2], toast: 'ZAP!' },
+  satellite: { radius: 1.5, speed: [2.5, 4], toast: 'CLANG!' },
   meteor: { radius: 1.3, speed: [5, 8], toast: 'KABOOM!' },
 };
 
@@ -414,6 +416,8 @@ export class Game {
 
   /** Dev-only: stops the frame loop from advancing the game, so debugStep() is the only clock. */
   debugPaused = false;
+  /** Playtest speed-up from the Tune panel (x1 to x20); not saved. */
+  timeScale = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -509,13 +513,14 @@ export class Game {
     const gap = this.lastUpdate ? (now - this.lastUpdate) / 1000 : 0;
     this.lastUpdate = now;
     if (this.debugPaused || gap <= 0) return;
-    let steps = Math.min(gap, 20);
+    const scaled = gap * this.timeScale;
+    let steps = Math.min(scaled, 20);
     while (steps > 0) {
       const dt = Math.min(0.05, steps);
       this.update(dt);
       steps -= dt;
     }
-    if (gap > 20) this.updateEconomy(gap - 20);
+    if (scaled > 20) this.updateEconomy(scaled - 20);
   }
 
   /** Dev-only: advance the game by fixed 60 fps steps and render once, for testing in throttled tabs. */
@@ -538,7 +543,20 @@ export class Game {
     if (this.lastUpdate && now - this.lastUpdate > 250) this.catchUp(now);
     else {
       this.lastUpdate = now;
-      if (!this.debugPaused) this.update(dt);
+      if (!this.debugPaused) {
+        // Sped up for playtests: several normal-sized steps per frame.
+        let left = dt * this.timeScale;
+        while (left > 1e-6) {
+          const step = Math.min(0.05, left);
+          this.update(step);
+          left -= step;
+        }
+        // Active play time: only frames drawn while the tab is on screen count (not background catch-up).
+        if (document.visibilityState === 'visible') {
+          this.save.playReal = (this.save.playReal ?? 0) + dt;
+          this.save.playTime = (this.save.playTime ?? 0) + dt * this.timeScale;
+        }
+      }
     }
     this.renderer.render(this.scene, this.camera);
     requestAnimationFrame(this.frame);
@@ -603,6 +621,9 @@ export class Game {
         this.save.gems += amount;
         writeSave(this.save);
         this.hud.toast(`+${formatCoins(amount)} gems (test)`, 'good small');
+      },
+      setSpeed: (scale) => {
+        this.timeScale = scale;
       },
       resetAll: () => {
         clearSave();
@@ -891,10 +912,19 @@ export class Game {
   /** Birds below the Storm Layer; planes and thunderclouds inside it. */
   private addBird(y: number): void {
     const zone = zoneIndexAt(y);
-    // Birds low down, planes and storm clouds in the Storm Layer, meteors at the Edge of Space.
-    const kind: HazardKind = zone < 2 ? 'bird' : zone >= 3 ? 'meteor' : Math.random() < 0.5 ? 'plane' : 'storm';
+    // Birds low down, planes and storm clouds in the Storm Layer, satellites at the Edge of Space, meteors in Outer Space.
+    const kind: HazardKind =
+      zone < 2 ? 'bird' : zone === 3 ? 'satellite' : zone >= 4 ? 'meteor' : Math.random() < 0.5 ? 'plane' : 'storm';
     const rig =
-      kind === 'bird' ? makeBird(ZONES[zone].hazard) : kind === 'plane' ? makePlane() : kind === 'meteor' ? makeMeteor() : makeStormCloud();
+      kind === 'bird'
+        ? makeBird(ZONES[zone].hazard)
+        : kind === 'plane'
+          ? makePlane()
+          : kind === 'satellite'
+            ? makeSatellite()
+            : kind === 'meteor'
+              ? makeMeteor()
+              : makeStormCloud();
     this.scene.add(rig.group);
     this.birds.push({
       kind,
@@ -3074,10 +3104,11 @@ export class Game {
           b.x = clamp(b.x, -edge, edge);
         }
         b.y = b.baseY + Math.sin(this.time * 2 + b.seed) * (b.kind === 'bird' ? 0.6 : 0.3);
-        if (b.kind !== 'storm') b.rig.group.rotation.y = b.dir > 0 ? 0 : Math.PI;
+        if (b.kind !== 'storm' && b.kind !== 'satellite') b.rig.group.rotation.y = b.dir > 0 ? 0 : Math.PI;
       }
-      // A plane's propeller whirs; a meteor tumbles slowly.
+      // A plane's propeller whirs; a meteor tumbles; a satellite turns slowly.
       if (b.rig.spinner && b.kind === 'meteor') b.rig.spinner.rotation.set(this.time * 1.4 + b.seed, this.time * 2 + b.seed, 0);
+      else if (b.rig.spinner && b.kind === 'satellite') b.rig.spinner.rotation.set(Math.sin(this.time * 0.7 + b.seed) * 0.25, Math.sin(this.time * 0.5 + b.seed) * 0.5, Math.sin(this.time * 0.4 + b.seed) * 0.2);
       else if (b.rig.spinner) b.rig.spinner.rotation.x = this.time * 40;
       if (b.rig.flash) b.rig.flash.visible = Math.sin(this.time * 9 + b.seed * 3) > 0.6;
       const flap = Math.sin(this.time * 14 + b.seed) * 0.8;

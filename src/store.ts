@@ -68,6 +68,9 @@ export interface Save {
   collected: string[];
   /** Book pages whose completion reward was claimed. */
   bookClaimed: number[];
+  /** Active play time in game seconds (sped-up time counts as game time), and in real seconds. */
+  playTime: number;
+  playReal: number;
 }
 
 const KEY = 'ccb-slice-v1';
@@ -109,6 +112,8 @@ export function defaultSave(): Save {
     lastDaily: '',
     collected: [],
     bookClaimed: [],
+    playTime: 0,
+    playReal: 0,
   };
 }
 

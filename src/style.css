@@ -1458,6 +1458,10 @@ button.primary,
   --lo: #3fa3e0;
 }
 
+#tune .tune-play {
+  margin-top: 10px;
+}
+
 #tune #resetBtn.armed {
   --c: #ff4d5e;
   --hi: #ff9aa4;
