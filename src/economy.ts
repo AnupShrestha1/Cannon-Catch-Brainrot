@@ -23,12 +23,61 @@ export function upgradeCost(save: Save, track: Track): number | null {
   return bought >= u.max ? null : Math.round(u.base * Math.pow(u.growth, bought));
 }
 
+/** Floors of the base: one, plus one for each of the first REBIRTH.floors rebirths. */
+export function floorsOf(save: Pick<Save, 'rebirths'>): number {
+  return 1 + Math.min(save.rebirths, REBIRTH.floors);
+}
+
+/** How many slots the base can have, over all its floors. */
+export function maxPads(save: Pick<Save, 'rebirths'>): number {
+  return ECONOMY.padsPerFloor * floorsOf(save);
+}
+
 /** Price of the next pair of slots, or null at max. */
 export function expansionCost(save: Save): number | null {
   const pads = save.pads.length;
-  if (pads >= ECONOMY.maxPads) return null;
+  if (pads >= maxPads(save)) return null;
   const step = (pads - ECONOMY.startPads) / ECONOMY.padStep;
-  return Math.round(ECONOMY.firstExpansion * Math.pow(ECONOMY.expansionGrowth, step));
+  const early = Math.min(step, 3);
+  return Math.round(
+    ECONOMY.firstExpansion * Math.pow(ECONOMY.expansionGrowth, early) * Math.pow(ECONOMY.lateExpansionGrowth, Math.max(0, step - 3)),
+  );
+}
+
+/**
+ * Rebirth: back to the start (coins, gems, upgrades, brainrots) for a permanent income bonus, keeping the rarest
+ * brainrot and every open slot. The first two also add a floor to the base, with a few of its slots open.
+ * Returns what was kept, and whether a floor was added.
+ */
+export function rebirthSave(save: Save): { kept: Owned | null; newFloor: boolean } {
+  let kept: Owned | null = null;
+  for (const o of [...save.pads, ...save.inventory]) if (o && (!kept || o.rarity > kept.rarity)) kept = { name: o.name, rarity: o.rarity };
+  const floorsBefore = floorsOf(save);
+  save.rebirths += 1;
+  const newFloor = floorsOf(save) > floorsBefore;
+  save.coins = 0;
+  save.gems = 0;
+  save.cannon = 1;
+  save.finder = save.magnet = save.steering = save.chute = 0;
+  let open = Math.max(ECONOMY.startPads, save.pads.length);
+  // A new floor: everything below it opens, and it comes with a few slots of its own.
+  if (newFloor) open = ECONOMY.padsPerFloor * floorsBefore + REBIRTH.newFloorPads;
+  save.pads = Array.from({ length: Math.min(open, maxPads(save)) }, () => null);
+  save.inventory = [];
+  if (kept) save.pads[0] = { name: kept.name, rarity: kept.rarity, cash: 0, level: 1, xp: 0 };
+  return { kept, newFloor };
+}
+
+/** Merges these particular backpack brainrots (all one rarity, exactly as many as a merge needs) into one. */
+export function mergeChosen(save: Save, chosen: Owned[]): Owned | null {
+  if (!chosen.length) return null;
+  const rarity = chosen[0].rarity;
+  const need = mergeNeed(rarity);
+  if (need === null || chosen.length !== need || chosen.some((o) => o.rarity !== rarity || !save.inventory.includes(o))) return null;
+  save.inventory = save.inventory.filter((o) => !chosen.includes(o));
+  const got = { name: pickName(rarity + 1), rarity: rarity + 1 };
+  save.inventory.push(got);
+  return got;
 }
 
 export function incomeMultiplier(save: Save): number {

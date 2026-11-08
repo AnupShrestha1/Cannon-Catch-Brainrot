@@ -136,10 +136,10 @@ export class RemoteView {
         plot.base.update({ pads: [] }, time, dt);
         continue;
       }
-      const key = owner.pads.map((p) => (p ? `${p.name}:${p.level ?? 1}` : '-')).join(',');
+      const key = `${owner.rebirths}|${owner.pads.map((p) => (p ? `${p.name}:${p.level ?? 1}` : '-')).join(',')}`;
       if (key !== plot.padsKey) {
         plot.padsKey = key;
-        plot.base.sync({ pads: owner.pads });
+        plot.base.sync({ pads: owner.pads, rebirths: owner.rebirths });
       }
       const near = plotAt(vx, vz)?.index === index || Math.hypot(plot.center[0] - vx, plot.center[1] - vz) < DETAIL_RANGE;
       plot.base.setDetail(near);

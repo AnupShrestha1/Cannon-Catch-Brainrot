@@ -31,10 +31,14 @@ the Network URL it prints.
 | Steer | Mouse position, or A/D or the arrow keys | Drag left and right |
 | Parachute | Space or click | PARACHUTE button |
 | At the base: walk (collects from slots you walk up to) | WASD or arrows, relative to the camera | Drag on the left half (joystick) |
+| At the base: jump | Space | |
 | At the base: turn and tilt the camera (drag up to look up at people flying) | Drag with the mouse | Drag on the right half |
 | Pull a gacha machine | Stand on its ×1 or ×10 pad, press E | Stand on a pad, tap the action button |
 | Merge station, shop | Step on the cauldron's platform or the shop's rug, press E | Same, tap the action button |
-| Launch | Launch button or Space (teleports you to the cannon from afar) | Launch button |
+| Launch | Launch button or F (teleports you to the cannon from afar) | Launch button |
+| Ride your base's lift between floors | Stand on the lift pad, press E | Stand on it, tap the action button |
+| Unlock 2 more slots | Unlock button over the next locked pair, or E beside it | Tap the Unlock button |
+| Rebirth | Stand on the rebirth station's gold pad, press E | Same, tap the action button |
 | Upgrades | Upgrades in the dock (teleports you to the shop) | Same |
 | At the base: level up a brainrot | Click Level up under it | Tap Level up under it |
 | At the base: store or sell the brainrot you're next to | E | The action button |
@@ -176,20 +180,30 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - **Merge station**, a bubbling cauldron behind the cannon. Step on the purple platform in front of it
   and press E (the pot jumps and wobbles on each merge): 10 Common → 1 Uncommon, 8 Uncommon →
   1 Rare, 6 Rare → 1 Epic, 4 Epic → 1 Legendary, 8 Legendary → 1 Mythic, from the backpack. A merge gives a random character of
-  the next rarity. Merge all runs every recipe from the bottom up in one click, and merged brainrots go
-  on display if they beat what's there.
+  the next rarity. You choose what goes in: the station lists your backpack by rarity, one card per character
+  with how many you have; tap a card to pick one more of it (once all are picked, a tap clears them), or
+  Pick 10 (or whatever the recipe needs) to fill a recipe at once, then Merge picked (in as many full groups
+  as you picked). Auto merge runs every recipe from the bottom up in one click. Merged brainrots go on
+  display if they beat what's there.
 - **Backpack**: brainrots not on display. Sell one or all of a rarity (60 seconds of its income each),
   put one on display, or merge a rarity.
 - **Shop**: a market stall with a striped awning and goods on the counter, and a keeper with an apron and
   a moustache who turns to watch customers and waves when you arrive. Upgrades in the dock teleports you
-  to its counter and opens the shop (from the cannon too); standing on its rug and pressing E opens it.
+  to its counter and opens the shop (from the cannon too); standing on its rug and pressing E opens it. The
+  shop sells flight upgrades only (cannon, gem finder, magnet, steering, parachute); slots are bought at the
+  base and rebirth has its own station.
 - **Showcase**: each plot is a tiled area edged by a low, rounded kerb in its owner's colour (gold for
   yours), open at the front where its path comes in from the lane: a subtle edge, not a fence, that you
   can step over. Inside, two lines of 5 pedestals run back from the lane either side of an aisle (filled in
   pairs from the front), with the brainrots turned toward the lane and the aisle, and the owner's name
-  board stands tall at the back. Walking down the aisle collects from both lines. 4 slots are open at the start; locked ones are roped off, and each base
-  expansion in Upgrades opens 2 more (600, then 3,600, then 21,600 coins). Empty open slots pulse a
-  ring of light.
+  board stands tall at the back. Walking down the aisle collects from both lines. 4 slots are open at the
+  start; locked ones are roped off. Unlocking is done at the base: an Unlock button floats over the next
+  locked pair (or press E beside it), 2 slots at a time (600, 3,600, 21,600, then each pair about 1.9×
+  the last). Empty open slots pulse a ring of light.
+- **Floors**: the first two rebirths each add a floor to the base, a deck on pillars over the one below
+  with a white railing, holding another 10 slots (4 open straight away, and every slot below it opens
+  too). A glowing lift pad at the back of the aisle rides you up a floor, and from the top back down to
+  the ground; up on a deck the railing keeps you on it. Other players' bases grow floors too.
 - **Slots**: a brainrot on display earns coins once a second by rarity (Common 1/s up to Legendary 90/s),
   up to 10 minutes' worth. The coins waiting show as a big gold coin spinning slowly over its head, with
   the amount above it. Pedestals are solid: walk up to one to collect its coins. Right under each
@@ -215,12 +229,19 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   big NEW ZONE banner with a sparkle and a moment of slow motion. The cannon's first levels climb fast
   (90 m at level 1, 155 m at level 6), so a good launch reaches Cloud Kingdom within the first few
   minutes; after that, each level adds less (410 m at level 28).
-- **Upgrades**: cannon power (to level 37 in this build), gem finder (+10% gems per pickup each), gem
-  magnet (+10% grab radius each), steering (+6% turn speed each), parachute (+5% safe window each), and
-  showcase slots.
-- **Rebirth** unlocks at cannon level 28, whose normal launch reaches the Storm Layer. It resets coins,
-  gems, upgrades, slots and the backpack, keeps the rarest brainrot, adds +50% income per rebirth, and
-  recolours the cannon.
+- **Upgrades** (the shop): cannon power (to level 37 in this build), gem finder (+10% gems per pickup
+  each), gem magnet (+10% grab radius each), steering (+6% turn speed each), parachute (+5% safe window
+  each).
+- **Rebirth** has its own station in the hub: a marble dais under a floating golden crystal in turning
+  rings, with a pillar of light once you can rebirth; its sign says what you'd get, or the cannon level
+  still needed with a progress bar. It unlocks at cannon level 28, whose normal launch reaches the Storm
+  Layer. Stand on its gold pad, press E and confirm. It resets coins, gems, upgrades and the backpack,
+  keeps the rarest brainrot and every open slot, adds +50% income per rebirth, and recolours the cannon;
+  the first two also add a floor to your base. It's grand and short (about three seconds): the crystal
+  dips and blasts up in a pillar of light with a shockwave across the ground, the screen flashes gold, a
+  huge REBIRTH! banner slams in over turning rays and confetti, the camera tilts up, and a volley of
+  fireworks whistles up behind the station and bursts in colour with a crackle. Bots rebirth at the
+  station too, with a smaller show.
 - Offline earnings: brainrots keep earning while you're away, at half rate for up to 2 hours.
 - Daily rewards: a 7-day login streak (coins, a Rare on day 3, an Epic on day 7, both to the backpack).
 - Collection book: every character as a silhouette until pulled, with a one-time reward per completed
@@ -264,9 +285,20 @@ Not in this build: fusion of named characters, sky events, the rival, the spin w
   brass bands, trunnions and a muzzle ring, on a carriage with spoked wheels over a round stone base; the
   cauldron has a rounded belly on three legs over a crackling fire, a gold rim and handles, and a bubbling,
   glowing brew; the fountain is turned on a lathe, with gold bands and a turning gold gem on top.
-- **Less clutter**: the fences, bunting, lanterns, flower beds, street lamps and cottage are gone, and the
-  ground cover around the town is about half as dense. Paving marks the hub, the lane (with gold studs
+- **Less clutter**: the bunting, lanterns, flower beds, street lamps and cottage are gone, and the
+  ground cover around the town is about half as dense. A smooth wooden fence with gold-capped posts runs
+  round the town's edge, where walking stops. Paving marks the hub, the lane (with gold studs
   down the middle) and the fountain's circle; the gacha corner has a pink carpet.
+- **Brainrots**: smooth and rounded (soft-edged boxes, finely divided balls and cylinders, so the cel
+  shading reads as clean bands), with big glossy eyes (two shines each) that blink now and then, rosy
+  cheeks and fuller smiles. Each has details that sell its joke: the cannon pigeon has wings, a tail,
+  wheels and a fizzing fuse and kicks back as it puffs smoke rings; the toaster's toast has butter and pops
+  with a squash; the snail crawls like an inchworm under a threaded, glowing bulb, its eye stalks wobbling;
+  the ostrich's toothbrush neck has blue-and-white bristles and toothpaste; the gelato gymnast has
+  sprinkles, a cherry and a drip; the pelican's pizza has pepperoni and it flaps as it shows it off; the
+  fan turtle paddles its feet under a plated shell; the macchiato ninja has latte art, steam and
+  fluttering headband tails; the helicopter hippo has ears, nostrils and a tail rotor and tips forward as
+  it lifts; the fridge flamingo has magnets on its door and a pink wing.
 - **Brainrot icons**: every card shows that character's own portrait, rendered once from its 3D model
   and cached. Characters not yet pulled show as a dark silhouette in the book.
 - The player is a blocky avatar with rounded edges: a square head with a drawn face, a cap, a T-shirt,
@@ -359,7 +391,7 @@ All first-pass numbers live in `src/config.ts`.
 | `src/base.ts` | A plot's showcase (floor, name board, pedestals, brainrots, coins), and what's solid and how high the floor is, town-wide |
 | `src/hub.ts` | The shared hub: paving, the cauldron, the shop stall and keeper, the five gacha machines with their pads and locks, the fountain |
 | `src/tiles.ts` | The Lego-style tile texture for paving and plot floors |
-| `src/characters.ts` | The 10 character models and their idle animations |
+| `src/characters.ts` | The 12 character models, their idle animations, blinking, and the Mythic rainbow |
 | `src/world.ts` | Sky pieces, cannon, player avatar, gems, hazards, guide arrows, labels |
 | `src/layout.ts` | The town: the lane, the eight plot slots, where the hub's things stand, and walking limits |
 | `src/net.ts` | The fake multiplayer server: bot players on the real economy, events, chat, standings |

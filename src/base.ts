@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { ECONOMY, GACHA, RARITIES } from './config';
 import { makeCharacter, type CharacterRig } from './characters';
-import { formatCoins } from './economy';
+import { floorsOf, formatCoins } from './economy';
 import {
   BOARDS,
   CAULDRON,
@@ -16,6 +16,8 @@ import {
   PAD_RADIUS,
   PLOT_DEPTH,
   PLOT_HALF,
+  REBIRTH_AT,
+  REBIRTH_FRONT,
   SETBACK,
   SHOP,
   SHOP_FRONT,
@@ -60,6 +62,10 @@ interface PadView {
 const LINE_X = 2.7;
 const FIRST_DEPTH = 3.6;
 const PAD_STEP = 4.2;
+/** Height between floors, and where the lift pad stands on each floor (back of the aisle), in plot space. */
+export const FLOOR_H = 5.6;
+export const LIFT_Z = -22.6;
+export const LIFT_RADIUS = 1.05;
 /** Where the name board's posts stand, in plot space. */
 const BOARD_Z = -PLOT_DEPTH + 0.9;
 const BOARD_POST_X = 3.9;
@@ -113,7 +119,7 @@ export function plotSolids(): Solids {
   if (plotSolidsCache) return plotSolidsCache;
   const circles: [number, number, number][] = [];
   const at = new THREE.Vector3();
-  for (let i = 0; i < ECONOMY.maxPads; i++) {
+  for (let i = 0; i < ECONOMY.padsPerFloor; i++) {
     Base.padPosition(i, at);
     circles.push([at.x, at.z, 1.7]);
   }
@@ -129,6 +135,7 @@ export function hubSolids(): Solids {
     [0, 0, 1.9],
     [CAULDRON.x, CAULDRON.z, CAULDRON.r],
     [FOUNTAIN.x, FOUNTAIN.z, FOUNTAIN.r],
+    [REBIRTH_AT.x, REBIRTH_AT.z, REBIRTH_AT.r],
   ];
   for (let i = 0; i < GACHA.length; i++) {
     const m = machineAt(i);
@@ -208,6 +215,7 @@ export function floorWorld(x: number, z: number): number {
     }
   }
   if (Math.hypot(x - CAULDRON_FRONT.x, z - CAULDRON_FRONT.z) < PLATFORM_RADIUS + 0.1) return 0.27;
+  if (Math.hypot(x - REBIRTH_FRONT.x, z - REBIRTH_FRONT.z) < PLATFORM_RADIUS + 0.1) return 0.27;
   if (Math.abs(x - SHOP_FRONT.x) < 1.3 && Math.abs(z - SHOP_FRONT.z) < 1.7) return 0.1;
   if (plotAt(x, z)) return 0.11;
   return 0.06;
@@ -222,6 +230,11 @@ export class Base {
   private remote: boolean;
   private scene: THREE.Scene;
   private labelTimer = 0;
+  /** One group per floor, raised FLOOR_H each, holding that floor's pedestals (and deck, above the ground). */
+  private floorGroups: THREE.Group[] = [];
+  /** The lift pads' rising rings, one per floor once there's more than one. */
+  private lifts: { ring: THREE.Mesh; arrow: THREE.Group; seed: number }[] = [];
+  private own: boolean;
 
   /** Builds a plot's showcase at its slot; `vacant` leaves it unclaimed, `owner` makes it another player's. */
   constructor(scene: THREE.Scene, slot: PlotSlot, options: BaseOptions = {}) {
@@ -232,11 +245,112 @@ export class Base {
     this.group.rotation.y = slot.rot;
     scene.add(this.group);
     const own = !this.vacant && !options.owner;
+    this.own = own;
     this.buildFloor(this.vacant ? 0xb9c0cc : own ? GOLD : 0x7fd8ff);
     if (this.vacant) this.buildSign('OPEN PLOT', '#c9ced6', 0x8a8f99);
     else if (options.owner) this.buildSign(`${options.owner.toUpperCase()}'S BASE`, '#9dfcff', 0x2f5fc4);
     else this.buildSign('YOUR BASE', '#ffd84a', 0xc8102e);
-    for (let i = 0; i < ECONOMY.maxPads; i++) this.addPad(i);
+    this.ensureFloors(1);
+  }
+
+  /** How many floors the base shows. */
+  get floors(): number {
+    return this.floorGroups.length;
+  }
+
+  /**
+   * Builds floors up to `n`: each one above the ground is a deck on pillars with a railing, and once there's
+   * more than one floor every floor gets a lift pad at the back of the aisle.
+   */
+  private ensureFloors(n: number): void {
+    while (this.floorGroups.length < n) {
+      const k = this.floorGroups.length;
+      const g = new THREE.Group();
+      g.position.y = k * FLOOR_H;
+      this.group.add(g);
+      this.floorGroups.push(g);
+      if (k > 0) this.buildDeck(g);
+      for (let i = 0; i < ECONOMY.padsPerFloor; i++) this.addPad(k * ECONOMY.padsPerFloor + i);
+    }
+    if (n > 1) while (this.lifts.length < this.floorGroups.length) this.buildLift(this.floorGroups[this.lifts.length]);
+  }
+
+  /** A deck over the floor below: a tiled slab on pillars, edged by a railing. */
+  private buildDeck(g: THREE.Group): void {
+    const w = PLOT_HALF * 2;
+    const d = PLOT_DEPTH;
+    const slab = new THREE.Mesh(
+      new RoundedBoxGeometry(w + 0.4, 0.34, d + 0.4, 2, 0.1),
+      new THREE.MeshLambertMaterial({ map: tileTexture('#f4ecdc', w, d) }),
+    );
+    slab.position.set(0, -0.17, -d / 2);
+    slab.castShadow = slab.receiveShadow = true;
+    g.add(slab);
+    const trim = new THREE.Mesh(
+      new RoundedBoxGeometry(w + 0.6, 0.16, d + 0.6, 2, 0.06),
+      new THREE.MeshPhongMaterial({ color: this.own ? GOLD : 0x7fd8ff, shininess: 60 }),
+    );
+    trim.position.set(0, -0.34, -d / 2);
+    g.add(trim);
+    const pillarMat = new THREE.MeshPhongMaterial({ color: 0xf6efe2, shininess: 30 });
+    const pillarGeo = new THREE.CylinderGeometry(0.28, 0.34, FLOOR_H, 20);
+    for (const x of [-w / 2 + 0.2, w / 2 - 0.2]) {
+      for (const z of [-0.2, -d / 2, -d + 0.2]) {
+        const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+        pillar.position.set(x, -FLOOR_H / 2, z);
+        pillar.castShadow = true;
+        g.add(pillar);
+      }
+    }
+    // A railing all round: posts and a rounded top rail.
+    const railMat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 80 });
+    const rail = (x: number, z: number, sx: number, sz: number) => {
+      const mesh = new THREE.Mesh(new RoundedBoxGeometry(sx, 0.14, sz, 2, 0.06), railMat);
+      mesh.position.set(x, 1.0, z);
+      g.add(mesh);
+    };
+    rail(-w / 2, -d / 2, 0.14, d);
+    rail(w / 2, -d / 2, 0.14, d);
+    rail(0, -d, w, 0.14);
+    rail(0, 0, w, 0.14);
+    const postGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.0, 8);
+    const spots: [number, number][] = [];
+    for (let z = 0; z >= -d; z -= 1.6) spots.push([-w / 2, z], [w / 2, z]);
+    for (let x = -w / 2 + 1.6; x < w / 2; x += 1.6) spots.push([x, 0], [x, -d]);
+    const posts = new THREE.InstancedMesh(postGeo, railMat, spots.length);
+    const m = new THREE.Matrix4();
+    spots.forEach(([x, z], i) => posts.setMatrixAt(i, m.makeTranslation(x, 0.5, z)));
+    g.add(posts);
+  }
+
+  /** A glowing round lift pad with an arrow, at the back of the aisle. */
+  private buildLift(g: THREE.Group): void {
+    const pad = new THREE.Group();
+    pad.position.set(0, 0, LIFT_Z);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(LIFT_RADIUS + 0.15, LIFT_RADIUS + 0.25, 0.16, 40), stoneMat);
+    base.position.y = 0.08;
+    const disc = new THREE.Mesh(
+      new THREE.CylinderGeometry(LIFT_RADIUS, LIFT_RADIUS, 0.05, 40),
+      new THREE.MeshLambertMaterial({ color: 0x3fd8ff, emissive: 0x1aa8e0, emissiveIntensity: 0.7 }),
+    );
+    disc.position.y = 0.18;
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(LIFT_RADIUS * 0.9, 0.05, 6, 40).rotateX(Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xbff4ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    // An up-and-down arrow hovering over it.
+    const arrow = new THREE.Group();
+    const arrowMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    for (const dir of [1, -1]) {
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.32, 16), arrowMat);
+      head.position.y = dir * 0.3;
+      if (dir < 0) head.rotation.z = Math.PI;
+      arrow.add(head);
+    }
+    arrow.position.y = 1.4;
+    pad.add(base, disc, ring, arrow);
+    g.add(pad);
+    this.lifts.push({ ring, arrow, seed: Math.random() });
   }
 
   /** Shows or hides the brainrots on display: other players' plots hide theirs when the player is far away. */
@@ -250,12 +364,20 @@ export class Base {
   }
 
   /**
-   * Where slot i stands in plot space: two lines of 5 running back from the lane either side of the aisle,
-   * filled in pairs from the front (0 and 1 nearest the lane), so the open slots are the ones up front.
+   * Where slot i stands in plot space: on each floor, two lines of 5 running back from the lane either side of
+   * the aisle, filled in pairs from the front (0 and 1 nearest the lane); slots 10-19 are the floor above, and
+   * 20-29 the one above that.
    */
   static padPosition(i: number, out = new THREE.Vector3()): THREE.Vector3 {
-    const side = i % 2 === 0 ? -1 : 1;
-    return out.set(side * LINE_X, PAD_TOP, -FIRST_DEPTH - Math.floor(i / 2) * PAD_STEP);
+    const floor = Math.floor(i / ECONOMY.padsPerFloor);
+    const j = i % ECONOMY.padsPerFloor;
+    const side = j % 2 === 0 ? -1 : 1;
+    return out.set(side * LINE_X, PAD_TOP + floor * FLOOR_H, -FIRST_DEPTH - Math.floor(j / 2) * PAD_STEP);
+  }
+
+  /** Which floor slot i is on. */
+  static padFloor(i: number): number {
+    return Math.floor(i / ECONOMY.padsPerFloor);
   }
 
   /** Slot i of a plot, in world space. */
@@ -270,9 +392,10 @@ export class Base {
     return Base.padWorld(slot, i, out).setY(-0.15);
   }
 
-  /** Matches pedestals, characters and rarity colours to the save. Slots past save.pads are locked. */
-  sync(save: Pick<Save, 'pads'>): void {
+  /** Matches floors, pedestals, characters and rarity colours to the save. Slots past save.pads are locked. */
+  sync(save: Pick<Save, 'pads'> & { rebirths?: number }): void {
     if (this.vacant) return;
+    this.ensureFloors(floorsOf({ rebirths: save.rebirths ?? 0 }));
     this.views.forEach((view, i) => {
       const locked = i >= save.pads.length;
       const slot = locked ? null : save.pads[i];
@@ -296,7 +419,7 @@ export class Base {
       rig.group.scale.setScalar(1.3);
       Base.padPosition(i, rig.group.position);
       // Facing the lane, turned a little toward the aisle, so they show to passers-by and to visitors.
-      rig.group.rotation.y = i % 2 === 0 ? 0.6 : -0.6;
+      rig.group.rotation.y = (i % ECONOMY.padsPerFloor) % 2 === 0 ? 0.6 : -0.6;
       this.group.add(rig.group);
       view.rig = rig;
       view.arrive = 1;
@@ -307,6 +430,14 @@ export class Base {
     this.labelTimer -= realDt;
     const refreshLabels = this.labelTimer <= 0;
     if (refreshLabels) this.labelTimer = 0.2;
+    for (const lift of this.lifts) {
+      const t = (time * 0.8 + lift.seed) % 1;
+      lift.ring.position.y = 0.2 + t * 2.2;
+      lift.ring.scale.setScalar(1 - t * 0.25);
+      (lift.ring.material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - t);
+      lift.arrow.position.y = 1.4 + Math.sin(time * 2.5 + lift.seed * 6) * 0.15;
+      lift.arrow.rotation.y = time * 1.5;
+    }
     if (this.vacant) return;
     this.views.forEach((view, i) => {
       this.updatePad(view, i < save.pads.length ? save.pads[i] : null, time, realDt, refreshLabels);
@@ -369,6 +500,7 @@ export class Base {
 
   private addPad(i: number): void {
     const pos = Base.padPosition(i);
+    const parent = this.floorGroups[Base.padFloor(i)];
     const pedestal = new THREE.Mesh(pedestalGeo, stoneMat);
     pedestal.position.set(pos.x, 0, pos.z);
     pedestal.castShadow = pedestal.receiveShadow = true;
@@ -421,13 +553,13 @@ export class Base {
     if (this.remote) {
       // Another player's slot: the pedestal, its glow and lock, but no coin pile or counter.
       vacantLabel ??= makeLabel();
-      this.group.add(glow, pedestal, top, rim, beacon, lock);
+      parent.add(glow, pedestal, top, rim, beacon, lock);
       this.views.push(view(vacantLabel, '?', 0, Math.random() * 10));
       return;
     }
     if (this.vacant) {
       beacon.visible = false;
-      this.group.add(pedestal, top, rim);
+      parent.add(pedestal, top, rim);
       vacantLabel ??= makeLabel();
       this.views.push(view(vacantLabel, '', 0, 0));
       return;
@@ -436,7 +568,7 @@ export class Base {
     label.sprite.position.set(pos.x, COIN_Y + 1.05, pos.z);
     label.sprite.scale.multiplyScalar(0.7);
     label.sprite.visible = false;
-    this.group.add(glow, pedestal, top, rim, beacon, lock, coin, label.sprite);
+    parent.add(glow, pedestal, top, rim, beacon, lock, coin, label.sprite);
     this.views.push(view(label, '?', -1, Math.random() * 10));
   }
 

@@ -25,6 +25,7 @@ import {
   type Track,
 } from '../src/config';
 import {
+  maxPads,
   buyUpgrade,
   expansionCost,
   incomePerSecond,
@@ -230,7 +231,7 @@ function simulate(minutes: number): { m: Milestones; two: AtTwo } {
     if (save.cannon > 1) mark('firstUpgrade', t);
     if (levelsOf(save) > before.levels) mark('firstLevelUp', t);
     if (save.pads.length > ECONOMY.startPads) mark('firstExpansion', t);
-    if (save.pads.length >= ECONOMY.maxPads) mark('allSlots', t);
+    if (save.pads.length >= maxPads(save)) mark('allSlots', t);
     if (save.cannon >= REBIRTH.cannonLevel) mark('stormCannon', t);
     levelUps += Math.max(0, levelsOf(save) - before.levels);
     upgrades += save.cannon - before.cannon;

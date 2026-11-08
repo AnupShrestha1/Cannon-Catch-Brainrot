@@ -393,6 +393,48 @@ export class Hud {
     setTimeout(() => line.remove(), 10000);
   }
 
+  /** A full-screen flash of colour that fades out. */
+  flash(color: string): void {
+    const el = document.createElement('div');
+    el.className = 'screen-flash';
+    el.style.setProperty('--c', color);
+    document.body.append(el);
+    setTimeout(() => el.remove(), 1000);
+  }
+
+  /**
+   * A huge banner for a big moment (rebirth): the title slams in, wobbles and settles, a line under it, gold
+   * rays turning behind, confetti bursting from the middle; it's all gone in under three seconds.
+   */
+  grandBanner(title: string, sub: string): void {
+    const wrap = document.createElement('div');
+    wrap.className = 'grand-banner';
+    const rays = document.createElement('div');
+    rays.className = 'grand-rays';
+    const h = document.createElement('h1');
+    h.textContent = title;
+    const p = document.createElement('p');
+    p.textContent = sub;
+    wrap.append(rays, h, p);
+    const colors = ['#ffd23f', '#ff5fa2', '#3fc8ff', '#8a5cff', '#3ccf5a', '#ffffff', '#ff7a1a'];
+    for (let i = 0; i < 90; i++) {
+      const bit = document.createElement('i');
+      bit.className = 'confetti';
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 160 + Math.random() * 420;
+      bit.style.left = '50%';
+      bit.style.top = '42%';
+      bit.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
+      bit.style.setProperty('--dy', `${Math.sin(angle) * dist - 160}px`);
+      bit.style.setProperty('--spin', `${Math.random() * 900 - 450}deg`);
+      bit.style.background = colors[i % colors.length];
+      bit.style.animationDelay = `${Math.random() * 0.25}s`;
+      wrap.append(bit);
+    }
+    document.body.append(wrap);
+    setTimeout(() => wrap.remove(), 2900);
+  }
+
   /** Opens the chat box and puts the cursor in it. */
   openChat(): void {
     this.chatForm.classList.add('open');

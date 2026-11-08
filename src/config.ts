@@ -284,16 +284,22 @@ export const REBIRTH = {
   unlockHeight: 400,
   /** Permanent income bonus per rebirth. */
   incomeBonus: 0.5,
+  /** The first this-many rebirths each add a floor to the base (on top of the bonus); later ones only the bonus. */
+  floors: 2,
+  /** A new floor comes with this many slots already open. */
+  newFloorPads: 4,
 };
 
 export const ECONOMY = {
-  /** The showcase: two rows of 5 slots along the lane, 4 open at the start, 2 more per expansion. */
+  /** The showcase: two lines of 5 slots per floor, 4 open at the start, 2 more per expansion. */
   startPads: 4,
   padStep: 2,
-  maxPads: 10,
+  padsPerFloor: 10,
   // Retuned with `npm run sim` from the doc's 400 × 3, which let income outrun every cost.
   firstExpansion: 600,
   expansionGrowth: 6,
+  /** Past the first floor's slots (3 expansions), each further pair costs this much more than the last. */
+  lateExpansionGrowth: 1.9,
   /** A pad's cash pile stops growing at this many seconds of its income. */
   padCapSeconds: 600,
   /** Selling a character pays this many seconds of its income. */

@@ -62,6 +62,9 @@ export const CAULDRON_FRONT = { x: 8.2, z: -5.6 };
 /** The upgrade shop's stall (centre, half width and half depth; it faces -x) and the mat in front of its counter. */
 export const SHOP = { x: 14, z: 6, halfW: 3.2, halfD: 2.2 };
 export const SHOP_FRONT = { x: 9.6, z: 6 };
+/** The rebirth station, behind the cannon on the gacha side, and the pad in front of it (toward +z). */
+export const REBIRTH_AT = { x: -9, z: -13, r: 2.6 };
+export const REBIRTH_FRONT = { x: -9, z: -8.9 };
 /** The gacha machines stand in a row along the left of the hub, facing the lane's mouth (+x). */
 export const MACHINE_X = LANE_X - 13;
 export const MACHINE_STEP = 6.5;
@@ -91,7 +94,7 @@ export const TOWN = {
   minX: Math.min(MACHINE_X - 6, LANE_X - LANE_HALF - SETBACK - PLOT_DEPTH - 3),
   maxX: Math.max(SHOP.x + SHOP.halfD + 6, LANE_X + LANE_HALF + SETBACK + PLOT_DEPTH + 3),
   minZ: HUB_BACK - 2,
-  maxZ: FOUNTAIN.z + FOUNTAIN.r + 4,
+  maxZ: FOUNTAIN.z + 12,
 };
 
 /** Where anyone can walk. There are no fences: only things that stand on the ground are solid. */

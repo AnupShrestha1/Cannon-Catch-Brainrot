@@ -4,7 +4,7 @@
 // flight is scripted rather than simulated, so the apex hits launchHeight() exactly.
 import * as THREE from 'three';
 import { Sfx } from './audio';
-import { Base, PLATFORM_RADIUS, bumpSolids, floorWorld } from './base';
+import { Base, FLOOR_H, LIFT_RADIUS, LIFT_Z, PLATFORM_RADIUS, bumpSolids, floorWorld } from './base';
 import { animateShared } from './characters';
 import { Hub } from './hub';
 import { brainrotIcon } from './icons';
@@ -13,6 +13,9 @@ import {
   CAULDRON_FRONT,
   OWN_SLOT,
   PAD_RADIUS,
+  PLOT_DEPTH,
+  PLOT_HALF,
+  REBIRTH_FRONT,
   SHOP_FRONT,
   SLOTS,
   fromPlot,
@@ -20,6 +23,7 @@ import {
   machineAt,
   plotAt,
   pullPad,
+  toPlot,
   walkStep,
 } from './layout';
 import { CAPACITY, FakeServer, describePad } from './net';
@@ -58,7 +62,11 @@ import {
   levelCost,
   levelReady,
   countInBackpack,
+  floorsOf,
+  maxPads,
   merge,
+  mergeChosen,
+  rebirthSave,
   mergeNeed,
   xpNeeded,
   padIncome,
@@ -70,7 +78,7 @@ import {
   trackBoost,
   upgradeCost,
 } from './economy';
-import { Particles, Streaks } from './fx';
+import { Particles, Sparks, Streaks } from './fx';
 import { Hud, type PadButton, type RevealItem, type ShopItem, type ShopRow } from './hud';
 import { Input } from './input';
 import { BOOK_ZONES, DAILY, bookEntries, dailyCoins, dailyStatus, dayKey, offlineEarnings, zoneComplete } from './meta';
@@ -347,7 +355,18 @@ export class Game {
   /** Seconds toward the next once-a-second income tick. */
   private incomeTimer = 0;
   /** Rebirth needs a second tap in the shop. */
-  private rebirthArmed = false;
+  /** Which floor of the base the player is on (0 is the ground), and the lift ride between floors. */
+  private level = 0;
+  private lift: { from: number; to: number; t: number } | null = null;
+  /** Jumping at the base: height, upward speed, and the squash on landing (1 easing to 0). */
+  private jumpY = 0;
+  private jumpV = 0;
+  private landSquash = 0;
+  /** Fireworks: their own big particle pool, and the rockets in the air. */
+  private sparks!: Sparks;
+  private rockets: { pos: THREE.Vector3; vel: THREE.Vector3; fuse: number; color: number; loud: number }[] = [];
+  /** Brainrots picked in the merge station. */
+  private mergePick: Owned[] = [];
 
   /** Dev-only: stops the frame loop from advancing the game, so debugStep() is the only clock. */
   debugPaused = false;
@@ -377,6 +396,7 @@ export class Game {
     this.scene.add(this.player.group);
     this.player.group.add(this.bubble.sprite);
     this.fx = new Particles(this.scene);
+    this.sparks = new Sparks(this.scene);
     this.streaks = new Streaks(this.scene);
     this.input = new Input(canvas);
     this.input.onGesture = () => this.sfx.unlock();
@@ -475,7 +495,7 @@ export class Game {
     hud.iconFor = brainrotIcon;
     hud.onBuy = (item) => this.buy(item);
     hud.onAction = () => this.useHere();
-    hud.onPadButton = (i) => this.levelUp(i);
+    hud.onPadButton = (i) => (i >= this.save.pads.length ? this.expandBase() : this.levelUp(i));
     hud.onChat = (text) => this.sayLocal(text);
     window.addEventListener('keydown', (e) => {
       // Typing in the chat or the tuning panel isn't a shortcut.
@@ -620,8 +640,19 @@ export class Game {
     this.updateBirds(dt);
     this.base.update(this.save, this.time, realDt);
     this.hub.update(this.time, realDt, this.shownBest, this.save.gems, this.px, this.pz);
+    {
+      const s = this.save;
+      const ready = s.cannon >= REBIRTH.cannonLevel;
+      const { mult, floor } = this.rebirthPrize();
+      this.hub.setRebirth(
+        ready,
+        ready ? `×${mult} income${floor ? ` + Floor ${floor}` : ''}` : `Cannon Lv ${s.cannon}/${REBIRTH.cannonLevel}`,
+        s.cannon / REBIRTH.cannonLevel,
+      );
+    }
     this.updateServer(realDt);
     this.fx.update(dt);
+    this.updateFireworks(realDt);
     this.updateVisuals(realDt, dt);
     // The reveal screen and the shop are breaks in play.
     platform.setPlaying(this.state !== 'reveal' && !this.hud.shopOpen && !this.hud.modalOpen);
@@ -1172,40 +1203,6 @@ export class Game {
     );
   }
 
-  /** A row of brainrot cards, each marked as on display or in the backpack, and NEW when first pulled. */
-  private resultCards(got: Owned[], isNew: boolean[]): HTMLElement {
-    const row = document.createElement('div');
-    row.className = 'result-cards';
-    // One card per character, rarest first, with a count when there are several.
-    const groups = new Map<string, { o: Owned; count: number; isNew: boolean }>();
-    got.forEach((o, i) => {
-      const g = groups.get(o.name) ?? { o, count: 0, isNew: false };
-      g.count++;
-      g.isNew ||= isNew[i];
-      groups.set(o.name, g);
-    });
-    [...groups.values()]
-      .sort((a, b) => b.o.rarity - a.o.rarity)
-      .forEach(({ o, count, isNew: fresh }, i) => {
-        const card = this.hud.characterCard(o.name, o.rarity);
-        card.classList.add('pulled');
-        card.style.animationDelay = `${i * 0.08}s`;
-        if (count > 1) {
-          const badge = document.createElement('span');
-          badge.className = 'count';
-          badge.textContent = `×${count}`;
-          card.append(badge);
-        }
-        const where = document.createElement('div');
-        where.className = 'where';
-        const shown = this.save.pads.some((slot) => slot?.name === o.name);
-        where.textContent = `${fresh ? 'NEW · ' : ''}${shown ? 'On display' : 'In backpack'}`;
-        card.append(where);
-        row.append(card);
-      });
-    return row;
-  }
-
   /**
    * Pulls machine `index` `count` times, from its ×1 or ×10 pad: spends the gems, spins the machine, and shows
    * the cards once it stops. No panel: the machine itself is the interface.
@@ -1349,48 +1346,117 @@ export class Game {
     }
   }
 
-  /** The merge station: each recipe with how many you have, and a Merge all button. */
-  private openMerger(made: { got: Owned[]; isNew: boolean[] } | null = null): void {
+  /**
+   * The merge station. Pick which brainrots to merge (tap a card to add one of it, again to add another; once all
+   * of it are picked, a tap clears it), or let Auto merge do everything it can from the bottom up. Each rarity
+   * shows its recipe and a quick Pick button.
+   */
+  private openMerger(): void {
     const s = this.save;
     this.sfx.open();
+    // Drop picks that are no longer in the backpack.
+    this.mergePick = this.mergePick.filter((o) => s.inventory.includes(o));
     const body: HTMLElement[] = [];
-    if (made && made.got.length) body.push(this.resultCards(made.got, made.isNew));
     const rules = document.createElement('p');
     rules.className = 'sub';
-    rules.textContent = 'Merge brainrots from your backpack into one of the next rarity up. Merged ones go on display if they beat what is there.';
+    rules.textContent = 'Tap brainrots to pick them, then Merge picked, or Auto merge everything. Merged ones go on display if they beat what is there.';
     body.push(rules);
+    const picked = this.mergePick;
+    const pickRarity = picked.length ? picked[0].rarity : null;
+    const pickNeed = pickRarity === null ? null : mergeNeed(pickRarity);
+    const status = document.createElement('div');
+    status.className = 'merge-status';
+    if (pickRarity === null || pickNeed === null) status.textContent = 'Nothing picked yet';
+    else {
+      status.style.setProperty('--c', RARITIES[pickRarity].css);
+      status.textContent = `Picked ${picked.length}/${pickNeed} ${RARITIES[pickRarity].name} → 1 ${RARITIES[pickRarity + 1].name}`;
+    }
+    body.push(status);
     let any = false;
     for (let r = 0; r < RARITIES.length; r++) {
       const need = mergeNeed(r);
-      if (need === null) continue;
-      const have = countInBackpack(s, r);
-      const ready = have >= need;
-      any ||= ready;
+      const items = s.inventory.filter((o) => o.rarity === r);
+      if (need === null || !items.length) continue;
+      any ||= items.length >= need;
+      const section = document.createElement('div');
+      section.className = 'merge-section';
+      section.style.setProperty('--c', RARITIES[r].css);
+      const head = document.createElement('div');
+      head.className = 'merge-head';
+      const title = document.createElement('span');
+      title.textContent = `${RARITIES[r].name} · ${items.length} (${need} → 1 ${RARITIES[r + 1].name})`;
+      const quick = document.createElement('button');
+      quick.type = 'button';
+      quick.textContent = `Pick ${need}`;
+      quick.disabled = items.length < need;
+      quick.addEventListener('click', () => {
+        this.mergePick = items.slice(0, need);
+        this.sfx.click();
+        this.openMerger();
+      });
+      head.append(title, quick);
       const row = document.createElement('div');
-      row.className = 'merge-row';
-      row.style.setProperty('--c', RARITIES[r].css);
-      row.style.setProperty('--p', String(Math.min(1, have / need)));
-      const text = document.createElement('span');
-      text.textContent = `${need} ${RARITIES[r].name} → 1 ${RARITIES[r + 1].name}`;
-      const count = document.createElement('b');
-      count.textContent = `${have}/${need}`;
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = 'Merge';
-      button.disabled = !ready;
-      button.addEventListener('click', () => this.mergeAll(r));
-      row.append(text, count, button);
-      body.push(row);
+      row.className = 'merge-cards';
+      // One card per character, with how many you have and how many are picked.
+      const byName = new Map<string, Owned[]>();
+      for (const o of items) byName.set(o.name, [...(byName.get(o.name) ?? []), o]);
+      for (const [name, group] of byName) {
+        const card = this.hud.characterCard(name, r);
+        card.classList.add('merge-card');
+        const chosen = group.filter((o) => picked.includes(o)).length;
+        if (chosen) card.classList.add('picked');
+        const have = document.createElement('span');
+        have.className = 'count';
+        have.textContent = chosen ? `${chosen}/${group.length}` : `×${group.length}`;
+        card.append(have);
+        card.addEventListener('click', () => {
+          // Picks are one rarity at a time.
+          if (pickRarity !== null && pickRarity !== r) this.mergePick = [];
+          const free = group.filter((o) => !this.mergePick.includes(o));
+          if (free.length) this.mergePick.push(free[0]);
+          else this.mergePick = this.mergePick.filter((o) => !group.includes(o));
+          this.sfx.click();
+          this.openMerger();
+        });
+        row.append(card);
+      }
+      section.append(head, row);
+      body.push(section);
     }
+    if (body.length === 2) {
+      const empty = document.createElement('p');
+      empty.textContent = 'Your backpack has nothing to merge. Pulls that are not on display land there.';
+      body.push(empty);
+    }
+    const ready = pickNeed !== null && picked.length >= pickNeed;
+    const times = ready ? Math.floor(picked.length / pickNeed!) : 0;
     this.hud.showModal('Merge station', body, [
-      { label: 'Merge all', primary: any, action: () => this.mergeAll(null) },
+      { label: times > 1 ? `Merge picked ×${times}` : 'Merge picked', primary: ready, action: () => (ready ? this.mergePicked() : this.openMerger()) },
+      { label: 'Auto merge', primary: !ready && any, action: () => this.mergeAll(null) },
       { label: 'Close' },
     ]);
   }
 
-  /** Merges one rarity, or everything possible from the bottom up when `only` is null, then reopens the station. */
+  /** Merges the picked brainrots, in as many full groups as were picked. */
+  private mergePicked(): void {
+    const s = this.save;
+    const picked = this.mergePick.filter((o) => s.inventory.includes(o));
+    this.mergePick = [];
+    const need = picked.length ? mergeNeed(picked[0].rarity) : null;
+    const got: Owned[] = [];
+    if (need !== null) {
+      for (let i = 0; i + need <= picked.length; i += need) {
+        const one = mergeChosen(s, picked.slice(i, i + need));
+        if (one) got.push(one);
+      }
+    }
+    this.finishMerge(got);
+  }
+
+  /** Auto merge: one rarity, or everything possible from the bottom up when `only` is null. */
   private mergeAll(only: number | null): void {
     const s = this.save;
+    this.mergePick = [];
     const got: Owned[] = [];
     for (let r = 0; r < RARITIES.length; r++) {
       if (only !== null && r !== only) continue;
@@ -1400,6 +1466,12 @@ export class Game {
         one = only === null ? merge(s, r) : null;
       }
     }
+    this.finishMerge(got);
+  }
+
+  /** After a merge: the cauldron bubbles over, the results burst out and are revealed, then back to the station. */
+  private finishMerge(got: Owned[]): void {
+    const s = this.save;
     if (!got.length) {
       this.hud.toast('Not enough to merge yet', 'small');
       this.openMerger();
@@ -1610,21 +1682,91 @@ export class Game {
 
   private updateHome(dt: number, space: boolean, blocked: boolean): void {
     this.stepping = false;
+    if (this.lift) {
+      this.updateLift(dt);
+      return;
+    }
     this.moveAtBase(dt, blocked);
     this.updateWalk(dt);
     // Step up onto platforms and the showcase floor.
     this.py = lerp(this.py, this.floorHere(), damp(20, dt));
+    // Space jumps.
+    this.updateJump(dt, space);
     this.save.pads.forEach((slot, i) => {
-      if (!slot || slot.cash < 1) return;
+      if (!slot || slot.cash < 1 || Base.padFloor(i) !== this.level) return;
       const pad = this.padAt(i, this.tmp);
       if (Math.hypot(pad.x - this.px, pad.z - this.pz) < COLLECT_RADIUS) this.collect(i);
     });
-    if (space) {
+    // F (or the Launch button) heads for the cannon.
+    if (!blocked && this.input.consumeKey('KeyF')) {
       this.startBoarding();
       return;
     }
     this.updateVisit();
     this.updateHomePrompt();
+  }
+
+  /** A hop: a quick squash-free take-off, stretched in the air, squashed on landing. */
+  private updateJump(dt: number, jump: boolean): void {
+    if (jump && this.jumpY === 0 && this.jumpV === 0) {
+      this.jumpV = 9.5;
+      this.sfx.hop();
+    }
+    if (this.jumpV === 0 && this.jumpY === 0) return;
+    this.jumpY += this.jumpV * dt;
+    this.jumpV -= 30 * dt;
+    if (this.jumpY <= 0) {
+      this.jumpY = 0;
+      this.jumpV = 0;
+      this.landSquash = 1;
+      this.sfx.step();
+    }
+  }
+
+  /** Whether the player stands on their base's lift pad (on whichever floor they're on). */
+  private atLift(): boolean {
+    if (this.base.floors < 2) return false;
+    const [x, z] = fromPlot(OWN, 0, LIFT_Z);
+    return Math.hypot(x - this.px, z - this.pz) < LIFT_RADIUS + 0.2;
+  }
+
+  /** The floor the lift goes to next: up a floor, or from the top back down to the ground. */
+  private liftTarget(): number {
+    return this.level + 1 < this.base.floors ? this.level + 1 : 0;
+  }
+
+  private startLift(): void {
+    const [x, z] = fromPlot(OWN, 0, LIFT_Z);
+    this.px = x;
+    this.pz = z;
+    this.walkVel.set(0, 0);
+    this.walking = false;
+    this.jumpY = this.jumpV = 0;
+    this.lift = { from: this.level, to: this.liftTarget(), t: 0 };
+    this.sfx.teleport();
+  }
+
+  /** The lift ride: eased up or down between floors with a column of sparkles, then off you step. */
+  private updateLift(dt: number): void {
+    const l = this.lift!;
+    l.t += dt;
+    const k = easeInOut(Math.min(1, l.t / 1.1));
+    this.py = lerp(l.from, l.to, k) * FLOOR_H + 0.02;
+    if (Math.random() < dt * 30) {
+      this.fx.burst(this.tmp.set(this.px + rand(-0.8, 0.8), this.py + rand(0, 2), this.pz + rand(-0.8, 0.8)), {
+        count: 1,
+        color: 0xbff4ff,
+        speed: 0.5,
+        life: 0.6,
+        size: 0.35,
+        up: l.to > l.from ? 2 : -2,
+      });
+    }
+    if (l.t >= 1.1) {
+      this.level = l.to;
+      this.lift = null;
+      this.hud.toast(this.level === 0 ? 'Ground floor' : `Floor ${this.level + 1}`, 'small');
+    }
   }
 
   /**
@@ -1667,6 +1809,11 @@ export class Game {
       // No fences: neighbours' plots, the lane and the hub are all open; only things on the ground are solid.
       [this.px, this.pz] = walkStep(this.px + this.walkVel.x * dt, this.pz + this.walkVel.y * dt);
       [this.px, this.pz] = bumpSolids(this.px, this.pz, PLAYER_RADIUS);
+      if (this.level > 0) {
+        // Up on a deck, the railing keeps the player on it.
+        const [lx, lz] = toPlot(OWN, this.px, this.pz);
+        [this.px, this.pz] = fromPlot(OWN, clamp(lx, -PLOT_HALF + 0.6, PLOT_HALF - 0.6), clamp(lz, -PLOT_DEPTH + 0.6, -0.6));
+      }
       this.stepping = this.walkVel.length() > 0.6;
     } else {
       this.walkVel.set(0, 0);
@@ -1706,7 +1853,12 @@ export class Game {
   }
 
   /** Another player used something shared: the cannon fires them off, a machine spins, the cauldron bubbles. */
-  private onRemoteAct(act: 'fire' | 'spin' | 'stir' | undefined, tier: number, count: number): void {
+  private onRemoteAct(act: 'fire' | 'spin' | 'stir' | 'rebirth' | undefined, tier: number, count: number): void {
+    if (act === 'rebirth') {
+      this.hub.rebirthBurst();
+      this.launchFireworks(this.hub.rebirthCrystal(new THREE.Vector3()), 5, 0.6);
+      return;
+    }
     if (act === 'fire') {
       const muzzle = this.tmp.set(0, MUZZLE_Y + 1.2, 0);
       this.fx.burst(muzzle, { count: 18, color: 0xd9dde3, speed: 6, life: 1, size: 1.4, grow: 2.2, up: 2, drag: 2.5 });
@@ -1796,6 +1948,7 @@ export class Game {
 
   /** Height of the floor under the player: raised on the pads, the cauldron platform and showcase floors. */
   private floorHere(): number {
+    if (this.level > 0) return this.level * FLOOR_H + 0.02;
     return floorWorld(this.px, this.pz);
   }
 
@@ -1804,6 +1957,7 @@ export class Game {
     let best: number | null = null;
     let bestD = COLLECT_RADIUS;
     for (let i = 0; i < this.save.pads.length; i++) {
+      if (Base.padFloor(i) !== this.level) continue;
       const at = this.padAt(i, this.tmp);
       const d = Math.hypot(at.x - this.px, at.z - this.pz);
       if (d < bestD) {
@@ -1816,7 +1970,8 @@ export class Game {
 
   /** A locked slot the player stands on, or null. */
   private lockedUnderfoot(): number | null {
-    for (let i = this.save.pads.length; i < ECONOMY.maxPads; i++) {
+    for (let i = this.save.pads.length; i < maxPads(this.save); i++) {
+      if (Base.padFloor(i) !== this.level) continue;
       const at = this.padAt(i, this.tmp);
       if (Math.hypot(at.x - this.px, at.z - this.pz) < COLLECT_RADIUS) return i;
     }
@@ -1833,6 +1988,14 @@ export class Game {
       const n = pull.ten ? 10 : 1;
       return `Pull ${tier.short} ×${n} · ${formatCoins(tier.cost * n)} gems`;
     }
+    if (this.atLift()) {
+      const to = this.liftTarget();
+      return to > this.level ? `Lift ▲ Floor ${to + 1}` : 'Lift ▼ Ground floor';
+    }
+    if (this.onRebirthPad()) {
+      const s = this.save;
+      return s.cannon >= REBIRTH.cannonLevel ? 'REBIRTH!' : `Rebirth · Cannon Lv ${s.cannon}/${REBIRTH.cannonLevel}`;
+    }
     if (this.onPlatform(CAULDRON_SPOT)) return 'Merge station';
     if (this.atShop()) return 'Upgrades';
     const pad = this.padUnderfoot();
@@ -1841,7 +2004,11 @@ export class Game {
       if (slot) return `Open ${slot.name}`;
       return this.save.inventory.length ? 'Display a brainrot' : null;
     }
-    return this.lockedUnderfoot() !== null ? 'Unlock more slots' : null;
+    if (this.lockedUnderfoot() !== null) {
+      const cost = expansionCost(this.save);
+      return cost === null ? null : `Unlock ${ECONOMY.padStep} slots · ${formatCoins(cost)}`;
+    }
+    return null;
   }
 
   /** Whether the player stands on the platform at a station's front. */
@@ -1870,7 +2037,16 @@ export class Game {
       this.pullMachine(pull.index, pull.ten ? 10 : 1);
       return;
     }
+    if (this.atLift()) {
+      this.startLift();
+      return;
+    }
+    if (this.onRebirthPad()) {
+      this.openRebirth();
+      return;
+    }
     if (this.onPlatform(CAULDRON_SPOT)) {
+      this.mergePick = [];
       this.openMerger();
       return;
     }
@@ -1887,8 +2063,7 @@ export class Game {
       return;
     }
     if (this.lockedUnderfoot() !== null) {
-      this.hud.openShop();
-      this.refreshShop();
+      this.expandBase();
       return;
     }
     this.hud.toast('Walk up to a slot, a machine pad, the cauldron or the shop first', 'small');
@@ -1982,7 +2157,9 @@ export class Game {
       };
     }
     if (this.wantsUpgradeHint()) return { text: 'Upgrade your cannon!', target: null };
-    if (this.wantsExpandHint()) return { text: 'Your showcase is full! Unlock more slots in Upgrades', target: null };
+    if (this.wantsExpandHint()) {
+      return { text: `Your showcase is full! Unlock ${ECONOMY.padStep} more slots at your base`, target: this.padAt(s.pads.length, this.objTarget) };
+    }
     if (this.wantsLevelHint()) {
       const ready = s.pads.findIndex((slot) => slot !== null && levelReady(slot));
       return {
@@ -2032,6 +2209,9 @@ export class Game {
     this.walkVel.set(0, 0);
     this.walking = false;
     this.arrive = null;
+    this.level = 0;
+    this.lift = null;
+    this.jumpY = this.jumpV = 0;
     this.facing = yaw;
     this.camYaw = yaw;
     this.camSnap = true;
@@ -2042,7 +2222,6 @@ export class Game {
 
   /** Upgrades: off to the shop's counter (teleporting there from afar), a wave from the keeper, and the shop opens. */
   private goShop(): void {
-    this.rebirthArmed = false;
     if (this.state === 'aim' || this.state === 'charging') {
       // Out of the cannon first.
       this.state = 'home';
@@ -2224,85 +2403,163 @@ export class Game {
       };
     });
 
-    const pads = expansionCost(s);
-    rows.push({
-      id: 'pads',
-      title: 'Showcase slots',
-      level: `${s.pads.length}/${ECONOMY.maxPads}`,
-      detail: pads === null ? 'Every slot is open' : `${s.pads.length} → ${s.pads.length + ECONOMY.padStep} slots`,
-      cost: pads,
-      affordable: pads !== null && s.coins >= pads,
-    });
-
-    const unlocked = s.cannon >= REBIRTH.cannonLevel;
-    const next = incomeMultiplier(s) + REBIRTH.incomeBonus;
-    rows.push({
-      id: 'rebirth',
-      title: 'Rebirth',
-      level: s.rebirths ? `×${incomeMultiplier(s)} income` : '',
-      detail: unlocked
-        ? `Start over with ×${next} income. You keep your rarest brainrot.`
-        : `Unlocks at Cannon Lv ${REBIRTH.cannonLevel}. Resets coins, gems, upgrades, slots and backpack for ×${next} income.`,
-      cost: null,
-      affordable: unlocked,
-      button: this.rebirthArmed ? 'Sure?' : 'Rebirth',
-    });
     return rows;
   }
 
   private buy(item: ShopItem): void {
     const s = this.save;
-    if (item === 'rebirth') {
-      // Two taps, so a stray one can't wipe progress.
-      if (this.rebirthArmed) this.rebirth();
-      else this.rebirthArmed = true;
-      this.refreshShop();
-      return;
-    }
-    this.rebirthArmed = false;
-    const cost = item === 'pads' ? expansionCost(s) : upgradeCost(s, item);
+    // The shop sells flight upgrades only: slots are bought at the base, rebirth is its own station.
+    if (item === 'pads' || item === 'rebirth') return;
+    const cost = upgradeCost(s, item);
     if (cost === null || s.coins < cost) return;
     s.coins -= cost;
-    if (item === 'pads') {
-      for (let i = 0; i < ECONOMY.padStep; i++) s.pads.push(null);
-      this.base.sync(s);
-      this.completeHint('expand');
-      this.hud.toast(`${s.pads.length} slots open!`, 'gold');
-    } else {
-      buyUpgrade(s, item);
-      if (item === 'cannon') this.completeHint('upgrade');
-      this.hud.toast(item === 'cannon' ? `Cannon Lv ${s.cannon}!` : `${UPGRADES[item].name} up!`, 'gold');
-    }
+    buyUpgrade(s, item);
+    if (item === 'cannon') this.completeHint('upgrade');
+    this.hud.toast(item === 'cannon' ? `Cannon Lv ${s.cannon}!` : `${UPGRADES[item].name} up!`, 'gold');
     this.sfx.buy();
     writeSave(s);
     this.refreshShop();
   }
 
-  /** Back to the start with a permanent income bonus, keeping the rarest character and a new cannon colour. */
-  private rebirth(): void {
+  /** Two more slots at the base: bought there (the button over the next locked pair, or E beside it). */
+  private expandBase(): void {
     const s = this.save;
-    this.rebirthArmed = false;
-    let keep: Owned | null = null;
-    for (const o of [...s.pads, ...s.inventory]) if (o && (!keep || o.rarity > keep.rarity)) keep = o;
-    s.rebirths += 1;
-    s.coins = 0;
-    s.gems = 0;
-    s.cannon = 1;
-    s.finder = s.magnet = s.steering = s.chute = 0;
-    s.pads = Array.from({ length: ECONOMY.startPads }, () => null);
-    s.inventory = [];
-    if (keep) s.pads[0] = { name: keep.name, rarity: keep.rarity, cash: 0, level: 1, xp: 0 };
+    const cost = expansionCost(s);
+    if (cost === null) {
+      this.hud.toast('Every slot is open', 'small');
+      return;
+    }
+    if (s.coins < cost) {
+      this.hud.toast(`Need ${formatCoins(cost - s.coins)} more coins`, 'bad small');
+      this.sfx.full();
+      return;
+    }
+    s.coins -= cost;
+    const first = s.pads.length;
+    for (let i = 0; i < ECONOMY.padStep; i++) s.pads.push(null);
+    this.base.sync(s);
+    this.completeHint('expand');
+    this.hud.toast(`${s.pads.length} slots open!`, 'gold');
+    this.sfx.buy();
+    for (let i = first; i < s.pads.length; i++) {
+      this.fx.burst(this.padAt(i, this.tmp).setY(this.padAt(i, this.tmp2).y + 0.8), { count: 26, color: 0x9dfcff, speed: 7, life: 0.9, size: 0.5, up: 5 });
+    }
+    writeSave(s);
+  }
+
+  /** Whether the player stands on the rebirth station's pad. */
+  private onRebirthPad(): boolean {
+    return Math.hypot(REBIRTH_FRONT.x - this.px, REBIRTH_FRONT.z - this.pz) < PLATFORM_RADIUS;
+  }
+
+  /** What the next rebirth gives: the new multiplier, and the floor it adds (if it does). */
+  private rebirthPrize(): { mult: number; floor: number | null } {
+    const s = this.save;
+    const after = { rebirths: s.rebirths + 1 };
+    return { mult: incomeMultiplier(s) + REBIRTH.incomeBonus, floor: floorsOf(after) > floorsOf(s) ? floorsOf(after) : null };
+  }
+
+  /** The rebirth station: what it costs and gives, then a confirm. */
+  private openRebirth(): void {
+    const s = this.save;
+    if (s.cannon < REBIRTH.cannonLevel) {
+      this.hud.toast(`Rebirth needs Cannon Lv ${REBIRTH.cannonLevel} (you're Lv ${s.cannon})`, 'small');
+      this.sfx.full();
+      return;
+    }
+    const { mult, floor } = this.rebirthPrize();
+    this.sfx.open();
+    const lines = [
+      `×${mult} income forever (now ×${incomeMultiplier(s)}).`,
+      floor ? `Your base grows a new floor: Floor ${floor}, with ${REBIRTH.newFloorPads} open slots.` : 'Your base keeps all its floors.',
+      'You keep your rarest brainrot and every open slot.',
+      'Coins, gems, upgrades and the backpack start over.',
+    ].map((t) => Object.assign(document.createElement('p'), { textContent: t }));
+    this.hud.showModal('Rebirth?', lines, [
+      { label: 'REBIRTH!', primary: true, action: () => this.doRebirth() },
+      { label: 'Not yet' },
+    ]);
+  }
+
+  private doRebirth(): void {
+    const s = this.save;
+    const { newFloor } = rebirthSave(s);
     this.base.sync(s);
     this.paintCannon();
     writeSave(s);
-    this.hud.closeShop();
-    this.hud.toast(`REBIRTH! ×${incomeMultiplier(s)} income`, 'gold big');
-    platform.happytime();
-    this.sfx.sparkle();
-    this.fx.burst(this.padAt(0, this.tmp).setY(2), { count: 60, color: 0xffd84a, speed: 12, life: 1.2, size: 0.7, up: 6 });
+    this.level = 0;
+    const floors = floorsOf(s);
+    this.hud.feed('You', `rebirthed! ×${incomeMultiplier(s)} income${newFloor ? ` and Floor ${floors}` : ''}`, 'rebirth', '#ffd84a');
+    this.grandRebirth(`×${incomeMultiplier(s)} income${newFloor ? ` · Floor ${floors} unlocked!` : ''}`);
   }
 
-  /** Each rebirth unlocks a cannon colour: the design doc's cosmetic skin, in gray-box form. */
+  /**
+   * The rebirth show, about three seconds: the station's crystal dips and blasts up in a pillar of light with a
+   * shockwave, the screen flashes gold, a big banner and confetti, the camera tilts up, and a volley of fireworks
+   * bursts overhead.
+   */
+  private grandRebirth(sub: string): void {
+    this.hub.rebirthBurst();
+    this.hud.flash('#fff1b0');
+    this.hud.grandBanner('REBIRTH!', sub);
+    this.sfx.rebirth();
+    platform.happytime();
+    this.shake = Math.max(this.shake, 1.2);
+    const center = this.hub.rebirthCrystal(new THREE.Vector3());
+    this.fx.burst(center, { count: 70, color: 0xffd84a, speed: 14, life: 1.3, size: 0.8, up: 6 });
+    // Look up at the show, then back.
+    const pitch = this.camPitch;
+    this.camYaw = Math.atan2(-(center.x - this.px), -(center.z - this.pz));
+    this.camPitch = Math.max(pitch, 0.7);
+    this.after(3.4, () => (this.camPitch = pitch));
+    this.launchFireworks(center, 11, 1);
+  }
+
+  /** A volley of rockets around a point, each bursting high in colour with a white crackle. */
+  private launchFireworks(center: THREE.Vector3, count: number, loud: number): void {
+    const colors = [0xff3b6b, 0xffd23f, 0x3fc8ff, 0x8a5cff, 0x3ccf5a, 0xff7a1a, 0xffffff];
+    for (let i = 0; i < count; i++) {
+      this.after(0.15 + i * 0.16, () => {
+        // From behind the point, as seen by the player, so the bursts fill the sky in front of them.
+        const dx = center.x - this.px;
+        const dz = center.z - this.pz;
+        const d = Math.hypot(dx, dz) || 1;
+        const back = rand(4, 9);
+        const across = rand(-7, 7);
+        const pos = new THREE.Vector3(center.x + (dx / d) * back - (dz / d) * across, 1, center.z + (dz / d) * back + (dx / d) * across);
+        this.rockets.push({
+          pos,
+          vel: new THREE.Vector3(rand(-2, 2), rand(17, 21), rand(-2, 2)),
+          fuse: rand(0.75, 1.0),
+          color: colors[i % colors.length],
+          loud,
+        });
+        this.sfx.fireworkLaunch(loud * this.nearness(pos));
+      });
+    }
+  }
+
+  /** 1 next to the player, fading to 0 at 90 m. */
+  private nearness(at: THREE.Vector3): number {
+    return clamp(1 - Math.hypot(at.x - this.px, at.z - this.pz) / 90, 0, 1);
+  }
+
+  private updateFireworks(dt: number): void {
+    this.sparks.update(dt);
+    for (const r of [...this.rockets]) {
+      r.vel.y -= 9 * dt;
+      r.pos.addScaledVector(r.vel, dt);
+      this.sparks.burst(r.pos, { count: 2, color: 0xffd9a0, speed: 0.6, life: 0.4, gravity: 2 });
+      r.fuse -= dt;
+      if (r.fuse > 0) continue;
+      this.rockets.splice(this.rockets.indexOf(r), 1);
+      this.sparks.burst(r.pos, { count: 160, color: r.color, speed: 15, life: 1.6, gravity: 5, drag: 1.3 });
+      this.sparks.burst(r.pos, { count: 22, color: 0xffffff, speed: 6, life: 0.7, gravity: 4, drag: 1.1 });
+      this.sfx.fireworkBang(r.loud * this.nearness(r.pos));
+    }
+  }
+
+  /** Each rebirth unlocks a cannon colour  /** Each rebirth unlocks a cannon colour: the design doc's cosmetic skin, in gray-box form. */
   private paintCannon(): void {
     const colors = [0x3d4450, 0xc0392b, 0x2e86de, 0xe1b12c, 0x8e44ad, 0x27ae60];
     this.env.setBarrelColor(colors[this.save.rebirths % colors.length]);
@@ -2593,13 +2850,17 @@ export class Game {
       this.px = -Math.sin(tilt) * BARREL_REACH;
       this.py = MUZZLE_Y - (1 - Math.cos(tilt)) * BARREL_REACH;
     }
-    this.player.group.position.set(this.px, this.py - squash * 0.5, this.pz);
+    this.player.group.position.set(this.px, this.py - squash * 0.5 + this.jumpY, this.pz);
     this.player.group.rotation.y = atBase ? this.facing : 0;
     // Squash and stretch for pop-ins: after a teleport, and popping up out of the muzzle.
     this.appear = Math.max(0, this.appear - realDt);
     this.popOut = Math.max(0, this.popOut - realDt);
     let stretch = 0;
     if (this.appear > 0) stretch = Math.sin((1 - this.appear / 0.4) * Math.PI) * 0.35;
+    // A jump stretches on the way up and squashes on landing.
+    if (this.jumpY > 0) stretch += clamp(this.jumpV / 45, -0.06, 0.18);
+    this.landSquash = Math.max(0, this.landSquash - realDt * 5);
+    stretch -= Math.sin(this.landSquash * Math.PI) * 0.2;
     if (this.popOut > 0) {
       const p = 1 - this.popOut / 0.35;
       stretch = Math.sin(p * Math.PI) * 0.3;
@@ -2674,7 +2935,7 @@ export class Game {
     this.hud.setWallet(this.save.coins, incomePerSecond(this.save), this.save.gems);
     this.hud.setBackpack(this.save.inventory.length);
     const canShop = this.state === 'home' || this.state === 'aim';
-    const upgradeHint = this.wantsUpgradeHint() || this.wantsExpandHint();
+    const upgradeHint = this.wantsUpgradeHint();
     const launchHint =
       this.state === 'home' &&
       this.hasHint('collect') &&
@@ -2693,8 +2954,27 @@ export class Game {
     const show = atBase && !this.hud.modalOpen && !this.hud.shopOpen;
     const items: PadButton[] = [];
     if (show) {
+      const expand = expansionCost(s);
+      const next = s.pads.length;
+      if (expand !== null && Base.padFloor(next) === this.level) {
+        const at = Base.buttonWorld(OWN, next, this.screen);
+        if (Math.hypot(at.x - this.px, at.z - this.pz) < BUTTON_RANGE + 4) {
+          at.project(this.camera);
+          if (at.z < 1 && Math.abs(at.x) < 1.1 && Math.abs(at.y) < 1.1) {
+            items.push({
+              index: next,
+              x: ((at.x + 1) / 2) * window.innerWidth,
+              y: ((1 - at.y) / 2) * window.innerHeight,
+              title: `Unlock ${ECONOMY.padStep} slots`,
+              sub: formatCoins(expand),
+              kind: s.coins >= expand ? 'go' : 'poor',
+              progress: 1,
+            });
+          }
+        }
+      }
       s.pads.forEach((slot, i) => {
-        if (!slot) return;
+        if (!slot || Base.padFloor(i) !== this.level) return;
         const cost = levelCost(slot);
         const need = xpNeeded(slot);
         if (cost === null || need === null) return;
@@ -2755,7 +3035,7 @@ export class Game {
       if (text && (s.flightNo < 6 || target)) {
         let hand: Parameters<Hud['coach']>[1] = null;
         if (hud.actionBtn.classList.contains('on')) hand = { mode: 'point', el: hud.actionBtn };
-        else if (/Upgrade|Unlock more slots/.test(text)) hand = { mode: 'point', el: hud.upgradesBtn };
+        else if (/^Upgrade/.test(text)) hand = { mode: 'point', el: hud.upgradesBtn };
         else if (text.startsWith('Launch')) hand = { mode: 'point', el: hud.launchBtn };
         else if (target) hand = { mode: 'walk', x: 0.3, y: 0.8 };
         hud.coach(text, hand);
@@ -2822,7 +3102,12 @@ export class Game {
     let legSpread = 0;
     let flail = 0;
     let wobble = 0;
-    if (moving) {
+    let tuck = 0;
+    if (atBase && this.jumpY > 0.05) {
+      // Mid-jump: arms flung up and out, knees tucked.
+      armOut = 1.5;
+      tuck = 0.7;
+    } else if (moving) {
       armOut = 0.15;
       armSwing = Math.sin(this.walkPhase) * 0.7;
       legSwing = Math.sin(this.walkPhase) * 0.8;
@@ -2867,7 +3152,7 @@ export class Game {
     legs.forEach((leg, i) => {
       const side = i === 0 ? -1 : 1;
       const kick = this.dive > 0.62 ? Math.sin(t * 38 + i * Math.PI) * 0.9 : flail ? Math.sin(t * 11 + i * Math.PI) * 0.6 : 0;
-      leg.rotation.x = lerp(leg.rotation.x, side * legSwing + kick, k);
+      leg.rotation.x = lerp(leg.rotation.x, side * legSwing + kick - tuck, k);
       leg.rotation.z = lerp(leg.rotation.z, side * legSpread, k);
     });
     body.rotation.y = lerp(body.rotation.y, wobble, damp(6, dt));

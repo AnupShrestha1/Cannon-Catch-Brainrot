@@ -281,6 +281,38 @@ export class Sfx {
     this.noiseBurst(0.04, 'highpass', 2200, 0.04 + strength * 0.06);
   }
 
+  /** A hop at the base: a short springy boing. */
+  hop(): void {
+    this.tone('sine', 300, 620, 0.12, 0.12);
+  }
+
+  /** Rebirth: a bright rising chord over a deep boom, with a shimmer. */
+  rebirth(): void {
+    this.tone('sine', 110, 40, 1.1, 0.7);
+    this.noiseBurst(0.9, 'lowpass', 900, 0.35, 120);
+    [0, 4, 7, 12, 16, 19, 24].forEach((n, i) => {
+      const f = 392 * Math.pow(2, n / 12);
+      this.tone('triangle', f, f, 1.1, 0.13, 0.08 + i * 0.07);
+      this.tone('sine', f * 2, f * 2, 1.3, 0.05, 0.12 + i * 0.07);
+    });
+    this.sparkle();
+  }
+
+  /** A firework rocket going up: a rising whistle. Level 0 to 1. */
+  fireworkLaunch(level: number): void {
+    if (level < 0.03) return;
+    this.tone('sine', 700, 2100, 0.9, 0.06 * level);
+    this.noiseBurst(0.3, 'highpass', 3000, 0.05 * level);
+  }
+
+  /** A firework bursting: a bang, then a crackle. Level 0 to 1. */
+  fireworkBang(level: number): void {
+    if (level < 0.03) return;
+    this.noiseBurst(0.5, 'lowpass', 1500, 0.55 * level, 150);
+    this.tone('sine', 90, 40, 0.4, 0.4 * level);
+    for (let i = 0; i < 6; i++) this.tone('square', 2400 + Math.random() * 1600, 1800, 0.03, 0.04 * level, 0.25 + Math.random() * 0.5);
+  }
+
   /** Teleporting: a quick rising zip and a soft pop. */
   teleport(): void {
     this.tone('sine', 300, 1800, 0.18, 0.18);

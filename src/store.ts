@@ -1,5 +1,6 @@
 // Local save. Browser storage can be missing or blocked, so every access is guarded.
 import { ECONOMY, UPGRADES } from './config';
+import { maxPads } from './economy';
 
 export type HazardMode = 'auto' | 'on' | 'off';
 
@@ -112,8 +113,8 @@ export function loadSave(): Save {
   } catch {
     // fall through to defaults
   }
-  // The showcase holds at most 10, in pairs; older bases could have 40 pads, whose extras go to the backpack.
-  for (const slot of save.pads.splice(ECONOMY.maxPads)) if (slot) save.inventory.push({ name: slot.name, rarity: slot.rarity });
+  // The showcase holds 10 slots per floor, in pairs; older bases could have 40 pads, whose extras go to the backpack.
+  for (const slot of save.pads.splice(maxPads(save))) if (slot) save.inventory.push({ name: slot.name, rarity: slot.rarity });
   while (save.pads.length < ECONOMY.startPads || save.pads.length % ECONOMY.padStep) save.pads.push(null);
   save.finder = Math.min(save.finder, UPGRADES.finder.max);
   return save;

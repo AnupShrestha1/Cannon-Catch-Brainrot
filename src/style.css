@@ -2805,3 +2805,186 @@ body.chute-alarm::after {
     bottom: calc(max(18px, env(safe-area-inset-bottom)) + 140px);
   }
 }
+
+
+/* ---------------------------------------------------------------- big moments: flash and grand banner */
+
+.screen-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  background: radial-gradient(circle, #fff 0%, var(--c) 50%, transparent 90%);
+  animation: flash 0.9s ease-out forwards;
+}
+
+.grand-banner {
+  position: fixed;
+  inset: 0;
+  z-index: 21;
+  pointer-events: none;
+  overflow: hidden;
+  text-align: center;
+  animation: grand-out 2.9s ease-in forwards;
+}
+
+.grand-banner h1 {
+  position: absolute;
+  top: 30%;
+  left: 0;
+  right: 0;
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(64px, 13vw, 150px);
+  letter-spacing: 0.04em;
+  background: linear-gradient(90deg, #ffd23f, #fff6b8, #ffb000, #fff6b8, #ffd23f);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-stroke: 4px var(--ink);
+  filter: drop-shadow(0 8px 0 var(--ink)) drop-shadow(0 0 40px #ffb000);
+  animation:
+    grand-slam 0.9s cubic-bezier(0.2, 1.7, 0.4, 1) both,
+    rainbow 1.2s linear infinite;
+}
+
+.grand-banner p {
+  position: absolute;
+  top: calc(30% + clamp(80px, 15vw, 170px));
+  left: 0;
+  right: 0;
+  margin: 0;
+  color: #fff;
+  font-family: var(--display);
+  font-size: clamp(22px, 4vw, 40px);
+  text-shadow: var(--stroke), 0 0 20px #ffb000;
+  animation: grand-sub 0.6s 0.35s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.grand-rays {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  width: 160vmax;
+  height: 160vmax;
+  margin: -80vmax 0 0 -80vmax;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 214, 90, 0.55) 0 9deg, transparent 9deg 22deg);
+  mask-image: radial-gradient(circle, #000 10%, transparent 55%);
+  -webkit-mask-image: radial-gradient(circle, #000 10%, transparent 55%);
+  animation:
+    rays-spin 7s linear infinite,
+    rays-in 0.5s ease-out;
+}
+
+@keyframes grand-slam {
+  0% {
+    opacity: 0;
+    transform: scale(3) rotate(-10deg);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(0.85) rotate(3deg);
+  }
+  70% {
+    transform: scale(1.08) rotate(-1deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes grand-sub {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.6);
+  }
+}
+
+@keyframes grand-out {
+  0%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- merge station picks */
+
+.merge-status {
+  margin: 4px 0 8px;
+  padding: 8px 12px;
+  border: 3px solid var(--c, var(--ink));
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 17px;
+  text-align: center;
+}
+
+.merge-section {
+  margin: 8px 0 12px;
+}
+
+.merge-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--c);
+  font-family: var(--display);
+  font-size: 16px;
+  text-shadow: var(--stroke-thin);
+}
+
+.merge-head button {
+  padding: 4px 12px 3px;
+  border-width: 3px;
+  font-size: 14px;
+}
+
+.merge-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.merge-card {
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.15s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+.merge-card:hover {
+  transform: translateY(-3px);
+}
+
+.merge-card.picked {
+  outline: 4px solid #fff;
+  box-shadow:
+    0 0 0 7px var(--c),
+    0 0 22px 6px var(--c);
+  transform: translateY(-4px) scale(1.04);
+}
+
+.merge-card .count {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  padding: 2px 8px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 14px;
+}
+
+.merge-card.picked .count {
+  background: #ffd23f;
+}

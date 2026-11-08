@@ -30,6 +30,7 @@ import {
   mergeNeed,
   padIncome,
   pull,
+  rebirthSave,
   sellValue,
   tierUnlocked,
   trackBoost,
@@ -39,6 +40,7 @@ import {
   CANNON_FOOT,
   CAULDRON,
   CAULDRON_FRONT,
+  REBIRTH_FRONT,
   FOUNTAIN,
   HUB_EDGE,
   LANE_END,
@@ -91,7 +93,7 @@ export interface RemotePlayer {
 export interface ServerEvent {
   kind: 'join' | 'leave' | 'pull' | 'merge' | 'zone' | 'rebirth' | 'chat' | 'act';
   /** For 'act': someone used a shared thing (fired the cannon, spun gacha machine `tier`, stirred the cauldron). */
-  act?: 'fire' | 'spin' | 'stir';
+  act?: 'fire' | 'spin' | 'stir' | 'rebirth';
   tier?: number;
   count?: number;
   name: string;
@@ -889,7 +891,12 @@ export class FakeServer {
   private decide(bot: Bot): void {
     const s = bot.save;
     if (s.cannon >= REBIRTH.cannonLevel && Math.random() < 0.25) {
-      this.rebirth(bot);
+      // Over to the rebirth station for it.
+      this.go(bot, this.route(bot, REBIRTH_FRONT.x + rand(-0.4, 0.4), REBIRTH_FRONT.z + rand(-0.3, 0.3)), () => {
+        bot.facing = Math.PI;
+        bot.wait = rand(2.5, 4);
+        if (bot.save.cannon >= REBIRTH.cannonLevel) this.rebirth(bot);
+      });
       return;
     }
     const choice = pickTier(s);
@@ -1151,17 +1158,16 @@ export class FakeServer {
   /** Back to the start for a permanent income bonus, keeping the rarest brainrot, like the player's rebirth. */
   private rebirth(bot: Bot): void {
     const s = bot.save;
-    let keep: Owned | null = null;
-    for (const o of [...s.pads, ...s.inventory]) if (o && (!keep || o.rarity > keep.rarity)) keep = o;
-    s.rebirths += 1;
-    s.coins = 0;
-    s.gems = 0;
-    s.cannon = 1;
-    s.finder = s.magnet = s.steering = s.chute = 0;
-    s.pads = Array.from({ length: ECONOMY.startPads }, () => null);
-    s.inventory = [];
-    if (keep) s.pads[0] = { name: keep.name, rarity: keep.rarity, cash: 0, level: 1, xp: 0 };
-    this.events.push({ kind: 'rebirth', name: bot.name, text: `rebirthed! ×${1 + s.rebirths * REBIRTH.incomeBonus} income`, color: '#ffd84a' });
+    const { newFloor } = rebirthSave(s);
+    this.events.push({ kind: 'act', name: bot.name, text: '', act: 'rebirth' });
+    this.events.push({
+      kind: 'rebirth',
+      name: bot.name,
+      text: `rebirthed! ×${1 + s.rebirths * REBIRTH.incomeBonus} income${newFloor ? ' and a new floor' : ''}`,
+      color: '#ffd84a',
+    });
+    if (Math.random() < 0.6) this.after(1.5, () => this.say(bot, pick(['REBIRTH LETS GO', 'new floor!!', 'finally rebirthed', 'ez'])));
+    this.react(bot);
   }
 }
 

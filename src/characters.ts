@@ -3,6 +3,7 @@
 // 1.2 m tall. Geometries and materials are cached, so building and dropping rigs leaks nothing.
 import * as THREE from 'three';
 import { RARITIES } from './config';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { makeCloud, softTexture } from './world';
 
 export interface CharacterRig {
@@ -86,40 +87,62 @@ const at = <T extends THREE.Object3D>(o: T, x: number, y: number, z: number): T 
   o.position.set(x, y, z);
   return o;
 };
+// Every shape is smooth and rounded: boxes have soft edges, balls and cylinders are finely divided, so the
+// cel shading reads as clean bands of light rather than facets.
 const box = (w: number, h: number, d: number, m: THREE.Material) =>
-  new THREE.Mesh(cached(`box${w},${h},${d}`, () => new THREE.BoxGeometry(w, h, d)), m);
-const ball = (r: number, m: THREE.Material, detail = 1) =>
-  new THREE.Mesh(cached(`ball${r},${detail}`, () => new THREE.IcosahedronGeometry(r, detail)), m);
+  new THREE.Mesh(
+    cached(`box${w},${h},${d}`, () => new RoundedBoxGeometry(w, h, d, 3, Math.min(w, h, d) * 0.24)),
+    m,
+  );
+const ball = (r: number, m: THREE.Material, _detail = 1) =>
+  new THREE.Mesh(cached(`ball${r}`, () => new THREE.SphereGeometry(r, 28, 18)), m);
 const cyl = (top: number, bottom: number, h: number, m: THREE.Material, seg = 10) =>
-  new THREE.Mesh(cached(`cyl${top},${bottom},${h},${seg}`, () => new THREE.CylinderGeometry(top, bottom, h, seg)), m);
+  new THREE.Mesh(cached(`cyl${top},${bottom},${h},${seg}`, () => new THREE.CylinderGeometry(top, bottom, h, Math.max(20, seg * 2))), m);
 const cone = (r: number, h: number, m: THREE.Material, seg = 8) =>
-  new THREE.Mesh(cached(`cone${r},${h},${seg}`, () => new THREE.ConeGeometry(r, h, seg)), m);
+  new THREE.Mesh(cached(`cone${r},${h},${seg}`, () => new THREE.ConeGeometry(r, h, Math.max(16, seg * 2))), m);
 const ring = (r: number, tube: number, m: THREE.Material) =>
-  new THREE.Mesh(cached(`ring${r},${tube}`, () => new THREE.TorusGeometry(r, tube, 6, 14)), m);
+  new THREE.Mesh(cached(`ring${r},${tube}`, () => new THREE.TorusGeometry(r, tube, 12, 32)), m);
+/** A capsule lying along x. */
+const pill = (r: number, len: number, m: THREE.Material) =>
+  new THREE.Mesh(cached(`pill${r},${len}`, () => new THREE.CapsuleGeometry(r, len, 8, 20).rotateZ(Math.PI / 2)), m);
 
 const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const pupilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
 const mouthMat = new THREE.MeshBasicMaterial({ color: 0x3a1020 });
+const cheekMat = new THREE.MeshBasicMaterial({ color: 0xff8fae, transparent: true, opacity: 0.7, depthWrite: false });
 /** Parts that never get an outline: eyes, mouths, glows and see-through bits. */
-const NO_OUTLINE = new Set<THREE.Material>([eyeMat, pupilMat, mouthMat, outlineMat]);
+const NO_OUTLINE = new Set<THREE.Material>([eyeMat, pupilMat, mouthMat, outlineMat, cheekMat]);
 
-/** Two big round cartoon eyes with pupils and a shine, on a face at depth z, centred on x. */
+/** Eye groups made while a model is being built, so the character can blink them. */
+let eyeCollector: THREE.Object3D[] | null = null;
+
+/**
+ * Two big glossy cartoon eyes on a face at depth z, centred on x: a white, a big pupil, two shines, and rosy
+ * cheeks under them. Each eye is its own group, so it can blink (squash flat and open again).
+ */
 function eyes(parent: THREE.Object3D, x: number, y: number, z: number, spread = 0.11): void {
-  const r = Math.min(0.12, Math.max(0.065, spread * 0.8));
+  const r = Math.min(0.135, Math.max(0.075, spread * 0.9));
   for (const side of [-1, 1]) {
-    const white = at(ball(r, eyeMat, 2), x + side * spread, y, z);
+    const eye = at(new THREE.Group(), x + side * spread, y, z);
+    const white = ball(r, eyeMat);
     white.scale.z = 0.55;
-    const pupil = at(ball(r * 0.55, pupilMat, 1), x + side * spread + side * r * 0.12, y - r * 0.1, z + r * 0.42);
+    const pupil = at(ball(r * 0.62, pupilMat), side * r * 0.1, -r * 0.08, r * 0.4);
     pupil.scale.z = 0.5;
-    const shine = at(ball(r * 0.2, eyeMat, 0), x + side * spread - r * 0.2, y + r * 0.25, z + r * 0.62);
-    parent.add(white, pupil, shine);
+    const shine = at(ball(r * 0.24, eyeMat), -r * 0.22, r * 0.28, r * 0.66);
+    const glint = at(ball(r * 0.11, eyeMat), r * 0.2, -r * 0.25, r * 0.66);
+    eye.add(white, pupil, shine, glint);
+    parent.add(eye);
+    eyeCollector?.push(eye);
+    const cheek = at(ball(r * 0.55, cheekMat), x + side * (spread + r * 0.7), y - r * 1.25, z - r * 0.15);
+    cheek.scale.set(1, 0.6, 0.3);
+    parent.add(cheek);
   }
 }
 
 /** A curved smile at depth z. */
 function smile(parent: THREE.Object3D, x: number, y: number, z: number, w = 0.12): void {
   const mouth = new THREE.Mesh(
-    cached(`smile${w}`, () => new THREE.TorusGeometry(w, w * 0.22, 4, 10, Math.PI)),
+    cached(`smile${w}`, () => new THREE.TorusGeometry(w, w * 0.28, 8, 20, Math.PI)),
     mouthMat,
   );
   mouth.rotation.z = Math.PI;
@@ -170,12 +193,32 @@ const MODELS: Record<string, Model> = {
     smoke.rotation.y = Math.PI / 2;
     f.add(barrel, lip, head, beak, collar, smoke);
     for (const side of [-1, 1]) f.add(at(box(0.07, 0.24, 0.07, mat(ORANGE)), -0.05 + side * 0.15, 0.12, 0));
+    const feather = mat(0xb9b6d3);
+    const wings: THREE.Mesh[] = [];
+    for (const side of [-1, 1]) {
+      const wing = at(ball(0.2, feather), -0.05, 0.62, side * 0.36);
+      wing.scale.set(1.5, 0.55, 0.35);
+      wings.push(wing);
+      f.add(wing);
+      const wheel = at(ring(0.13, 0.04, mat(0x6b4226)), 0.15, 0.17, side * 0.3);
+      f.add(wheel, at(ball(0.04, accent), 0.15, 0.17, side * 0.3));
+    }
+    const tail = at(cone(0.14, 0.3, feather), -0.6, 0.62, 0);
+    tail.rotation.z = Math.PI / 2 + 0.3;
+    tail.scale.z = 0.4;
+    const fuse = at(cyl(0.02, 0.02, 0.18, mat(0xf2e2b8), 6), -0.3, 0.86, -0.12);
+    const spark = at(ball(0.05, bulbMat), -0.3, 0.97, -0.12);
+    f.add(tail, fuse, spark);
     eyes(f, -0.2, 1, 0.34, 0.09);
     return (t) => {
       const p = (t * 0.7) % 1;
       smoke.position.x = 0.62 + p * 0.9;
       smoke.scale.setScalar(0.6 + p * 1.2);
       smoke.visible = p < 0.85;
+      // A little kick back as each ring puffs out.
+      barrel.position.x = 0.05 - Math.max(0, 0.08 - p) * 0.8;
+      wings.forEach((w, i) => (w.rotation.x = (i ? 1 : -1) * Math.sin(t * 6) * 0.25));
+      spark.scale.setScalar(0.7 + Math.abs(Math.sin(t * 25)) * 0.6);
     };
   },
 
@@ -196,8 +239,19 @@ const MODELS: Record<string, Model> = {
       f.add(at(box(0.12, 0.11, 0.2, dark), side * 0.3, 0.06, 0));
     }
     eyes(f, 0, 0.5, 0.29, 0.13);
+    const butter = at(box(0.14, 0.05, 0.1, mat(0xffe680)), 0, 0.2, 0.02);
+    toast.add(butter);
+    for (const x of [-0.3, 0.3]) {
+      const dial = at(cyl(0.06, 0.06, 0.04, mat(0x2b2b33), 12), x, 0.2, 0.29);
+      dial.rotation.x = Math.PI / 2;
+      f.add(dial);
+    }
     return (t) => {
-      toast.position.y = 0.6 + Math.max(0, Math.sin(t * 2.2)) * 0.35;
+      // Toast pops up fast and settles back slowly, with a squash of the toaster as it fires.
+      const pop = Math.max(0, Math.sin(t * 2.2));
+      toast.position.y = 0.6 + pop * 0.35;
+      toast.rotation.z = Math.sin(t * 2.2) * 0.15 * pop;
+      body.scale.set(1 + (1 - pop) * 0.03, 1 - (1 - pop) * 0.04, 1);
       const flap = Math.sin(t * 10) * 0.5;
       wings[0].rotation.z = -flap;
       wings[1].rotation.z = flap;
@@ -207,14 +261,38 @@ const MODELS: Record<string, Model> = {
   // Snail with a lightbulb shell; the bulb flickers (shared material, see animateShared).
   'Lampadino Lumachino': (f, accent) => {
     const slime = mat(0x86c95b);
-    f.add(at(box(1.1, 0.24, 0.42, slime), 0, 0.12, 0), at(box(0.3, 0.42, 0.36, slime), 0.48, 0.36, 0));
-    for (const x of [0.4, 0.56]) {
-      f.add(at(cyl(0.03, 0.03, 0.3, slime, 6), x, 0.72, 0.08));
-      f.add(at(ball(0.08, eyeMat, 0), x, 0.9, 0.1), at(ball(0.04, pupilMat, 0), x, 0.89, 0.17));
+    const foot = at(pill(0.16, 0.85, slime), 0, 0.16, 0);
+    const neck = at(new THREE.Group(), 0.48, 0.2, 0);
+    const headPart = at(ball(0.22, slime), 0, 0.24, 0);
+    headPart.scale.set(1, 1.25, 1);
+    neck.add(headPart);
+    const stalks: THREE.Group[] = [];
+    for (const side of [-1, 1]) {
+      const stalk = at(new THREE.Group(), side * 0.08, 0.46, 0.04);
+      stalk.add(at(cyl(0.025, 0.03, 0.3, slime, 6), 0, 0.15, 0));
+      const eye = at(new THREE.Group(), 0, 0.33, 0.02);
+      eye.add(ball(0.08, eyeMat), at(ball(0.045, pupilMat), 0, -0.01, 0.06));
+      eyeCollector?.push(eye);
+      stalk.add(eye);
+      neck.add(stalk);
+      stalks.push(stalk);
     }
-    f.add(at(cyl(0.16, 0.2, 0.2, accent), -0.12, 0.34, 0), at(ball(0.36, bulbMat, 2), -0.12, 0.74, 0));
-    smile(f, 0.48, 0.36, 0.19, 0.08);
-    return () => {};
+    smile(neck, 0, 0.16, 0.2, 0.08);
+    f.add(foot, neck);
+    // The bulb shell: a screw base with threads, glass, and a glowing filament inside.
+    const shell = at(new THREE.Group(), -0.12, 0.32, 0);
+    shell.add(at(cyl(0.16, 0.2, 0.22, accent), 0, 0, 0));
+    for (const y of [-0.06, 0.02, 0.1]) shell.add(at(ring(0.18, 0.025, mat(0xc9ced6)), 0, y, 0)).children.at(-1)!.rotateX(Math.PI / 2);
+    shell.add(at(ball(0.36, bulbMat), 0, 0.42, 0));
+    f.add(shell);
+    return (t) => {
+      // An inchworm crawl: the foot stretches and squashes, the stalks wobble on their own.
+      const crawl = Math.sin(t * 2.4);
+      foot.scale.set(1 + crawl * 0.08, 1 - crawl * 0.06, 1);
+      neck.position.x = 0.48 + crawl * 0.05;
+      stalks.forEach((s, i) => (s.rotation.z = Math.sin(t * 3 + i * 1.7) * 0.25));
+      shell.rotation.z = Math.sin(t * 2.4 + 1) * 0.04;
+    };
   },
 
   // Ostrich whose neck is a toothbrush; brushes the air.
@@ -227,10 +305,23 @@ const MODELS: Record<string, Model> = {
     for (const side of [-1, 1]) f.add(at(cyl(0.04, 0.04, 0.62, mat(0xf2a6a0), 6), side * 0.13, 0.31, 0));
     const neck = at(new THREE.Group(), 0.35, 1.05, 0);
     neck.add(at(box(0.12, 0.85, 0.12, accent), 0, 0.42, 0), at(box(0.16, 0.14, 0.3, mat(0xffffff)), 0.02, 0.88, 0.1));
+    // Bristles in rows of white and blue, and a swirl of toothpaste on top.
+    for (let i = 0; i < 6; i++) {
+      neck.add(at(box(0.04, 0.12, 0.04, mat(i % 2 ? 0x5ec4ff : 0xffffff)), -0.04 + (i % 2) * 0.08, 1.0, 0 + Math.floor(i / 2) * 0.09));
+    }
+    neck.add(at(pill(0.05, 0.12, mat(0xffffff)), 0, 1.1, 0.09), at(pill(0.04, 0.08, mat(0x7fe0c0)), 0, 1.14, 0.09));
     eyes(neck, 0, 0.7, 0.07, 0.06);
     f.add(neck);
+    const wings: THREE.Mesh[] = [];
+    for (const side of [-1, 1]) {
+      const wing = at(ball(0.2, mat(0x3b3b44)), -0.05, 0.92, side * 0.36);
+      wing.scale.set(1.3, 0.5, 0.3);
+      wings.push(wing);
+      f.add(wing);
+    }
     return (t) => {
       neck.rotation.z = Math.sin(t * 3) * 0.3;
+      wings.forEach((w, i) => (w.rotation.x = (i ? 1 : -1) * (0.2 + Math.sin(t * 5) * 0.3)));
     };
   },
 
@@ -248,6 +339,18 @@ const MODELS: Record<string, Model> = {
     const cone_ = at(cone(0.2, 0.42, mat(WAFFLE)), 0, 0.44, 0);
     cone_.rotation.x = Math.PI;
     pivot.add(cone_, at(ball(0.24, mat(0xff9ec7)), 0, 0.72, 0));
+    const sprinkleColors = [0xffd23f, 0x5ec4ff, 0x3ccf5a, 0xffffff, 0x8a5cff, 0xff5f7e];
+    for (let i = 0; i < 12; i++) {
+      const a = i * 2.39;
+      const y = 0.8 + (i % 4) * 0.035;
+      const sprinkle = at(pill(0.012, 0.05, mat(sprinkleColors[i % sprinkleColors.length])), Math.cos(a) * 0.17, y + 0.05, Math.sin(a) * 0.17 - 0.03);
+      sprinkle.rotation.set(a, a * 1.3, 0);
+      pivot.add(sprinkle);
+    }
+    pivot.add(at(ball(0.07, mat(0xe63946)), 0, 0.98, 0), at(cyl(0.008, 0.008, 0.1, mat(0x3a7d2c), 4), 0.02, 1.06, 0));
+    const drip = at(ball(0.05, mat(0xff9ec7)), 0.16, 0.56, 0.12);
+    drip.scale.y = 1.6;
+    pivot.add(drip);
     eyes(pivot, 0, 0.74, 0.22, 0.09);
     smile(pivot, 0, 0.62, 0.22, 0.07);
     f.add(pivot);
@@ -270,8 +373,22 @@ const MODELS: Record<string, Model> = {
     const lid = at(new THREE.Group(), 0, 1.04, 0.23);
     lid.add(at(box(0.56, 0.05, 0.5, cardboard), 0, 0, 0.25));
     f.add(lid, at(box(0.3, 0.12, 0.08, accent), 0, 0.88, 0.38));
+    for (const [x, z] of [[-0.1, 0.4], [0.1, 0.42], [0, 0.56], [-0.12, 0.58], [0.12, 0.56]]) {
+      f.add(at(cyl(0.045, 0.045, 0.02, mat(0xc8102e), 12), x, 1.065, z));
+    }
+    f.add(at(ring(0.025, 0.012, mat(0x1d1d24)), 0.05, 1.07, 0.48).rotateX(Math.PI / 2));
+    const wings: THREE.Mesh[] = [];
+    for (const side of [-1, 1]) {
+      const wing = at(ball(0.24, white), side * 0.45, 0.68, -0.05);
+      wing.scale.set(0.35, 0.8, 1.1);
+      wings.push(wing);
+      f.add(wing);
+    }
     return (t) => {
-      lid.rotation.x = -Math.max(0, Math.sin(t * 1.8)) * 1.1;
+      const open = Math.max(0, Math.sin(t * 1.8));
+      lid.rotation.x = -open * 1.1;
+      // It flaps proudly as it shows the pizza off.
+      wings.forEach((w, i) => (w.rotation.z = (i ? -1 : 1) * open * 0.6));
     };
   },
 };
@@ -292,13 +409,31 @@ const MODELS_STORM: Record<string, Model> = {
       blades.add(blade);
     }
     hover.add(shell, cage, blades, at(ball(0.2, skin), 0, 0.42, 0.5));
-    for (const side of [-1, 1]) hover.add(at(box(0.16, 0.1, 0.22, skin), side * 0.42, 0.3, 0.15));
+    const feet: THREE.Mesh[] = [];
+    for (const side of [-1, 1]) {
+      for (const z of [0.2, -0.25]) {
+        const foot = at(ball(0.11, skin), side * 0.44, 0.32, z);
+        foot.scale.set(1.3, 0.6, 1);
+        feet.push(foot);
+        hover.add(foot);
+      }
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const plate = at(ball(0.1, mat(0xcfd6de)), Math.cos(a) * 0.4, 0.5, Math.sin(a) * 0.4);
+      plate.scale.set(1, 0.4, 1);
+      hover.add(plate);
+    }
+    const tail = at(cone(0.06, 0.18, skin), 0, 0.38, -0.55);
+    tail.rotation.x = -Math.PI / 2;
+    hover.add(tail);
     eyes(hover, 0, 0.48, 0.68, 0.07);
     smile(hover, 0, 0.36, 0.66, 0.06);
     f.add(hover);
     return (t) => {
       blades.rotation.y = t * 18;
       hover.position.y = 0.2 + Math.sin(t * 2.5) * 0.08;
+      feet.forEach((f2, i) => (f2.rotation.x = Math.sin(t * 6 + i * 1.6) * 0.5));
     };
   },
 
@@ -312,9 +447,37 @@ const MODELS_STORM: Record<string, Model> = {
     tail.rotation.z = 0.4;
     const star = at(box(0.12, 0.12, 0.12, mat(0xffffff)), 0.4, 0.75, 0.2);
     f.add(cup, foam, mask, handle, tail, star);
+    const heart = new THREE.Group();
+    const art = mat(0xa0663a);
+    heart.add(at(ball(0.07, art), -0.05, 0, 0.02), at(ball(0.07, art), 0.05, 0, 0.02));
+    const tip = at(cone(0.09, 0.12, art), 0, 0, -0.07);
+    tip.rotation.x = -Math.PI / 2;
+    heart.add(tip);
+    heart.scale.set(1, 0.25, 1);
+    heart.position.set(0, 0.775, 0.02);
+    f.add(heart);
+    const tails: THREE.Mesh[] = [];
+    for (const side of [-1, 1]) {
+      const band = at(box(0.06, 0.05, 0.3, mat(0x1f1f28)), side * 0.08, 0.55, -0.48);
+      tails.push(band);
+      f.add(band);
+    }
+    const steam = [0, 1, 2].map((i) => {
+      const puff = at(ball(0.07, smokeMat), 0, 0.85, 0);
+      puff.userData.seed = i / 3;
+      f.add(puff);
+      return puff;
+    });
     eyes(f, 0, 0.53, 0.37, 0.11);
     smile(f, 0, 0.3, 0.36, 0.1);
     return (t) => {
+      tails.forEach((b, i) => (b.rotation.y = Math.sin(t * 7 + i) * 0.35));
+      steam.forEach((s) => {
+        const p = (t * 0.5 + (s.userData.seed as number)) % 1;
+        s.position.set(Math.sin(p * 9) * 0.08, 0.82 + p * 0.6, 0);
+        s.scale.setScalar(0.5 + p);
+        s.visible = p < 0.9;
+      });
       const p = (t * 0.8) % 1;
       star.position.set(0.4 + p * 1.2, 0.75 + Math.sin(p * Math.PI) * 0.4, 0.2);
       star.rotation.set(t * 9, t * 7, 0);
@@ -337,12 +500,25 @@ const MODELS_STORM: Record<string, Model> = {
     const rotor = at(new THREE.Group(), 0, 1.3, 0);
     rotor.add(box(1.6, 0.04, 0.12, accent), box(0.12, 0.04, 1.6, accent));
     lift.add(rotor);
+    for (const side of [-1, 1]) {
+      const ear = at(ball(0.09, purple), side * 0.32, 1.02, 0.1);
+      ear.scale.set(1, 0.7, 0.5);
+      lift.add(ear, at(ball(0.035, pupilMat), side * 0.12, 0.7, 0.64));
+    }
+    const tailBoom = at(cyl(0.05, 0.09, 0.55, purple, 8), 0, 0.7, -0.75);
+    tailBoom.rotation.x = Math.PI / 2 + 0.3;
+    const tailRotor = at(new THREE.Group(), 0.06, 0.62, -1.02);
+    tailRotor.add(box(0.03, 0.36, 0.06, accent));
+    lift.add(tailBoom, tailRotor);
     eyes(lift, 0, 0.98, 0.42, 0.14);
     smile(lift, 0, 0.56, 0.64, 0.12);
     f.add(lift);
     return (t) => {
       rotor.rotation.y = t * 22;
+      tailRotor.rotation.x = t * 30;
       lift.position.y = Math.max(0, Math.sin(t * 1.4)) * 0.25;
+      // Tips forward a touch as it lifts, like a real helicopter.
+      lift.rotation.x = Math.max(0, Math.sin(t * 1.4)) * 0.08;
     };
   },
 
@@ -354,6 +530,14 @@ const MODELS_STORM: Record<string, Model> = {
     door.add(at(box(0.6, 0.8, 0.05, mat(0xdfe6ec)), -0.3, 0, 0.02), at(box(0.05, 0.3, 0.05, accent), -0.52, 0, 0.07));
     const mist = at(ball(0.18, smokeMat, 1), 0, 0.75, 0.4);
     f.add(fridge, door, mist);
+    // Magnets on the door, a freezer line, and a pink wing.
+    for (const [x, y, c] of [[-0.42, 0.25, 0xffd23f], [-0.2, 0.18, 0x5ec4ff], [-0.34, -0.1, 0x3ccf5a]] as const) {
+      door.add(at(box(0.09, 0.09, 0.04, mat(c)), x, y, 0.07));
+    }
+    door.add(at(box(0.56, 0.02, 0.02, mat(0xb9c4cf)), -0.3, 0.12, 0.06));
+    const wing = at(ball(0.22, pink), -0.32, 0.95, -0.02);
+    wing.scale.set(0.3, 0.8, 1.1);
+    f.add(wing);
     for (const side of [-1, 1]) {
       f.add(at(cyl(0.04, 0.04, 0.3, pink, 6), side * 0.16, 0.32, 0));
       f.add(at(cyl(0.09, 0.12, 0.2, mat(0x5a606b), 10), side * 0.16, 0.1, 0));
@@ -507,7 +691,19 @@ export function makeCharacter(rarity: number, name: string): CharacterRig {
   const group = new THREE.Group();
   const figure = new THREE.Group();
   group.add(figure);
-  const animate = (MODELS[name] ?? cubeModel)(figure, rarityMaterial(rarity));
+  const blinkers: THREE.Object3D[] = [];
+  eyeCollector = blinkers;
+  const base = (MODELS[name] ?? cubeModel)(figure, rarityMaterial(rarity));
+  eyeCollector = null;
+  // Every few seconds the eyes squash shut and pop open again (each character on its own rhythm).
+  const seed = Math.random();
+  const period = 2.6 + seed * 2.2;
+  const animate = (t: number) => {
+    base(t);
+    const p = ((t / period + seed) % 1) * period;
+    const shut = p < 0.14 ? Math.sin((p / 0.14) * Math.PI) : 0;
+    for (const e of blinkers) e.scale.y = 1 - shut * 0.9;
+  };
   // Mythics shimmer with a moving rainbow over their whole body.
   if (rarity === 5) {
     figure.traverse((o) => {

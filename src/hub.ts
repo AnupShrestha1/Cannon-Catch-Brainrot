@@ -16,6 +16,9 @@ import { formatCoins } from './economy';
 import {
   CAULDRON,
   CAULDRON_FRONT,
+  REBIRTH_AT,
+  REBIRTH_FRONT,
+  WALK,
   FOUNTAIN,
   HUB_BACK,
   HUB_EDGE,
@@ -261,6 +264,23 @@ export class Hub {
   private dropSeeds: number[] = [];
   private fountainWater: THREE.Mesh[] = [];
   private dummy = new THREE.Object3D();
+  private rebirthSign!: Sign;
+  private rebirthKey = '';
+  private rebirthReady = false;
+  /** Seconds into the rebirth burst, or < 0. */
+  private rebirthT = -1;
+  private rebirthParts!: {
+    crystal: THREE.Mesh;
+    crystalMat: THREE.MeshPhongMaterial;
+    rings: THREE.Mesh[];
+    pillar: THREE.Mesh;
+    pillarMat: THREE.MeshBasicMaterial;
+    halo: THREE.Sprite;
+    shock: THREE.Mesh;
+    shockMat: THREE.MeshBasicMaterial;
+    sparks: THREE.Mesh[];
+    padRing: THREE.Mesh;
+  };
   /** Called when a machine unlocks during play (not when the hub is first built). */
   onUnlock: (index: number) => void = () => {};
   /** Called when a spat-out capsule hits the floor, with where and how hard (0 to 1). */
@@ -273,6 +293,27 @@ export class Hub {
     this.buildShop();
     GACHA.forEach((tier, i) => this.buildMachine(tier, i));
     this.buildFountain();
+    this.buildRebirth();
+    this.buildFence();
+  }
+
+  /** The rebirth station's sign: what it gives, or what it still needs (with a bar), and whether it's ready. */
+  setRebirth(ready: boolean, sub: string, progress: number): void {
+    const key = `${ready}|${sub}|${Math.round(progress * 40)}`;
+    if (key === this.rebirthKey) return;
+    this.rebirthKey = key;
+    this.rebirthReady = ready;
+    this.rebirthSign.draw(ready ? 'REBIRTH' : '🔒 REBIRTH', sub, '#ffd84a', !ready, ready ? undefined : progress);
+  }
+
+  /** The station's big moment: the crystal rises and blazes, the rings whirl, a shockwave rolls out. */
+  rebirthBurst(): void {
+    this.rebirthT = 0;
+  }
+
+  /** Where the rebirth station's crystal floats, in world space. */
+  rebirthCrystal(out = new THREE.Vector3()): THREE.Vector3 {
+    return out.set(REBIRTH_AT.x, 4.2, REBIRTH_AT.z);
   }
 
   // ---------------------------------------------------------------- what the game asks of it
@@ -323,6 +364,176 @@ export class Hub {
     this.animateCauldron(time, dt);
     this.animateKeeper(time, dt, px, pz);
     this.animateFountain(time);
+    this.animateRebirth(time, dt);
+  }
+
+  // ---------------------------------------------------------------- the rebirth station
+
+  /**
+   * A marble dais in three steps, gold-banded, under a floating golden crystal held in two turning rings, with
+   * sparks in orbit and a pillar of light when rebirth is ready. A gold pad in front is where you stand.
+   */
+  private buildRebirth(): void {
+    const g = new THREE.Group();
+    g.position.set(REBIRTH_AT.x, 0, REBIRTH_AT.z);
+    const marble = phong(0xfbf7f0, { shininess: 90, specular: 0xffffff });
+    const gold = goldMat();
+    const dais = new THREE.Mesh(
+      new THREE.LatheGeometry(
+        [[0.01, 0], [2.5, 0], [2.5, 0.3], [1.95, 0.3], [1.95, 0.62], [1.4, 0.62], [1.4, 0.95], [0.7, 0.95], [0.55, 1.6], [0.75, 1.9], [0.01, 1.9]].map(
+          ([r, y]) => new THREE.Vector2(r, y),
+        ),
+        56,
+      ),
+      marble,
+    );
+    dais.castShadow = dais.receiveShadow = true;
+    for (const [r, y] of [
+      [2.5, 0.3],
+      [1.95, 0.62],
+      [1.4, 0.95],
+    ]) {
+      const band = new THREE.Mesh(new THREE.TorusGeometry(r, 0.05, 8, 56).rotateX(Math.PI / 2), gold);
+      band.position.y = y;
+      g.add(band);
+    }
+    const crystalMat = new THREE.MeshPhongMaterial({ color: 0xffe27a, emissive: 0xffa31a, emissiveIntensity: 0.6, shininess: 150, specular: 0xffffff });
+    const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.6, 0), crystalMat);
+    crystal.scale.set(1, 1.7, 1);
+    crystal.position.y = 4.2;
+    const rings = [1.5, 1.25].map((r, i) => {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.07, 12, 64), i ? marble : gold);
+      ring.position.y = 4.2;
+      g.add(ring);
+      return ring;
+    });
+    const halo = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: softTexture(), color: 0xffd36b, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    halo.scale.setScalar(4.5);
+    halo.position.y = 4.2;
+    const pillarMat = new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.25, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.3, 14, 32, 1, true), pillarMat);
+    pillar.position.y = 8;
+    const shockMat = new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+    const shock = new THREE.Mesh(new THREE.TorusGeometry(1, 0.12, 8, 64).rotateX(Math.PI / 2), shockMat);
+    shock.position.y = 0.4;
+    const sparks: THREE.Mesh[] = [];
+    for (let k = 0; k < 8; k++) {
+      const s = new THREE.Mesh(new THREE.OctahedronGeometry(0.11, 0), new THREE.MeshBasicMaterial({ color: k % 2 ? 0xffffff : 0xffd84a }));
+      s.userData.seed = k;
+      sparks.push(s);
+      g.add(s);
+    }
+    g.add(dais, crystal, halo, pillar, shock);
+    this.rebirthSign = makeSign();
+    this.rebirthSign.sprite.position.y = 7.1;
+    g.add(this.rebirthSign.sprite);
+    this.group.add(g);
+    // The gold pad in front.
+    const pad = new THREE.Group();
+    pad.position.set(REBIRTH_FRONT.x, 0, REBIRTH_FRONT.z);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(PLATFORM_RADIUS + 0.15, PLATFORM_RADIUS + 0.3, 0.2, 40), phong(0xf1ebe0, { shininess: 20 }));
+    base.position.y = 0.1;
+    const disc = new THREE.Mesh(
+      new THREE.CylinderGeometry(PLATFORM_RADIUS, PLATFORM_RADIUS, 0.08, 40),
+      new THREE.MeshLambertMaterial({ color: 0xffc21a, emissive: 0xffa000, emissiveIntensity: 0.5 }),
+    );
+    disc.position.y = 0.22;
+    const padRing = new THREE.Mesh(
+      new THREE.TorusGeometry(PLATFORM_RADIUS * 0.85, 0.06, 6, 40).rotateX(Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    pad.add(base, disc, padRing);
+    this.group.add(pad);
+    this.rebirthParts = { crystal, crystalMat, rings, pillar, pillarMat, halo, shock, shockMat, sparks, padRing };
+    this.setRebirth(false, '', 0);
+  }
+
+  private animateRebirth(time: number, dt: number): void {
+    const p = this.rebirthParts;
+    const ready = this.rebirthReady;
+    let burst = 0;
+    if (this.rebirthT >= 0) {
+      this.rebirthT += dt;
+      burst = Math.max(0, 1 - this.rebirthT / 2.6);
+      if (this.rebirthT > 2.6) this.rebirthT = -1;
+    }
+    const k = this.rebirthT >= 0 ? this.rebirthT : 0;
+    // Anticipation: the crystal dips first, then shoots up and swells.
+    const dip = this.rebirthT >= 0 && k < 0.25 ? -Math.sin((k / 0.25) * Math.PI) * 0.5 : 0;
+    p.crystal.position.y = 4.2 + Math.sin(time * 1.6) * 0.15 + dip + burst * 1.4;
+    p.crystal.rotation.y = time * (ready ? 1.2 : 0.4) + burst * k * 20;
+    p.crystal.scale.set(1 + burst * 0.5, 1.7 * (1 + burst * 0.6), 1 + burst * 0.5);
+    p.crystalMat.emissiveIntensity = (ready ? 0.9 + Math.sin(time * 3) * 0.2 : 0.25) + burst * 3;
+    p.rings[0].rotation.set(time * 0.7 + burst * k * 12, time * 0.5, 0);
+    p.rings[1].rotation.set(0, time * 0.9 + burst * k * 15, Math.PI / 2 + time * 0.3);
+    for (const r of p.rings) r.position.y = p.crystal.position.y;
+    p.halo.position.y = p.crystal.position.y;
+    p.halo.scale.setScalar((ready ? 4.6 : 2.8) + Math.sin(time * 3) * 0.3 + burst * 3);
+    p.pillar.visible = ready || burst > 0;
+    p.pillarMat.opacity = 0.18 + Math.sin(time * 2.2) * 0.06 + burst * 0.3;
+    p.pillar.scale.set(1 + burst * 1.5, 1, 1 + burst * 1.5);
+    p.sparks.forEach((s) => {
+      const a = time * (1.2 + burst * 6) + (s.userData.seed as number) * 0.785;
+      const r = 2 + burst * 2;
+      s.position.set(Math.cos(a) * r, 3.2 + Math.sin(a * 2) * 0.8 + burst * 2, Math.sin(a) * r);
+      s.rotation.y = time * 4;
+      s.visible = ready || burst > 0;
+    });
+    // A shockwave rolling out across the ground.
+    if (this.rebirthT >= 0 && k < 1.2) {
+      const t = k / 1.2;
+      p.shock.scale.setScalar(1 + t * 16);
+      p.shockMat.opacity = 0.9 * (1 - t);
+    } else {
+      p.shockMat.opacity = 0;
+    }
+    const t = (time * 0.9) % 1;
+    p.padRing.position.y = 0.2 + t * 1.3;
+    p.padRing.scale.setScalar(1 - t * 0.3);
+    (p.padRing.material as THREE.MeshBasicMaterial).opacity = (ready ? 0.9 : 0.35) * (1 - t);
+  }
+
+  // ---------------------------------------------------------------- the town's fence
+
+  /** A smooth wooden fence round the town's edge, where walking stops: rounded posts and two rails, batched. */
+  private buildFence(): void {
+    const x0 = WALK.minX - 0.5;
+    const x1 = WALK.maxX + 0.5;
+    const z0 = WALK.minZ - 0.5;
+    const z1 = WALK.maxZ + 0.5;
+    const wood = phong(0xb07a45, { shininess: 25 });
+    const cap = phong(0xffc84a, { shininess: 80 });
+    const spots: [number, number][] = [];
+    const side = (ax: number, az: number, bx: number, bz: number) => {
+      const len = Math.hypot(bx - ax, bz - az);
+      const n = Math.max(1, Math.round(len / 2.5));
+      for (let i = 0; i < n; i++) spots.push([ax + ((bx - ax) * i) / n, az + ((bz - az) * i) / n]);
+      for (const y of [0.45, 0.95]) {
+        const rail = new THREE.Mesh(new RoundedBoxGeometry(Math.abs(bx - ax) + 0.12, 0.13, Math.abs(bz - az) + 0.12, 2, 0.05), wood);
+        rail.position.set((ax + bx) / 2, y, (az + bz) / 2);
+        rail.castShadow = true;
+        this.group.add(rail);
+      }
+    };
+    side(x0, z0, x1, z0);
+    side(x1, z0, x1, z1);
+    side(x1, z1, x0, z1);
+    side(x0, z1, x0, z0);
+    const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.13, 0.16, 1.25, 12), wood, spots.length);
+    const caps = new THREE.InstancedMesh(new THREE.SphereGeometry(0.17, 12, 8), cap, spots.length);
+    spots.forEach(([x, z], i) => {
+      this.dummy.position.set(x, 0.62, z);
+      this.dummy.updateMatrix();
+      posts.setMatrixAt(i, this.dummy.matrix);
+      this.dummy.position.set(x, 1.3, z);
+      this.dummy.updateMatrix();
+      caps.setMatrixAt(i, this.dummy.matrix);
+    });
+    posts.castShadow = true;
+    posts.frustumCulled = caps.frustumCulled = false;
+    this.group.add(posts, caps);
   }
 
   // ---------------------------------------------------------------- paving
