@@ -30,6 +30,8 @@ import {
   mergeNeed,
   padIncome,
   pull,
+  putOnPad,
+  rebirthCannonLevel,
   rebirthSave,
   sellValue,
   tierUnlocked,
@@ -218,7 +220,7 @@ function display(save: Save, o: Owned): void {
   let pad = save.pads.findIndex((slot) => slot === null);
   if (pad < 0) {
     save.pads.forEach((slot, i) => {
-      if (!slot || (slot.level ?? 1) > 1 || slot.rarity >= o.rarity) return;
+      if (!slot || slot.rarity >= o.rarity) return;
       if (pad < 0 || slot.rarity < save.pads[pad]!.rarity) pad = i;
     });
     if (pad < 0) return;
@@ -226,7 +228,7 @@ function display(save: Save, o: Owned): void {
     save.inventory.push({ name: old.name, rarity: old.rarity });
   }
   save.inventory.splice(save.inventory.indexOf(o), 1);
-  save.pads[pad] = { name: o.name, rarity: o.rarity, cash: 0, level: 1 };
+  putOnPad(save, pad, o);
 }
 
 /** Gems a run collects: the rows it passes, as Game.spawnRun places them, times how many the bot grabs. */
@@ -890,12 +892,12 @@ export class FakeServer {
    */
   private decide(bot: Bot): void {
     const s = bot.save;
-    if (s.cannon >= REBIRTH.cannonLevel && Math.random() < 0.25) {
+    if (s.cannon >= rebirthCannonLevel(s) && Math.random() < 0.25) {
       // Over to the rebirth station for it.
       this.go(bot, this.route(bot, REBIRTH_FRONT.x + rand(-0.4, 0.4), REBIRTH_FRONT.z + rand(-0.3, 0.3)), () => {
         bot.facing = Math.PI;
         bot.wait = rand(2.5, 4);
-        if (bot.save.cannon >= REBIRTH.cannonLevel) this.rebirth(bot);
+        if (bot.save.cannon >= rebirthCannonLevel(bot.save)) this.rebirth(bot);
       });
       return;
     }

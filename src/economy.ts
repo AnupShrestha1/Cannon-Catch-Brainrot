@@ -23,6 +23,35 @@ export function upgradeCost(save: Save, track: Track): number | null {
   return bought >= u.max ? null : Math.round(u.base * Math.pow(u.growth, bought));
 }
 
+/** The cannon level the next rebirth needs: a little higher each time, up to the top level. */
+export function rebirthCannonLevel(save: Pick<Save, 'rebirths'>): number {
+  return Math.min(UPGRADES.cannon.max + 1, REBIRTH.cannonLevel + REBIRTH.cannonStep * save.rebirths);
+}
+
+/**
+ * Levels belong to slots, not brainrots: a slot keeps its level and XP when its brainrot is swapped, stored or
+ * sold, and whatever goes on it earns at that level. The level lives on the brainrot's PadSlot while the slot
+ * is filled, and in save.padLevels while it's empty.
+ */
+export function slotLevel(save: Save, i: number): { level: number; xp: number } {
+  const pad = save.pads[i];
+  if (pad) return { level: pad.level ?? 1, xp: pad.xp ?? 0 };
+  return save.padLevels[i] ?? { level: 1, xp: 0 };
+}
+
+/** Puts a brainrot on slot i (replacing whatever was there), at the slot's level. */
+export function putOnPad(save: Save, i: number, o: Owned): void {
+  const { level, xp } = slotLevel(save, i);
+  save.pads[i] = { name: o.name, rarity: o.rarity, cash: 0, level, xp };
+}
+
+/** Empties slot i, keeping its level for the next brainrot. */
+export function emptyPad(save: Save, i: number): void {
+  const pad = save.pads[i];
+  if (pad) save.padLevels[i] = { level: pad.level ?? 1, xp: pad.xp ?? 0 };
+  save.pads[i] = null;
+}
+
 /** Floors of the base: one, plus one for each of the first REBIRTH.floors rebirths. */
 export function floorsOf(save: Pick<Save, 'rebirths'>): number {
   return 1 + Math.min(save.rebirths, REBIRTH.floors);
@@ -62,9 +91,11 @@ export function rebirthSave(save: Save): { kept: Owned | null; newFloor: boolean
   let open = Math.max(ECONOMY.startPads, save.pads.length);
   // A new floor: everything below it opens, and it comes with a few slots of its own.
   if (newFloor) open = ECONOMY.padsPerFloor * floorsBefore + REBIRTH.newFloorPads;
+  // Slot levels start over too.
   save.pads = Array.from({ length: Math.min(open, maxPads(save)) }, () => null);
+  save.padLevels = [];
   save.inventory = [];
-  if (kept) save.pads[0] = { name: kept.name, rarity: kept.rarity, cash: 0, level: 1, xp: 0 };
+  if (kept) putOnPad(save, 0, kept);
   return { kept, newFloor };
 }
 
@@ -118,16 +149,16 @@ export function gainXp(slot: PadSlot, seconds: number): boolean {
   return before < need && slot.xp >= need;
 }
 
-/** Price of the next level for a character, or null at max. */
-export function levelCost(slot: PadSlot): number | null {
+/** Price of a slot's next level, or null at max. It depends on the slot's level only, not what's on it. */
+export function levelCost(slot: Pick<PadSlot, 'level'>): number | null {
   const level = slot.level ?? 1;
   if (level >= LEVELS.max) return null;
-  return Math.round(RARITIES[slot.rarity].income * LEVELS.firstCostSeconds * Math.pow(LEVELS.growth, level - 1));
+  return Math.round(LEVELS.slotCost * Math.pow(LEVELS.costGrowth, level - 1));
 }
 
-/** Selling pays ECONOMY.sellSeconds of the character's current income. */
-export function sellValue(save: Save, slot: Pick<PadSlot, 'rarity' | 'level'>): number {
-  return Math.round(padIncome(save, slot) * ECONOMY.sellSeconds);
+/** Selling pays ECONOMY.sellSeconds of the character's own income (the slot's level stays with the slot). */
+export function sellValue(save: Save, slot: Pick<PadSlot, 'rarity'>): number {
+  return Math.round(padIncome(save, { rarity: slot.rarity }) * ECONOMY.sellSeconds);
 }
 
 export function pickName(rarity: number): string {

@@ -110,7 +110,7 @@ export const GACHA: GachaTier[] = [
     color: '#3ccf8e',
     cost: 20,
     odds: [[0, 0.4], [1, 0.42], [2, 0.18]],
-    unlockBest: 115,
+    unlockBest: 130,
     pity: [[2, 8]],
   },
   {
@@ -120,7 +120,7 @@ export const GACHA: GachaTier[] = [
     color: '#3f8cff',
     cost: 100,
     odds: [[1, 0.4], [2, 0.4], [3, 0.2]],
-    unlockBest: 150,
+    unlockBest: 190,
     pity: [[3, 9]],
   },
   {
@@ -130,7 +130,7 @@ export const GACHA: GachaTier[] = [
     color: '#b45cff',
     cost: 300,
     odds: [[2, 0.45], [3, 0.4], [4, 0.15]],
-    unlockBest: 230,
+    unlockBest: 290,
     pity: [[4, 10]],
   },
   {
@@ -141,7 +141,7 @@ export const GACHA: GachaTier[] = [
     cost: 800,
     // The first chance at a Mythic, still very rare.
     odds: [[3, 0.55], [4, 0.4], [5, 0.05]],
-    unlockBest: 550,
+    unlockBest: 600,
     pity: [[4, 4], [5, 60]],
   },
   {
@@ -152,7 +152,7 @@ export const GACHA: GachaTier[] = [
     cost: 1600,
     // Legendary or Mythic: the top machine, for the highest flights.
     odds: [[4, 0.85], [5, 0.15]],
-    unlockBest: 650,
+    unlockBest: 700,
     pity: [[5, 20]],
   },
 ];
@@ -290,6 +290,8 @@ export const REBIRTH = {
   unlockHeight: 400,
   /** Permanent income bonus per rebirth. */
   incomeBonus: 0.5,
+  /** Each rebirth asks for this many more cannon levels than the last (capped at the top level). */
+  cannonStep: 2,
   /** The first this-many rebirths each add a floor to the base (on top of the bonus); later ones only the bonus. */
   floors: 2,
   /** A new floor comes with this many slots already open. */
@@ -316,7 +318,7 @@ export const ECONOMY = {
  * Character levels: each adds `incomeBonus`; level 2 costs `firstCostSeconds` of base income, then ×`growth`.
  * A level also needs XP, earned by time on a pad: `xpFirstSeconds` for level 2, then ×`xpGrowth`.
  */
-export const LEVELS = { max: 10, incomeBonus: 0.25, firstCostSeconds: 30, growth: 1.6, xpFirstSeconds: 30, xpGrowth: 1.6 };
+export const LEVELS = { max: 10, incomeBonus: 0.25, xpFirstSeconds: 30, xpGrowth: 1.6, slotCost: 80, costGrowth: 2.1 };
 
 export interface Gift {
   /** Seconds of play in this session before it can be claimed. */

@@ -62,8 +62,11 @@ import {
   levelCost,
   levelReady,
   countInBackpack,
+  emptyPad,
   floorsOf,
   maxPads,
+  putOnPad,
+  rebirthCannonLevel,
   merge,
   mergeChosen,
   rebirthSave,
@@ -165,6 +168,8 @@ const SHOP_SPOT = new THREE.Vector3(SHOP_FRONT.x, 0, SHOP_FRONT.z);
 const CAULDRON_SPOT = new THREE.Vector3(CAULDRON_FRONT.x, 0, CAULDRON_FRONT.z);
 /** Launching from further from the cannon than this teleports the player there. */
 const TELEPORT_RANGE = 14;
+/** Hazards only appear where the ascent is slower than this (m/s), so they can be dodged. */
+const HAZARD_MAX_SPEED = 60;
 /** Seconds of the comic dive into the cannon. */
 const DIVE_TIME = 0.95;
 /** How far the cannon swings either way while aiming (radians), and how long a swung shot keeps that line. */
@@ -342,6 +347,8 @@ export class Game {
   private recoil = 0;
   /** Seconds into the dive into the cannon, or -1. */
   private dive = -1;
+  /** Where the dive started (it can start from any side of the cannon). */
+  private diveFrom = new THREE.Vector3(0, 0, 2.6);
   /** 1 as the cannon swallows the player, easing to 0: the barrel bulges. */
   private gulp = 0;
   /** Pop-in after a teleport, and the pop out of the muzzle, easing from their start to 0. */
@@ -705,12 +712,13 @@ export class Game {
     this.hub.update(this.time, realDt, this.shownBest, this.save.gems, this.px, this.pz);
     {
       const s = this.save;
-      const ready = s.cannon >= REBIRTH.cannonLevel;
+      const need = rebirthCannonLevel(s);
+      const ready = s.cannon >= need;
       const { mult, floor } = this.rebirthPrize();
       this.hub.setRebirth(
         ready,
-        ready ? `×${mult} income${floor ? ` + Floor ${floor}` : ''}` : `Cannon Lv ${s.cannon}/${REBIRTH.cannonLevel}`,
-        s.cannon / REBIRTH.cannonLevel,
+        ready ? `×${mult} income${floor ? ` + Floor ${floor}` : ''}` : `Cannon Lv ${s.cannon}/${need}`,
+        s.cannon / need,
       );
     }
     this.updateServer(realDt);
@@ -836,8 +844,11 @@ export class Game {
     if (mode === 'on' || (mode === 'auto' && flight >= TUTORIAL.hazardFromFlight)) {
       // A few hazards, a little denser with height, capped per flight.
       const h = HAZARD_SPACING;
+      // At high cannon levels the first stretch flashes by too fast to dodge anything, so hazards only start
+      // where the ascent has slowed to a dodgeable speed.
+      const dodgeable = MUZZLE_Y + Math.max(0, (v0 * v0 - HAZARD_MAX_SPEED * HAZARD_MAX_SPEED) / (2 * this.gUp));
       let count = 0;
-      for (let y = Math.max(h.start, floor); y < apex - 3 && count < h.maxPerFlight; count++) {
+      for (let y = Math.max(h.start, floor, dodgeable); y < apex - 3 && count < h.maxPerFlight; count++) {
         this.addBird(y);
         y += lerp(h.gapLow, h.gapHigh, Math.min(1, y / 1500)) * rand(0.8, 1.2);
       }
@@ -1395,7 +1406,7 @@ export class Game {
       let pad = s.pads.findIndex((slot) => slot === null);
       if (pad < 0) {
         s.pads.forEach((slot, i) => {
-          if (!slot || (slot.level ?? 1) > 1 || slot.rarity >= cand.rarity) return;
+          if (!slot || slot.rarity >= cand.rarity) return;
           if (pad < 0 || slot.rarity < s.pads[pad]!.rarity) pad = i;
         });
         if (pad < 0) break;
@@ -1404,7 +1415,8 @@ export class Game {
         s.inventory.push({ name: old.name, rarity: old.rarity });
       }
       s.inventory.splice(k, 1);
-      s.pads[pad] = { name: cand.name, rarity: cand.rarity, cash: 0, level: 1 };
+      // The slot keeps its level: the new brainrot earns at it straight away.
+      putOnPad(s, pad, cand);
       this.fx.burst(this.padAt(pad, this.tmp).setY(1.2), {
         count: 16,
         color: RARITIES[cand.rarity].color,
@@ -1676,7 +1688,7 @@ export class Game {
     }
     const got = takeFromBackpack(s, name);
     if (!got) return;
-    s.pads[pad] = { name: got.name, rarity: got.rarity, cash: 0, level: 1 };
+    putOnPad(s, pad, got);
     this.base.sync(s);
     this.hud.closeModal();
     this.fx.burst(this.padAt(pad, this.tmp).setY(1.2), {
@@ -1715,16 +1727,16 @@ export class Game {
     writeSave(s);
   }
 
-  /** Moves a slot's brainrot into the backpack, collecting its coins first. It goes back to level 1. */
+  /** Moves a slot's brainrot into the backpack, collecting its coins first. The slot keeps its level. */
   private storePad(i: number): void {
     const s = this.save;
     const slot = s.pads[i];
     if (!slot) return;
     this.collect(i);
     s.inventory.push({ name: slot.name, rarity: slot.rarity });
-    s.pads[i] = null;
+    emptyPad(s, i);
     this.base.sync(s);
-    this.hud.toast(`${slot.name} is in your backpack${(slot.level ?? 1) > 1 ? ' (back to Lv 1)' : ''}`, 'small');
+    this.hud.toast(`${slot.name} is in your backpack${(slot.level ?? 1) > 1 ? ` (the slot stays Lv ${slot.level})` : ''}`, 'small');
     writeSave(s);
   }
 
@@ -2070,7 +2082,8 @@ export class Game {
     }
     if (this.onRebirthPad()) {
       const s = this.save;
-      return s.cannon >= REBIRTH.cannonLevel ? 'REBIRTH!' : `Rebirth · Cannon Lv ${s.cannon}/${REBIRTH.cannonLevel}`;
+      const need = rebirthCannonLevel(s);
+      return s.cannon >= need ? 'REBIRTH!' : `Rebirth · Cannon Lv ${s.cannon}/${need}`;
     }
     if (this.onPlatform(CAULDRON_SPOT)) return 'Merge station';
     if (this.atShop()) return 'Upgrades';
@@ -2270,7 +2283,10 @@ export class Game {
     this.jumpY = this.jumpV = 0;
     const d = Math.hypot(this.px - CANNON_FOOT.x, this.pz - CANNON_FOOT.z);
     // Close by (in the hub, on the ground floor), walk over; from further, teleport. Either way, dive in.
-    if (d > TELEPORT_RANGE || this.level > 0) {
+    if (this.level === 0 && Math.hypot(this.px, this.pz) < 3.6) {
+      // Right beside the cannon, on any side: dive in from where you stand.
+      this.startDive();
+    } else if (d > TELEPORT_RANGE || this.level > 0) {
       this.teleport(CANNON_FOOT, 0, () => this.startDive());
     } else if (this.pz < CANNON_FOOT.z - 1) {
       // Behind the cannon: round its side first.
@@ -2303,9 +2319,9 @@ export class Game {
     this.fx.burst(this.tmp.set(0, MUZZLE_Y + 1.4, 0), { count: 10, color: 0xd9dde3, speed: 3, life: 0.5, size: 0.8, grow: 1.5 });
   }
 
-  /** Whether the player stands at the cannon's foot, where E climbs in. */
+  /** Whether the player stands next to the cannon (any side), where E climbs in. */
   private atCannon(): boolean {
-    return this.level === 0 && Math.hypot(CANNON_FOOT.x - this.px, CANNON_FOOT.z - this.pz) < 2.4;
+    return this.level === 0 && Math.hypot(this.px, this.pz) < 3.6;
   }
 
   /**
@@ -2365,9 +2381,9 @@ export class Game {
   private startDive(): void {
     this.state = 'boarding';
     this.walking = false;
-    this.px = CANNON_FOOT.x;
-    this.pz = CANNON_FOOT.z;
-    this.facing = 0;
+    this.diveFrom.set(this.px, this.floorHere(), this.pz);
+    // Facing the cannon, from whichever side.
+    this.facing = Math.atan2(this.px, this.pz);
     this.dive = 0;
   }
 
@@ -2583,8 +2599,8 @@ export class Game {
   /** The rebirth station: what it costs and gives, then a confirm. */
   private openRebirth(): void {
     const s = this.save;
-    if (s.cannon < REBIRTH.cannonLevel) {
-      this.hud.toast(`Rebirth needs Cannon Lv ${REBIRTH.cannonLevel} (you're Lv ${s.cannon})`, 'small');
+    if (s.cannon < rebirthCannonLevel(s)) {
+      this.hud.toast(`Rebirth needs Cannon Lv ${rebirthCannonLevel(s)} (you're Lv ${s.cannon})`, 'small');
       this.sfx.full();
       return;
     }
@@ -2594,7 +2610,8 @@ export class Game {
       `×${mult} income forever (now ×${incomeMultiplier(s)}).`,
       floor ? `Your base grows a new floor: Floor ${floor}, with ${REBIRTH.newFloorPads} open slots.` : 'Your base keeps all its floors.',
       'You keep your rarest brainrot and every open slot.',
-      'Coins, gems, upgrades and the backpack start over.',
+      'Coins, gems, upgrades, slot levels and the backpack start over.',
+      `The next rebirth will need Cannon Lv ${rebirthCannonLevel({ rebirths: s.rebirths + 1 })}.`,
     ].map((t) => Object.assign(document.createElement('p'), { textContent: t }));
     this.hud.showModal('Rebirth?', lines, [
       { label: 'REBIRTH!', primary: true, action: () => this.doRebirth() },
@@ -2749,7 +2766,7 @@ export class Game {
       this.completeHint('level');
       writeSave(s);
       this.sfx.levelUp();
-      this.hud.toast(`${slot.name} Lv ${slot.level}!`, 'gold');
+      this.hud.toast(`Slot Lv ${slot.level}!`, 'gold');
       this.fx.burst(this.padAt(i, this.tmp).setY(1), {
         count: 18,
         color: RARITIES[slot.rarity].color,
@@ -2768,7 +2785,7 @@ export class Game {
     if (!slot) return;
     const coins = sellValue(s, slot) + Math.floor(slot.cash);
     s.coins += coins;
-    s.pads[i] = null;
+    emptyPad(s, i);
     this.base.sync(s);
     writeSave(s);
     this.sfx.coin();
@@ -3288,9 +3305,10 @@ export class Game {
   private poseDive(body: THREE.Group): void {
     const t = this.dive;
     const g = this.player.group;
-    let x = CANNON_FOOT.x;
-    let y = this.floorHere() + 0.9;
-    let z = CANNON_FOOT.z;
+    const from = this.diveFrom;
+    let x = from.x;
+    let y = from.y + 0.9;
+    let z = from.z;
     let pitch = 0;
     let sx = 1;
     let sy = 1;
@@ -3303,8 +3321,8 @@ export class Game {
     } else if (t < 0.62) {
       // A quadratic arc from the foot, up over the muzzle, and down into it.
       const u = (t - 0.2) / 0.42;
-      const p0 = [CANNON_FOOT.x, y, CANNON_FOOT.z];
-      const p1 = [0, 8.4, 1.6];
+      const p0 = [from.x, y, from.z];
+      const p1 = [from.x * 0.6, 8.4, from.z * 0.6];
       const p2 = [0, 4.8, 0];
       const b0 = (1 - u) * (1 - u);
       const b1 = 2 * u * (1 - u);
@@ -3338,7 +3356,7 @@ export class Game {
     this.pz = z;
     this.py = y - 0.9;
     g.position.set(x, y - 0.9, z);
-    g.rotation.y = 0;
+    g.rotation.y = this.facing;
     body.position.y = 0.9;
     body.rotation.set(pitch, 0, 0);
     body.scale.set(sx, sy, sx);

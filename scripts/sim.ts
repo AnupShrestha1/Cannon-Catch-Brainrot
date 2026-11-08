@@ -26,6 +26,7 @@ import {
 } from '../src/config';
 import {
   maxPads,
+  putOnPad,
   buyUpgrade,
   expansionCost,
   incomePerSecond,
@@ -105,7 +106,7 @@ function gemsPassed(apex: number, flight: number): number {
 function display(save: Save, o: Owned): boolean {
   const empty = save.pads.findIndex((slot) => slot === null);
   if (empty >= 0) {
-    save.pads[empty] = { ...o, cash: 0, level: 1 };
+    putOnPad(save, empty, o);
     return true;
   }
   let weakest = 0;
@@ -115,7 +116,7 @@ function display(save: Save, o: Owned): boolean {
   const old = save.pads[weakest]!;
   if (padIncome(save, { rarity: o.rarity }) <= padIncome(save, old)) return false;
   save.coins += sellValue(save, old);
-  save.pads[weakest] = { ...o, cash: 0, level: 1 };
+  putOnPad(save, weakest, o);
   return true;
 }
 

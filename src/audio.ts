@@ -231,9 +231,23 @@ export class Sfx {
     this.windFilter.frequency.setTargetAtTime(300 + level * 1400, t, 0.1);
   }
 
+  /**
+   * The cannon firing, in layers: a sharp crack, a deep chest-thumping body, a roaring blast that sweeps down,
+   * the whoosh of the player leaving, a metallic ring from the barrel, and an echo off the hills.
+   */
   boom(power: number): void {
-    this.noiseBurst(0.8, 'lowpass', 1200, 0.9 * power, 120);
-    this.tone('sine', 120, 35, 0.6, 0.9 * power);
+    const p = Math.min(1.6, power);
+    this.noiseBurst(0.07, 'highpass', 2800, 0.55 * p);
+    this.tone('sine', 170, 36, 0.75, 1.0 * p);
+    this.tone('triangle', 95, 30, 0.95, 0.45 * p);
+    this.tone('sawtooth', 240, 60, 0.18, 0.18 * p);
+    this.noiseBurst(1.3, 'lowpass', 2400, 0.85 * p, 80);
+    this.noiseBurst(0.7, 'bandpass', 600, 0.22 * p, 3200, 0.05);
+    this.tone('triangle', 640, 590, 1.2, 0.05 * p, 0.03);
+    this.tone('sine', 960, 930, 0.9, 0.035 * p, 0.03);
+    // The echo.
+    this.noiseBurst(0.9, 'lowpass', 700, 0.22 * p, 90, 0.32);
+    this.tone('sine', 110, 40, 0.6, 0.18 * p, 0.32);
   }
 
   pop(rarity: number, delay = 0): void {
@@ -362,8 +376,10 @@ export class Sfx {
   /** Someone else's cannon shot, quieter with distance (0 to 1). */
   distantBoom(level: number): void {
     if (level < 0.03) return;
-    this.noiseBurst(0.6, 'lowpass', 700, 0.5 * level, 100);
-    this.tone('sine', 100, 35, 0.5, 0.5 * level);
+    this.noiseBurst(0.06, 'highpass', 2000, 0.15 * level);
+    this.noiseBurst(0.9, 'lowpass', 800, 0.5 * level, 90);
+    this.tone('sine', 120, 35, 0.6, 0.5 * level);
+    this.noiseBurst(0.7, 'lowpass', 500, 0.15 * level, 80, 0.3);
   }
 
   private tone(type: OscillatorType, f0: number, f1: number, dur: number, gain: number, delay = 0): void {
@@ -383,10 +399,10 @@ export class Sfx {
     osc.stop(t + dur + 0.05);
   }
 
-  private noiseBurst(dur: number, type: BiquadFilterType, freq: number, gain: number, freqEnd?: number): void {
+  private noiseBurst(dur: number, type: BiquadFilterType, freq: number, gain: number, freqEnd?: number, delay = 0): void {
     const ctx = this.ctx;
     if (!ctx) return;
-    const t = ctx.currentTime;
+    const t = ctx.currentTime + delay;
     const src = ctx.createBufferSource();
     src.buffer = this.noise;
     const filter = ctx.createBiquadFilter();

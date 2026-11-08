@@ -36,7 +36,7 @@ the Network URL it prints.
 | Pull a gacha machine | Stand on its ×1 or ×10 pad, press E | Stand on a pad, tap the action button |
 | Merge station, shop | Step on the cauldron's platform or the shop's rug, press E | Same, tap the action button |
 | Launch | Launch button or F (walks over from nearby, teleports from afar) | Launch button |
-| Get in the cannon / climb out | E at the cannon's foot / Exit button or Q | Action button / Exit button |
+| Get in the cannon / climb out | E next to the cannon, any side / Exit button or Q | Action button / Exit button |
 | Ride your base's lift between floors | Stand on the lift pad, press E | Stand on it, tap the action button |
 | Unlock 2 more slots | Unlock button over the next locked pair, or E beside it | Tap the Unlock button |
 | Rebirth | Stand on the rebirth station's gold pad, press E | Same, tap the action button |
@@ -114,7 +114,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     About 400 draw calls in the hub.
 - **Launching**: within about 14 m of the cannon, Launch walks you over (round its side if you're behind
   it); from further away, or from an upper floor, it teleports you there in a puff, with a squash-and-stretch
-  pop-in and a camera cut. Standing at the cannon's foot, E gets you in too. Either way, a short comic dive
+  pop-in and a camera cut. Standing next to the cannon on any side, E gets you in too (the dive starts from where you stand). Either way, a short comic dive
   always follows (under a second): a
   crouch, a leap in an arc turning head first, stuck in the muzzle with legs kicking while the cannon
   gulps, then slurped in. You pop back up out of the muzzle and a crash helmet drops onto your head with
@@ -131,15 +131,15 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   - Each machine gives only its own band of rarities, never anything above it, so ×10 on a cheap machine
     can't farm what a better one gives; to aim higher, use a higher machine.
   - BASIC (10 gems), the red capsule machine with a glass globe and a crank: Common 72%, Uncommon 28%.
-  - LUCKY (20 gems, unlocks at 115 m), a mint machine with a tall dome of capsules that whirl like a
+  - LUCKY (20 gems, unlocks at 130 m), a mint machine with a tall dome of capsules that whirl like a
     tornado, a gold horseshoe and a four-leaf clover: Common 40%, Uncommon 42%, Rare 18%.
-  - SUPER (100 gems, 150 m), a blue-and-gold slot machine with three reels, chasing bulbs and a lever:
+  - SUPER (100 gems, 190 m), a blue-and-gold slot machine with three reels, chasing bulbs and a lever:
     Uncommon 40%, Rare 40%, Epic 20%.
-  - ULTRA (300 gems, 230 m), a tall purple slot machine with an arched marquee and a crown: Rare 45%,
+  - ULTRA (300 gems, 290 m), a tall purple slot machine with an arched marquee and a crown: Rare 45%,
     Epic 40%, Legendary 15%.
-  - COSMIC (800 gems, 550 m), a black-and-gold pedestal under a glowing orb in two whirling gimbal rings,
+  - COSMIC (800 gems, 600 m), a black-and-gold pedestal under a glowing orb in two whirling gimbal rings,
     with stars in orbit: Epic 55%, Legendary 40%, Mythic 5%.
-  - GALAXY (1,600 gems, 650 m), the same orb machine in white and rose gold with a rainbow orb: Legendary
+  - GALAXY (1,600 gems, 700 m), the same orb machine in white and rose gold with a rainbow orb: Legendary
     85%, Mythic 15%.
   - Mythics are very rare: only Cosmic and Galaxy give them, or merging 8 Legendaries.
   - Every machine shows its odds on a little board beside it: each rarity it can give, in that rarity's
@@ -214,15 +214,23 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - **Slots**: a brainrot on display earns coins once a second by rarity (Common 1/s up to Legendary 90/s),
   up to 10 minutes' worth. The coins waiting show as a big gold coin spinning slowly over its head, with
   the amount above it. Pedestals are solid: walk up to one to collect its coins. Right under each
-  brainrot within about 11 m, a Level up button shows its XP (earned on display) and, once full, the
-  price: click it to level up. Standing next to a slot and pressing E opens its panel to store it in
-  the backpack (back to level 1) or sell it. Slots glow in their brainrot's rarity colour.
+  brainrot within about 11 m, a Level up button shows the slot's XP (earned while something's on it) and,
+  once full, the price: click it to level up.
+- **Levels belong to slots, not brainrots.** A slot keeps its level and XP when its brainrot is swapped
+  out, stored or sold, and whatever goes on it earns at that level: income is the brainrot's rarity rate
+  × the slot's level bonus (+25% a level, up to Lv 10). So a rarer pull dropped onto a Lv 6 slot earns
+  at Lv 6 straight away, with no levelling again. A level costs the same whatever is on the slot (80
+  coins for Lv 2, then about 2.1× each). Rebirth resets slot levels. Standing next to a slot and pressing
+  E opens its panel to store it in the backpack or sell it. Slots glow in their brainrot's rarity colour.
 - **Camera at the base**: drag sideways to turn it and up or down to tilt it. Tilting up brings it low and
   close behind the player, with their head at the bottom of the screen, to look up at people flying from
   the cannon (up to about 54° above the horizon).
 - **Walking**: the cannon, the cauldron, the machines, the stall, the pedestals and the fountain are
   solid (you slide around them), and you step up onto the pads, the cauldron's platform and showcase
   floors. Returning players start in the lane in front of their plot, looking at it.
+- **Hazards** only appear where the climb has slowed enough to dodge them (under 60 m/s): at high cannon
+  levels the first stretch flashes by too fast, so it's left clear. At cannon Lv 30 they start at about
+  300 m.
 - **Tutorial**: flight 1 is a straight line of 12 gems, enough for the first pull. Hazards start on
   flight 3, and nothing is lost to hits or crashes during the first 3 flights. A coach guides new
   players: a big bouncing yellow banner, low on the screen just above the buttons so it never hides the
@@ -247,8 +255,9 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   each).
 - **Rebirth** has its own station in the hub: a marble dais under a floating golden crystal in turning
   rings, with a pillar of light once you can rebirth; its sign says what you'd get, or the cannon level
-  still needed with a progress bar. It unlocks at cannon level 28, whose normal launch reaches the Storm
-  Layer. Stand on its gold pad, press E and confirm. It resets coins, gems, upgrades and the backpack,
+  still needed with a progress bar. The first unlocks at cannon level 28, whose normal launch reaches the
+  Storm Layer, and each one after asks for 2 more levels (30, 32, 34, 36, then the top level, 37). Stand on
+  its gold pad, press E and confirm. It resets coins, gems, upgrades, slot levels and the backpack,
   keeps the rarest brainrot and every open slot, adds +50% income per rebirth, and recolours the cannon;
   the first two also add a floor to your base. It's grand and short (about three seconds): the crystal
   dips and blasts up in a pillar of light with a shockwave across the ground, the screen flashes gold, a
@@ -275,7 +284,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   rarer ones sing lower and longer with an echo. Brainrots no longer call out from the base while idle.
 - **Sounds**, all synthesised: soft footsteps at the base, capsule pop, card flips, fanfares by rarity,
   suspense whoosh, cash register on upgrades, level-up scale, bubbling merge, new-zone call, panel
-  whoosh, coins, gems, launch boom, wind, parachute, hits and landings; and now a teleport zip, the dive's
+  whoosh, coins, gems, launch boom (a layered crack, deep thump, roaring blast, whoosh, a ring from the barrel and an echo), wind, parachute, hits and landings; and now a teleport zip, the dive's
   whoop, the cannon's gulp, the helmet's clonk, the parachute alarm's beeps, a machine-unlock chime, a
   ratchet while a machine spins, and other players' cannon shots, quieter with distance.
 - **Animation** follows the classic principles where it can: anticipation (the dive's crouch, a machine's

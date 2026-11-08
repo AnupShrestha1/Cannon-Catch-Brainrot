@@ -15,6 +15,12 @@ export interface PadSlot {
   xp?: number;
 }
 
+/** An empty slot's level and XP, kept for the next brainrot put on it. */
+export interface SlotLevel {
+  level: number;
+  xp: number;
+}
+
 /** A brainrot in the backpack: pulled or stored, not on a showcase slot. */
 export interface Owned {
   name: string;
@@ -43,6 +49,8 @@ export interface Save {
   pity: Record<string, Record<number, number>>;
   /** Showcase slots that are open; locked ones aren't in the array. */
   pads: (PadSlot | null)[];
+  /** Levels of empty slots, by index (a filled slot keeps its level on its brainrot). */
+  padLevels: (SlotLevel | null)[];
   /** Brainrots owned but not on a slot. */
   inventory: Owned[];
   hazards: HazardMode;
@@ -88,6 +96,7 @@ export function defaultSave(): Save {
     pulls: 0,
     pity: {},
     pads: Array.from({ length: ECONOMY.startPads }, () => null),
+    padLevels: [],
     inventory: [],
     hazards: 'auto',
     muted: false,
