@@ -492,7 +492,9 @@ export class Base {
 
   /** Where slot i's level-up button sits in world space: under its brainrot, at the foot of the pedestal. */
   static buttonWorld(slot: PlotSlot, i: number, out = new THREE.Vector3()): THREE.Vector3 {
-    return Base.padWorld(slot, i, out).setY(-0.15);
+    // On its own floor: the foot of the pedestal is PAD_TOP below the pad.
+    Base.padWorld(slot, i, out);
+    return out.setY(out.y - PAD_TOP - 0.15);
   }
 
   /** Matches floors, pedestals, characters and rarity colours to the save. Slots past save.pads are locked. */
