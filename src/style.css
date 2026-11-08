@@ -2701,3 +2701,29 @@ body.chute-alarm::after {
     transform: scale(1.24, 1.28) rotate(4deg);
   }
 }
+
+/* ---------------------------------------------------------------- coach and prompt, low on the screen */
+
+/* Low on the screen, just above the buttons, so they never hide the sky, the flight or the town ahead. */
+#coach,
+#prompt {
+  top: auto;
+  bottom: calc(max(18px, env(safe-area-inset-bottom)) + 92px);
+}
+
+@media (max-width: 640px) {
+  /* Above the dock, the Launch button and the action button. */
+  #coach,
+  #prompt {
+    top: auto;
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 170px);
+  }
+}
+
+/* The banner now rises in from below. */
+@keyframes coach-in {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.6) rotate(-4deg);
+  }
+}

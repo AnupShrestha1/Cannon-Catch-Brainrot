@@ -172,6 +172,9 @@ const PLAYER_RADIUS = 0.45;
 const BUTTON_RANGE = 11;
 /** Radians the base camera turns per pixel dragged. */
 const ORBIT_SPEED = 0.006;
+/** How far the base camera can tilt down and up from its usual view (radians). Up is enough to watch flights. */
+const PITCH_MIN = -0.35;
+const PITCH_MAX = 1.16;
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
@@ -260,6 +263,8 @@ export class Game {
   private followCam = false;
   /** Base camera heading: it looks along (-sin, -cos) of this, from behind the player. */
   private camYaw = 0;
+  /** How far the base camera is tilted up from its usual view (radians; negative looks further down). */
+  private camPitch = 0;
   private walkPhase = 0;
   /** Base walking velocity on the ground (x, z). */
   private walkVel = new THREE.Vector2();
@@ -353,6 +358,11 @@ export class Game {
     this.base = new Base(this.scene, OWN);
     this.hub = new Hub(this.scene);
     this.hub.onUnlock = (i) => this.onMachineUnlock(i);
+    // Capsules bouncing nearby click on the floor (anyone's).
+    this.hub.onBounce = (at, strength) => {
+      const near = 1 - Math.hypot(at.x - this.px, at.z - this.pz) / 18;
+      if (near > 0 && (this.state === 'home' || this.state === 'boarding')) this.sfx.bounce(strength * near);
+    };
     this.shownBest = this.save.best;
     this.remote = new RemoteView(this.scene, this.server);
     this.player = makePlayer();
@@ -579,7 +589,10 @@ export class Game {
     this.server.setCannonBusy(this.state === 'aim' || this.state === 'charging' || this.dive >= 0);
 
     // Camera drags only mean something at the base; drop any made during a run.
-    if (this.state !== 'home') this.input.consumeOrbitDx();
+    if (this.state !== 'home') {
+      this.input.consumeOrbitDx();
+      this.input.consumeOrbitDy();
+    }
     this.hud.showStick(this.state === 'home' && !blocked ? this.input.stick : null);
     this.updateEconomy(realDt);
     this.updateGems(dt);
@@ -1203,9 +1216,11 @@ export class Game {
     this.completeHint(`tier-${tier.id}`);
     this.autoDisplay();
     writeSave(s);
-    // The machine spins with a soft ratchet; the big sound comes when the prize pops out.
-    this.pulling = this.hub.spin(index, count);
-    this.sfx.crank(this.pulling * 0.8);
+    // The machine spins with a soft ratchet, spits out a capsule in the best result's colour (glowing for an
+    // Epic or better), and the big sound comes when the capsule pops open.
+    const best = got.reduce((a, b) => (b.rarity > a.rarity ? b : a));
+    this.pulling = this.hub.spin(index, count, RARITIES[best.rarity].color, best.rarity >= 3);
+    this.sfx.crank(this.pulling * 0.5);
     this.pendingPull = { got, index, isNew };
   }
 
@@ -1601,6 +1616,8 @@ export class Game {
       return;
     }
     this.camYaw -= this.input.consumeOrbitDx() * ORBIT_SPEED;
+    // Dragging up looks up (into the sky, to watch people fly), down looks down a little.
+    this.camPitch = clamp(this.camPitch - this.input.consumeOrbitDy() * ORBIT_SPEED, PITCH_MIN, PITCH_MAX);
     const stick = this.input.stick;
     const right = this.input.axis + (stick.active ? stick.x : 0);
     const forward = this.input.axisY + (stick.active ? stick.y : 0);
@@ -2702,7 +2719,7 @@ export class Game {
     }
     if (this.state === 'ascent' && newbie && this.time - this.launchT < 4) {
       if (s.flightNo <= 1) hud.coach('Fly through the gems!');
-      else hud.coach(touch ? 'Drag left and right to steer!' : 'Move the mouse to steer into gems!', { mode: 'swipe', x: 0.5, y: 0.72 });
+      else hud.coach(touch ? 'Drag left and right to steer!' : 'Move the mouse to steer into gems!', { mode: 'swipe', x: 0.5, y: 0.62 });
       return;
     }
     if (this.state === 'fall' && this.chute === 'closed' && this.secondsToImpact() < (newbie ? 3.4 : this.chuteWarnAt())) {
@@ -2717,7 +2734,7 @@ export class Game {
         if (hud.actionBtn.classList.contains('on')) hand = { mode: 'point', el: hud.actionBtn };
         else if (/Upgrade|Unlock more slots/.test(text)) hand = { mode: 'point', el: hud.upgradesBtn };
         else if (text.startsWith('Launch')) hand = { mode: 'point', el: hud.launchBtn };
-        else if (target) hand = { mode: 'walk', x: 0.5, y: 0.84 };
+        else if (target) hand = { mode: 'walk', x: 0.3, y: 0.8 };
         hud.coach(text, hand);
         return;
       }
@@ -2988,11 +3005,19 @@ export class Game {
         const moving = this.walking || this.stepping;
         // Only a tap-to-walk swings the camera round; with keys or the stick, the player owns it.
         if (moving && this.followCam) this.camYaw = lerpAngle(this.camYaw, this.facing, damp(1.5, realDt));
-        const dist = 7.5 * (1 + portrait * 0.4);
+        // The camera orbits a point at head height. Tilting up drops it low and pulls it in close behind the
+        // player, turning the view skyward with their head still at the bottom of the screen; tilting down
+        // raises it.
+        const close = clamp((this.camPitch - 0.35) / (PITCH_MAX - 0.35), 0, 1);
+        const dist = lerp(7.8, 2.6, close * close * (3 - 2 * close)) * (1 + portrait * 0.4);
         const sin = Math.sin(this.camYaw);
         const cos = Math.cos(this.camYaw);
-        pos.set(this.px + sin * dist, 3.6, this.pz + cos * dist);
-        look.set(this.px - sin * 3, 1.3, this.pz - cos * 3);
+        const elevation = 0.27 - this.camPitch * 0.62;
+        const view = -0.21 + this.camPitch;
+        const pivotY = this.py + 1.5;
+        const across = Math.cos(elevation) * dist;
+        pos.set(this.px + sin * across, Math.max(this.floorHere() + 0.45, pivotY + Math.sin(elevation) * dist), this.pz + cos * across);
+        look.set(pos.x - sin * Math.cos(view) * 10, pos.y + Math.sin(view) * 10, pos.z - cos * Math.cos(view) * 10);
         rate = 6;
         break;
       }

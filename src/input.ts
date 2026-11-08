@@ -13,6 +13,7 @@ interface Gesture {
   startX: number;
   startY: number;
   lastX: number;
+  lastY: number;
   kind: 'none' | 'stick' | 'orbit';
 }
 
@@ -37,6 +38,7 @@ export class Input {
   private chute = false;
   private touchDx = 0;
   private orbitDx = 0;
+  private orbitDy = 0;
   private touchId = -1;
   private lastTouchX = 0;
   private gestures = new Map<number, Gesture>();
@@ -59,7 +61,7 @@ export class Input {
         this.mouseX = e.clientX / window.innerWidth;
         this.chute = true;
       }
-      this.gestures.set(e.pointerId, { touch, startX: e.clientX, startY: e.clientY, lastX: e.clientX, kind: 'none' });
+      this.gestures.set(e.pointerId, { touch, startX: e.clientX, startY: e.clientY, lastX: e.clientX, lastY: e.clientY, kind: 'none' });
       this.actionDown = true;
       this.pressed = true;
     });
@@ -136,7 +138,10 @@ export class Input {
         this.stick.originY = g.startY;
       }
     }
-    if (g.kind === 'orbit') this.orbitDx += x - g.lastX;
+    if (g.kind === 'orbit') {
+      this.orbitDx += x - g.lastX;
+      this.orbitDy += y - g.lastY;
+    }
     if (g.kind === 'stick') {
       const len = Math.hypot(dx, dy);
       const scale = len > STICK_RANGE ? 1 / len : 1 / STICK_RANGE;
@@ -144,6 +149,7 @@ export class Input {
       this.stick.y = -dy * scale;
     }
     g.lastX = x;
+    g.lastY = y;
   }
 
   /** -1 to 1 from A/D or the arrow keys. */
@@ -207,6 +213,13 @@ export class Input {
   }
 
   /** Horizontal pixels dragged to turn the base camera since last read. */
+  /** Vertical camera drag since the last call, in pixels (down is positive). */
+  consumeOrbitDy(): number {
+    const v = this.orbitDy;
+    this.orbitDy = 0;
+    return v;
+  }
+
   consumeOrbitDx(): number {
     const v = this.orbitDx;
     this.orbitDx = 0;

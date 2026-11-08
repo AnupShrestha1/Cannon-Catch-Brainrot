@@ -29,7 +29,7 @@ import {
   machineAt,
   pullPad,
 } from './layout';
-import { PLATFORM_RADIUS } from './base';
+import { PLATFORM_RADIUS, floorWorld } from './base';
 import { flat, makePlayer, softTexture, type PlayerRig } from './world';
 
 const GOLD = 0xffc84a;
@@ -201,6 +201,20 @@ interface Model {
   spin(time: number, p: number, k: number): void;
 }
 
+/** The capsule a machine spits out on a pull: it arcs out, bounces, rolls to a stop, wobbles and pops open. */
+interface Prize {
+  group: THREE.Group;
+  top: THREE.MeshPhongMaterial;
+  radius: number;
+  pos: THREE.Vector3;
+  vel: THREE.Vector3;
+  /** Seconds since it came out, and how long until it pops. */
+  t: number;
+  life: number;
+  /** 1 on each bounce, easing to 0: it squashes on impact. */
+  squash: number;
+}
+
 interface Machine {
   tier: GachaTier;
   index: number;
@@ -222,6 +236,12 @@ interface Machine {
   unlockT: number;
   /** Where capsules or prizes come out, in world space. */
   exit: THREE.Vector3;
+  /** The capsule this pull spits out (when the machine pops at the end of its spin), and its colour. */
+  prize: Prize;
+  prizeColor: number;
+  prizeGlow: boolean;
+  /** Where the last capsule was when it popped, for the burst. */
+  prizeAt: THREE.Vector3;
 }
 
 export class Hub {
@@ -242,6 +262,8 @@ export class Hub {
   private dummy = new THREE.Object3D();
   /** Called when a machine unlocks during play (not when the hub is first built). */
   onUnlock: (index: number) => void = () => {};
+  /** Called when a spat-out capsule hits the floor, with where and how hard (0 to 1). */
+  onBounce: (at: THREE.Vector3, strength: number) => void = () => {};
 
   constructor(scene: THREE.Scene) {
     scene.add(this.group);
@@ -254,17 +276,23 @@ export class Hub {
 
   // ---------------------------------------------------------------- what the game asks of it
 
-  /** Starts machine i's pull animation; returns how long it lasts (seconds). */
-  spin(i: number, count: number): number {
+  /**
+   * Starts machine i's pull: it spins, then spits out a capsule (in `color`, glowing for a big one, larger for
+   * ×10) that bounces and rolls to a stop in front of it, wobbles, and pops. Returns the seconds until the pop.
+   */
+  spin(i: number, count: number, color?: number, glow = false): number {
     const m = this.machines[i];
     m.spinT = 0;
     m.spinDur = count > 1 ? 1.9 : 1.5;
-    return m.spinDur;
+    m.prizeColor = color ?? new THREE.Color(m.tier.color).getHex();
+    m.prizeGlow = glow;
+    m.prize.radius = count > 1 ? 0.44 : 0.34;
+    return m.spinDur * SPIT_AT + PRIZE_LIFE;
   }
 
-  /** Where machine i's prizes burst out, in world space. */
+  /** Where machine i's last capsule popped open (or its chute, before any), in world space. */
   machineExit(i: number, out = new THREE.Vector3()): THREE.Vector3 {
-    return out.copy(this.machines[i].exit);
+    return out.copy(this.machines[i].prizeAt);
   }
 
   /** A short "nope" wobble for a machine the player can't use yet. */
@@ -647,8 +675,30 @@ export class Hub {
     this.group.add(group);
     const color = new THREE.Color(tier.color).getHex();
     const pads: [PullPadView, PullPadView] = [this.buildPullPad(pullPad(i, false), false, color), this.buildPullPad(pullPad(i, true), true, color)];
-    const exit = new THREE.Vector3(at.x + 1.8, exitY, at.z);
-    this.machines.push({ tier, index: i, group, body, model, tints, lock, sign, signKey: '', pads, locked: null, spinT: -1, spinDur: 0, unlockT: -1, exit });
+    const exit = new THREE.Vector3(at.x + 1.5, exitY, at.z);
+    const prize = makePrize();
+    this.group.add(prize.group);
+    this.machines.push({
+      tier,
+      index: i,
+      group,
+      body,
+      model,
+      tints,
+      lock,
+      sign,
+      signKey: '',
+      pads,
+      locked: null,
+      spinT: -1,
+      spinDur: 0,
+      unlockT: -1,
+      exit,
+      prize,
+      prizeColor: 0xffffff,
+      prizeGlow: false,
+      prizeAt: exit.clone(),
+    });
   }
 
   /** A round pad in front of a machine with ×1 or ×10 painted on it, a gold rim and a rising ring of light. */
@@ -760,10 +810,14 @@ export class Hub {
           sx = 1 - 0.05 * Math.sin(a * Math.PI);
         }
         m.model.spin(time, p, Math.sin(p * Math.PI));
+        // The capsule shoots out as the machine pops up at the end of its spin.
+        const before = (m.spinT - dt) / m.spinDur;
+        if (before < SPIT_AT && p >= SPIT_AT) this.spit(m);
         if (p >= 1) m.spinT = -1;
       }
     }
     if (m.spinT < 0) m.model.idle(time);
+    if (m.prize.group.visible) this.updatePrize(m, time, dt);
     m.body.scale.set(sx, sy, sx);
     m.body.rotation.z = shake;
     // Pads: brighter when the player stands on one, and when it can be afforded.
@@ -780,6 +834,68 @@ export class Hub {
       pad.top.emissiveIntensity = locked ? 0 : (affordable ? 0.45 : 0.15) + pad.lit * 0.6 + Math.sin(time * 3 + pad.seed * 6) * 0.1;
       pad.group.scale.setScalar(1 + pad.lit * 0.06);
     });
+  }
+
+  /** Out of the chute: a hop toward the pads, between them, with a little spin. */
+  private spit(m: Machine): void {
+    const pz = m.prize;
+    pz.top.color.setHex(m.prizeColor);
+    pz.top.emissive.setHex(m.prizeColor);
+    pz.top.emissiveIntensity = m.prizeGlow ? 0.7 : 0.15;
+    pz.group.scale.setScalar(pz.radius / 0.34);
+    pz.pos.copy(m.exit);
+    pz.vel.set(1.6 + Math.random() * 0.3, 3.8, (Math.random() - 0.5) * 0.4);
+    pz.t = 0;
+    pz.life = PRIZE_LIFE;
+    pz.squash = 0;
+    pz.group.visible = true;
+    pz.group.position.copy(pz.pos);
+  }
+
+  /**
+   * The capsule's short life: falling with gravity, bouncing with a squash (each lower than the last), rolling
+   * to a stop, then a wobble that swells (anticipation) just before it pops.
+   */
+  private updatePrize(m: Machine, time: number, dt: number): void {
+    const pz = m.prize;
+    pz.t += dt;
+    const r = pz.radius;
+    const wobbleFrom = pz.life - 0.32;
+    if (pz.t < wobbleFrom) {
+      pz.vel.y -= 22 * dt;
+      pz.pos.addScaledVector(pz.vel, dt);
+      const floor = floorWorld(pz.pos.x, pz.pos.z);
+      if (pz.pos.y - r < floor) {
+        pz.pos.y = floor + r;
+        if (pz.vel.y < -1.6) {
+          const strength = Math.min(1, -pz.vel.y / 8);
+          pz.vel.y = -pz.vel.y * 0.42;
+          pz.squash = strength;
+          this.onBounce(pz.pos, strength);
+        } else {
+          pz.vel.y = 0;
+        }
+        // Rolling friction.
+        const k = Math.exp(-2.6 * dt);
+        pz.vel.x *= k;
+        pz.vel.z *= k;
+      }
+      // Rolls as it goes.
+      pz.group.rotation.z -= (pz.vel.x * dt) / r;
+      pz.group.rotation.x += (pz.vel.z * dt) / r;
+    } else {
+      const w = (pz.t - wobbleFrom) / 0.32;
+      pz.group.rotation.z = Math.sin(time * 48) * 0.3 * w;
+      pz.group.rotation.x *= 0.8;
+      pz.squash = Math.max(pz.squash, w * 0.25);
+    }
+    pz.squash = Math.max(0, pz.squash - dt * 5);
+    const swell = pz.t > wobbleFrom ? 1 + ((pz.t - wobbleFrom) / 0.32) * 0.25 : 1;
+    const s = pz.radius / 0.34;
+    pz.group.scale.set(s * swell * (1 + pz.squash * 0.25), s * swell * (1 - pz.squash * 0.35), s * swell * (1 + pz.squash * 0.25));
+    pz.group.position.set(pz.pos.x, pz.pos.y - pz.squash * r * 0.35, pz.pos.z);
+    m.prizeAt.copy(pz.pos);
+    if (pz.t >= pz.life) pz.group.visible = false;
   }
 
   // ---------------------------------------------------------------- the fountain
@@ -877,6 +993,27 @@ export class Hub {
       crown.position.y = 4.75 + Math.sin(time * 1.7) * 0.08;
     }
   }
+}
+
+/** A pull's capsule shoots out at this share of the machine's spin (as it pops up), and pops this long after. */
+const SPIT_AT = 0.82;
+const PRIZE_LIFE = 1.05;
+
+/** A gacha capsule: a coloured top, a white bottom and a dark seam, shiny. */
+function makePrize(): Prize {
+  const group = new THREE.Group();
+  const radius = 0.34;
+  const top = new THREE.MeshPhongMaterial({ color: 0xff5f7e, emissive: 0xff5f7e, emissiveIntensity: 0.15, shininess: 120, specular: 0xffffff });
+  const upper = new THREE.Mesh(new THREE.SphereGeometry(radius, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), top);
+  const lower = new THREE.Mesh(
+    new THREE.SphereGeometry(radius, 28, 14, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+    new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 120, specular: 0xffffff }),
+  );
+  const seam = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.035, 8, 32).rotateX(Math.PI / 2), new THREE.MeshPhongMaterial({ color: 0x1d1640 }));
+  upper.castShadow = lower.castShadow = true;
+  group.add(upper, lower, seam);
+  group.visible = false;
+  return { group, top, radius, pos: new THREE.Vector3(), vel: new THREE.Vector3(), t: 0, life: PRIZE_LIFE, squash: 0 };
 }
 
 // ---------------------------------------------------------------- machine models (built facing +z)

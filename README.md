@@ -31,7 +31,7 @@ the Network URL it prints.
 | Steer | Mouse position, or A/D or the arrow keys | Drag left and right |
 | Parachute | Space or click | PARACHUTE button |
 | At the base: walk (collects from slots you walk up to) | WASD or arrows, relative to the camera | Drag on the left half (joystick) |
-| At the base: turn the camera | Drag with the mouse | Drag on the right half |
+| At the base: turn and tilt the camera (drag up to look up at people flying) | Drag with the mouse | Drag on the right half |
 | Pull a gacha machine | Stand on its ×1 or ×10 pad, press E | Stand on a pad, tap the action button |
 | Merge station, shop | Step on the cauldron's platform or the shop's rug, press E | Same, tap the action button |
 | Launch | Launch button or Space (teleports you to the cannon from afar) | Launch button |
@@ -134,7 +134,11 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     confetti; the coach then points you at it once.
   - Pulling: the machine squats (anticipation), spins (the crank turns; capsules rattle or whirl; slot
     reels spin and stop left to right; the Cosmic orb dips, then blazes as its rings whirl), then pops up
-    and settles with an overshoot. Not enough gems or not unlocked: it shakes its head.
+    and settles with an overshoot, spitting out a capsule (just for show): it arcs out of the chute,
+    bounces with a squash and a click, rolls to a stop in front of the machine between the pads, wobbles
+    and swells, and pops open in a burst as the cards are dealt. The capsule is the best result's rarity
+    colour (glowing for Epic or better) and bigger for ×10. Bots' pulls spit capsules too. Not enough gems
+    or not unlocked: the machine shakes its head.
   - Mythic is the new top rarity (350 coins/s), with two characters from the design doc: Razzo
     Rinoceronte (a rhino strapped to a sputtering rocket) and Satellito Gattino (a kitten with satellite
     dish ears that sweep the sky). Mythics come from the Ultra pull, or from merging three Legendaries.
@@ -179,12 +183,16 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   brainrot within about 11 m, a Level up button shows its XP (earned on display) and, once full, the
   price: click it to level up. Standing next to a slot and pressing E opens its panel to store it in
   the backpack (back to level 1) or sell it. Slots glow in their brainrot's rarity colour.
+- **Camera at the base**: drag sideways to turn it and up or down to tilt it. Tilting up brings it low and
+  close behind the player, with their head at the bottom of the screen, to look up at people flying from
+  the cannon (up to about 54° above the horizon).
 - **Walking**: the cannon, the cauldron, the machines, the stall, the pedestals and the fountain are
   solid (you slide around them), and you step up onto the pads, the cauldron's platform and showcase
   floors. Returning players start in the lane in front of their plot, looking at it.
 - **Tutorial**: flight 1 is a straight line of 12 gems, enough for the first pull. Hazards start on
   flight 3, and nothing is lost to hits or crashes during the first 3 flights. A coach guides new
-  players: a big bouncing yellow banner says what to do, and a cartoon hand shows how. It presses and
+  players: a big bouncing yellow banner, low on the screen just above the buttons so it never hides the
+  sky or the town, says what to do, and a cartoon hand shows how. It presses and
   holds to charge, swipes to steer on flight 2, taps the parachute (or says to press Space), and at the
   base points down at the next button (the action button once you're on a platform, Upgrades, Launch).
   When the next step is to walk somewhere, it shows the WASD keys (a dragging thumb on touch) and a

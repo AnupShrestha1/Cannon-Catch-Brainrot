@@ -275,6 +275,12 @@ export class Sfx {
     this.tone('triangle', 1568, 2093, 0.3, 0.15, 0.08);
   }
 
+  /** A plastic capsule bouncing on the floor; strength 0 to 1. */
+  bounce(strength: number): void {
+    this.tone('sine', 520 + strength * 260, 300, 0.07, 0.05 + strength * 0.12);
+    this.noiseBurst(0.04, 'highpass', 2200, 0.04 + strength * 0.06);
+  }
+
   /** Teleporting: a quick rising zip and a soft pop. */
   teleport(): void {
     this.tone('sine', 300, 1800, 0.18, 0.18);
