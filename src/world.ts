@@ -91,29 +91,88 @@ export function buildEnv(scene: THREE.Scene): Env {
   const horizon = new THREE.Color();
   const white = new THREE.Color(0xffffff);
 
-  // Cannon: a wooden carriage with a barrel tilted slightly away so its muzzle sits at x = 0, z = 0.
+  // Cannon: a classic turned barrel with gold bands on a wooden carriage with spoked wheels, on a round stone
+  // base. Smooth, glossy materials; the barrel is tilted slightly away so its muzzle sits at x = 0, z = 0.
   const cannon = new THREE.Group();
-  const carriage = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.2, 2.4), flat(0x8a5a33));
-  carriage.position.y = 0.6;
-  const wheelGeo = new THREE.CylinderGeometry(0.75, 0.75, 0.3, 10);
-  const wheelMat = flat(0x3d2a1a);
+  const wood = new THREE.MeshPhongMaterial({ color: 0x9a6236, shininess: 18 });
+  const darkWood = new THREE.MeshPhongMaterial({ color: 0x5c3a20, shininess: 12 });
+  const iron = new THREE.MeshPhongMaterial({ color: 0x2b2f38, shininess: 70, specular: 0x666a75 });
+  const brass = new THREE.MeshPhongMaterial({ color: 0xffc84a, emissive: 0x3a2600, shininess: 90, specular: 0xfff1b0 });
+  const stone = new THREE.MeshPhongMaterial({ color: 0xd9cfbf, shininess: 8 });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.95, 2.2, 0.32, 40), stone);
+  base.position.y = 0.16;
+  base.receiveShadow = true;
+  const baseRim = new THREE.Mesh(new THREE.TorusGeometry(1.97, 0.07, 10, 48).rotateX(Math.PI / 2), brass);
+  baseRim.position.y = 0.33;
+  // Carriage: two rounded cheeks joined by a block, with an axle through them.
+  const cheekGeo = new RoundedBoxGeometry(0.34, 1.05, 2.1, 3, 0.12);
   for (const side of [-1, 1]) {
-    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(side * 1.35, 0.75, 0);
+    const cheek = new THREE.Mesh(cheekGeo, wood);
+    cheek.position.set(side * 0.82, 0.92, 0.05);
+    cannon.add(cheek);
+  }
+  const bed = new THREE.Mesh(new RoundedBoxGeometry(1.4, 0.36, 1.8, 3, 0.1), darkWood);
+  bed.position.set(0, 0.62, 0.05);
+  const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2.9, 16).rotateZ(Math.PI / 2), iron);
+  axle.position.set(0, 0.78, 0);
+  cannon.add(bed, axle);
+  // Spoked wheels with iron tyres and brass hubs.
+  const tyreGeo = new THREE.TorusGeometry(0.7, 0.09, 12, 40);
+  const felloeGeo = new THREE.TorusGeometry(0.62, 0.07, 8, 40);
+  const spokeGeo = new THREE.CylinderGeometry(0.045, 0.045, 1.24, 8);
+  const hubGeo = new THREE.SphereGeometry(0.17, 16, 12);
+  for (const side of [-1, 1]) {
+    const wheel = new THREE.Group();
+    wheel.position.set(side * 1.25, 0.78, 0);
+    wheel.rotation.y = Math.PI / 2;
+    wheel.add(new THREE.Mesh(tyreGeo, iron), new THREE.Mesh(felloeGeo, wood), new THREE.Mesh(hubGeo, brass));
+    for (let k = 0; k < 6; k++) {
+      const spoke = new THREE.Mesh(spokeGeo, wood);
+      spoke.rotation.z = (k * Math.PI) / 6;
+      wheel.add(spoke);
+    }
     cannon.add(wheel);
   }
   const barrel = new THREE.Group();
-  barrel.position.set(0, 1.2, 0.38);
+  barrel.position.set(0, 1.25, 0.38);
   barrel.rotation.x = -0.12;
-  const tubeMat = flat(0x3d4450);
-  const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.1, 3.2, 12), tubeMat);
-  tube.position.y = 1.6;
-  const lip = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.16, 6, 14), flat(0x2a2f38));
+  const tubeMat = new THREE.MeshPhongMaterial({ color: 0x3d4450, shininess: 80, specular: 0x8890a0 });
+  // The barrel turned on a lathe: rounded breech, swelling reinforce, a waist, and a flared muzzle with a bore.
+  const profile = [
+    [0, -0.55], [0.45, -0.5], [0.78, -0.3], [0.98, 0], [1.08, 0.35], [1.1, 0.8], [1.02, 1.05], [0.98, 1.6],
+    [0.9, 2.3], [0.88, 2.65], [0.98, 2.78], [1.06, 2.95], [1.04, 3.12], [0.94, 3.2], [0.7, 3.2], [0.66, 2.9],
+  ].map(([r, y]) => new THREE.Vector2(r, y));
+  const tube = new THREE.Mesh(new THREE.LatheGeometry(profile, 40), tubeMat);
+  tube.material.side = THREE.DoubleSide;
+  const bore = new THREE.Mesh(new THREE.CircleGeometry(0.66, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x0d0f14 }));
+  bore.position.y = 2.95;
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.09, 12, 40), brass);
   lip.rotation.x = Math.PI / 2;
-  lip.position.y = 3.2;
-  barrel.add(tube, lip);
-  cannon.add(carriage, barrel);
+  lip.position.y = 3.16;
+  barrel.add(tube, bore, lip);
+  for (const [y, r] of [
+    [0.25, 1.1],
+    [1.05, 1.04],
+    [2.72, 0.95],
+  ]) {
+    const band = new THREE.Mesh(new THREE.TorusGeometry(r, 0.07, 10, 40), brass);
+    band.rotation.x = Math.PI / 2;
+    band.position.y = y;
+    barrel.add(band);
+  }
+  // Trunnions, a cascabel knob at the back and a fuse.
+  for (const side of [-1, 1]) {
+    const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.4, 16).rotateZ(Math.PI / 2), brass);
+    pin.position.set(side * 1.12, 0.55, 0);
+    barrel.add(pin);
+  }
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 12), brass);
+  knob.position.y = -0.7;
+  const fuse = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.35, 8), new THREE.MeshPhongMaterial({ color: 0xf2e2b8 }));
+  fuse.position.set(0, -0.15, 0.85);
+  fuse.rotation.x = 0.6;
+  barrel.add(knob, fuse);
+  cannon.add(base, baseRim, barrel);
   cannon.traverse((o) => {
     if (o instanceof THREE.Mesh) o.castShadow = true;
   });
@@ -474,6 +533,9 @@ export interface GuideRig {
 }
 
 /** The tutorial's green arrows. */
+/** How many chevrons the ground trail can show at once. */
+export const GUIDE_CHEVRONS = 16;
+
 export function makeGuide(): GuideRig {
   const green = new THREE.MeshLambertMaterial({ color: 0x3ccf5a, emissive: 0x1f8a35, emissiveIntensity: 0.8 });
   const ink = new THREE.MeshBasicMaterial({ color: 0x1d2340, side: THREE.BackSide });
@@ -492,28 +554,32 @@ export function makeGuide(): GuideRig {
   marker.add(shaft, head);
   marker.visible = false;
 
+  // A trail of chevrons on the ground, from the player to the objective (see Game.updateGuide).
   const shape = new THREE.Shape();
-  shape.moveTo(-0.28, -0.7);
-  shape.lineTo(0.28, -0.7);
-  shape.lineTo(0.28, 0.1);
-  shape.lineTo(0.65, 0.1);
-  shape.lineTo(0, 0.85);
-  shape.lineTo(-0.65, 0.1);
-  shape.lineTo(-0.28, 0.1);
+  shape.moveTo(-0.62, -0.28);
+  shape.lineTo(0, 0.2);
+  shape.lineTo(0.62, -0.28);
+  shape.lineTo(0.62, 0.02);
+  shape.lineTo(0, 0.5);
+  shape.lineTo(-0.62, 0.02);
   shape.closePath();
   const geo = new THREE.ShapeGeometry(shape);
   geo.rotateX(-Math.PI / 2);
-  // Bright gold on a thick ink outline, so it never blends into the grass.
+  const fillMat = new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, depthWrite: false });
+  const edgeMat = new THREE.MeshBasicMaterial({ color: 0x1d1640, transparent: true, depthWrite: false });
   const ground = new THREE.Group();
-  const fill = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffd23f, depthWrite: false }));
-  fill.position.y = 0.02;
-  fill.renderOrder = 2;
-  const edge = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x1d1640, depthWrite: false }));
-  edge.scale.setScalar(1.28);
-  edge.position.z = 0.05;
-  edge.renderOrder = 1;
-  ground.add(edge, fill);
-  ground.scale.setScalar(1.3);
+  for (let i = 0; i < GUIDE_CHEVRONS; i++) {
+    const chevron = new THREE.Group();
+    const fill = new THREE.Mesh(geo, fillMat.clone());
+    fill.position.y = 0.01;
+    fill.renderOrder = 2;
+    const edge = new THREE.Mesh(geo, edgeMat.clone());
+    edge.scale.setScalar(1.22);
+    edge.position.z = 0.04;
+    edge.renderOrder = 1;
+    chevron.add(edge, fill);
+    ground.add(chevron);
+  }
   ground.visible = false;
   return { marker, ground };
 }

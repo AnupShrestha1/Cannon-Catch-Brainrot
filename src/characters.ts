@@ -342,7 +342,96 @@ const MODELS_STORM: Record<string, Model> = {
   },
 };
 
-Object.assign(MODELS, MODELS_STORM);
+const MODELS_MYTHIC: Record<string, Model> = {
+  // Rhino strapped to a red rocket; the exhaust flickers and it rumbles.
+  'Razzo Rinoceronte': (f, accent) => {
+    const hide = mat(0x8f939e);
+    const rig = new THREE.Group();
+    const body = at(ball(0.5, hide, 2), 0, 0.62, 0);
+    body.scale.set(1, 0.85, 1.25);
+    const head = at(ball(0.32, hide, 2), 0, 0.72, 0.62);
+    head.scale.set(1, 0.9, 1.1);
+    const horn = at(cone(0.11, 0.38, mat(0xf4ecd8), 8), 0, 0.98, 0.86);
+    horn.rotation.x = 0.5;
+    const small = at(cone(0.07, 0.18, mat(0xf4ecd8), 8), 0, 0.98, 0.66);
+    rig.add(body, head, horn, small);
+    for (const side of [-1, 1]) {
+      rig.add(at(cyl(0.11, 0.12, 0.3, hide, 8), side * 0.28, 0.15, 0.35));
+      rig.add(at(cyl(0.11, 0.12, 0.3, hide, 8), side * 0.28, 0.15, -0.35));
+      const ear = at(cone(0.08, 0.16, hide, 6), side * 0.18, 1.0, 0.5);
+      rig.add(ear);
+    }
+    eyes(rig, 0, 0.84, 0.9, 0.13);
+    smile(rig, 0, 0.62, 0.92, 0.08);
+    // The rocket on its back, with fins, a nose cone and an exhaust flame.
+    const rocket = at(new THREE.Group(), 0, 1.25, -0.15);
+    rocket.rotation.x = -Math.PI / 2 + 0.25;
+    rocket.add(at(cyl(0.2, 0.2, 0.9, mat(0xe63946), 14), 0, 0, 0));
+    rocket.add(at(cone(0.2, 0.32, mat(0xffffff), 14), 0, 0.61, 0));
+    rocket.add(at(ring(0.2, 0.04, accent), 0, 0.2, 0));
+    for (let i = 0; i < 3; i++) {
+      const fin = at(box(0.04, 0.26, 0.2, mat(0xffd23f)), 0, -0.35, 0);
+      fin.rotation.y = (i * Math.PI * 2) / 3;
+      fin.translateZ(0.2);
+      rocket.add(fin);
+    }
+    const flame = at(cone(0.15, 0.5, bulbMat, 10), 0, -0.7, 0);
+    flame.rotation.x = Math.PI;
+    rocket.add(flame);
+    rig.add(rocket);
+    f.add(rig);
+    return (t) => {
+      flame.scale.set(1, 0.7 + Math.abs(Math.sin(t * 23)) * 0.6, 1);
+      rig.position.set(Math.sin(t * 40) * 0.012, Math.abs(Math.sin(t * 2)) * 0.06, 0);
+    };
+  },
+
+  // Kitten with satellite-dish ears that sweep the sky, and an antenna with a blinking light.
+  'Satellito Gattino': (f, accent) => {
+    const fur = mat(0xff9f43);
+    const cream = mat(0xfff1d6);
+    const body = at(ball(0.42, fur, 2), 0, 0.5, 0);
+    body.scale.set(1, 0.95, 1.1);
+    const belly = at(ball(0.3, cream, 2), 0, 0.46, 0.2);
+    const head = at(ball(0.36, fur, 2), 0, 1.08, 0.12);
+    const muzzle = at(ball(0.14, cream, 1), 0, 0.98, 0.42);
+    const nose = at(ball(0.05, mat(0xff6b9a), 1), 0, 1.03, 0.54);
+    f.add(body, belly, head, muzzle, nose);
+    eyes(f, 0, 1.14, 0.42, 0.13);
+    smile(f, 0, 0.93, 0.5, 0.06);
+    const dishes: THREE.Group[] = [];
+    for (const side of [-1, 1]) {
+      const pivot = at(new THREE.Group(), side * 0.27, 1.38, 0.08);
+      const dish = new THREE.Mesh(
+        cached('dish', () => new THREE.SphereGeometry(0.22, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2.4)),
+        mat(0xe9edf2),
+      );
+      dish.material.side = THREE.DoubleSide;
+      dish.rotation.x = -Math.PI / 2;
+      const stem = at(cyl(0.025, 0.025, 0.2, mat(0x8f939e), 6), 0, 0, -0.1);
+      stem.rotation.x = Math.PI / 2;
+      pivot.add(dish, stem, at(ball(0.035, accent, 0), 0, 0, 0.12));
+      f.add(pivot);
+      dishes.push(pivot);
+    }
+    const antenna = at(cyl(0.02, 0.02, 0.36, mat(0x8f939e), 6), 0, 1.58, 0);
+    const blink = at(ball(0.07, bulbMat, 1), 0, 1.78, 0);
+    const tail = at(cyl(0.05, 0.07, 0.6, fur, 8), 0, 0.55, -0.48);
+    tail.rotation.x = -0.9;
+    for (const side of [-1, 1]) f.add(at(ball(0.1, cream, 1), side * 0.2, 0.1, 0.22));
+    f.add(antenna, blink, tail);
+    return (t) => {
+      dishes.forEach((d, i) => {
+        d.rotation.y = Math.sin(t * 1.5 + i * Math.PI) * 0.6;
+        d.rotation.x = Math.sin(t * 2.1) * 0.2;
+      });
+      tail.rotation.z = Math.sin(t * 3) * 0.4;
+      blink.visible = Math.sin(t * 6) > -0.2;
+    };
+  },
+};
+
+Object.assign(MODELS, MODELS_STORM, MODELS_MYTHIC);
 
 /** Fallback for characters without a model yet: a cube in the rarity colour. */
 const cubeModel: Model = (f, accent) => {

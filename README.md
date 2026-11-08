@@ -99,6 +99,18 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     included: about 1.4× the Legendaries (one per ~600 gems against ~820), 1.5× the Epics or better, and
     1.2× the value if everything were merged up. So once it's unlocked, saving for Super is the better
     buy, and Basic stays the cheap way in.
+  - Ultra pull, 400 gems, unlocked once a flight reaches the Storm Layer: Epic 20%, Legendary 55%,
+    Mythic 25%, with a Legendary or better at least every 3 pulls and a Mythic every 6. Per gem it
+    beats Super too (0.76 Mythics, 2.05 Legendary-or-better and 3.7 Legendaries of merged value per
+    1,000 gems, against Super's 0, 1.65 and 2.8).
+  - Mythic is the new top rarity (350 coins/s), with two characters from the design doc: Razzo
+    Rinoceronte (a rhino strapped to a sputtering rocket) and Satellito Gattino (a kitten with satellite
+    dish ears that sweep the sky). Mythics come from the Ultra pull, or from merging three Legendaries.
+  - Opening: the machine shakes silently and the sound comes when the capsule pops open. On the cards,
+    every flip whooshes and pops, and Rare and better get a fanfare that grows with rarity. Epic and
+    better flash the screen in their colour, turn light rays behind the card, burst confetti and show a
+    big rarity banner. Legendary and Mythic hold back first: the card shakes and blazes with a rising
+    whoosh before it turns. A Mythic also quakes the whole screen and has a rainbow banner and edge.
   - Each tier has a ×10 button once you can afford ten.
   - The first 10 pulls are scripted to include at least two Uncommons and one Rare: the 1st is at least
     Uncommon, the 3rd at least Rare (a glowing card at about 100 s) and the 5th at least Uncommon. The
@@ -117,7 +129,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     Merges reveal their results the same way.
 - **Merge station**, a bubbling cauldron on the right of the cannon. Step on the purple platform in front
   of it and press E: 10 Common → 1 Uncommon, 8 Uncommon →
-  1 Rare, 6 Rare → 1 Epic, 4 Epic → 1 Legendary, from the backpack. A merge gives a random character of
+  1 Rare, 6 Rare → 1 Epic, 4 Epic → 1 Legendary, 3 Legendary → 1 Mythic, from the backpack. A merge gives a random character of
   the next rarity. Merge all runs every recipe from the bottom up in one click, and merged brainrots go
   on display if they beat what's there.
 - **Backpack**: brainrots not on display. Sell one or all of a rarity (60 seconds of its income each),
@@ -135,12 +147,13 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - **Walking at the base**: the cannon, both stations, the pedestals and the showcase's low walls are
   solid (you slide around them), and you step up onto the station platforms and the showcase floor.
 - **Tutorial**: flight 1 is a straight line of 12 gems, enough for the first pull. Hazards start on
-  flight 3, and nothing is lost to hits or crashes during the first 3 flights. At the base, a green
-  arrow bobs over the next place to go (a station's platform, coins to collect, a brainrot ready to
-  level up), and a gold
-  arrow with a dark outline on the ground by the player points the way. When the next step is a
-  button (Upgrades, Launch), that button bounces instead. From flight 2, the apex
-  shows the next zone's gem value and the cannon level that reaches it.
+  flight 3, and nothing is lost to hits or crashes during the first 3 flights. A coach guides new
+  players: a big bouncing yellow banner says what to do, and a cartoon hand shows how. It presses and
+  holds to charge, swipes to steer on flight 2, taps the parachute (or says to press Space), and at the
+  base points down at the next button (the action button once you're on a platform, Upgrades, Launch).
+  When the next step is to walk somewhere, it shows the WASD keys (a dragging thumb on touch) and a
+  trail of gold chevrons on the ground flows from the player to the goal, with a green arrow bobbing
+  over it. From flight 2, the apex shows the next zone's gem value and the cannon level that reaches it.
 - **New zones**: entering a zone on the way up shows its name and gem value; the first time ever, it's a
   big NEW ZONE banner with a sparkle and a moment of slow motion. The cannon's first levels climb fast
   (90 m at level 1, 155 m at level 6), so a good launch reaches Cloud Kingdom within the first few
@@ -158,7 +171,12 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - Session gifts: 20 gems at 2 minutes (two more pulls, to keep a new player going), then 30 gems and a
   minute of income at 5 minutes, 50 gems and 2 minutes at 10, 100 gems (a Super pull) and 2 minutes at
   20, and 200 gems and 4 minutes at 40.
-- Each pull, and now and then a brainrot on display, chants its name with the browser's text-to-speech.
+- **Voices**: when a Rare or better is revealed, it sings its name in a generated babble (like the
+  gibberish voices in cosy games), built from the syllables of its name with its own pitch and rhythm;
+  rarer ones sing lower and longer with an echo. Brainrots no longer call out from the base while idle.
+- **Sounds**, all synthesised: soft footsteps at the base, capsule pop, card flips, fanfares by rarity,
+  suspense whoosh, cash register on upgrades, level-up scale, bubbling merge, new-zone call, panel
+  whoosh, coins, gems, launch boom, wind, parachute, hits and landings.
 
 Older saves carry over: catches that were being carried go to the backpack, and bases bigger than 10
 slots move their extra brainrots to the backpack.
@@ -171,6 +189,10 @@ Not in this build: fusion of named characters, sky events, the rival, the spin w
   (from Google Fonts, with system fallbacks), glossy 3D buttons with thick ink outlines that press down,
   currency pills, a dock of icon tiles (Upgrades, Bag, Book), a prompt banner, and panels
   that open with a coloured ribbon.
+- **Cannon, gacha machine and cauldron**: smooth and glossy. The cannon is a turned barrel with brass
+  bands, trunnions and a muzzle ring, on a carriage with spoked wheels over a round stone base; the gacha
+  machine has a rounded body and a shiny glass globe of capsules; the cauldron has a rounded belly on
+  three legs over a crackling fire, a gold rim and handles, and a bubbling, glowing brew.
 - **Brainrot icons**: every card shows that character's own portrait, rendered once from its 3D model
   and cached. Characters not yet pulled show as a dark silhouette in the book.
 - The player is a blocky avatar with rounded edges: a square head with a drawn face, a cap, a T-shirt,
@@ -234,7 +256,7 @@ It reports the first two minutes (the hook) and the long game. With the current 
 | 11 min | First Legendary on display |
 | 25 min | All 10 slots open |
 | 37 min | First Storm Layer run |
-| ~65 min | Rebirth unlocks |
+| ~60 min | Rebirth unlocks |
 
 By 2 minutes the median player has had 8 rewards (pulls, upgrades and level-ups), has cannon level 5
 and earns about 12 coins a second, and every simulated player has a Rare. Each big milestone after

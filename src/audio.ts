@@ -1,4 +1,4 @@
-// Placeholder sound effects synthesised with Web Audio, so the prototype ships no audio files.
+// Sound effects and voices synthesised with Web Audio, so the game ships no audio files.
 
 export class Sfx {
   private ctx: AudioContext | null = null;
@@ -44,51 +44,179 @@ export class Sfx {
   setMuted(muted: boolean): void {
     this.muted = muted;
     if (this.ctx) this.master.gain.setTargetAtTime(muted ? 0 : 0.5, this.ctx.currentTime, 0.05);
-    if (muted && 'speechSynthesis' in window) window.speechSynthesis.cancel();
   }
 
   /**
-   * Stand-in for the per-character voice line: the browser's own text-to-speech chants the name.
-   * Recorded lines replace this when they exist.
+   * A brainrot's voice: a sung babble built from the syllables of its name, like the gibberish voices in
+   * cosy games. Each name gets its own pitch, rhythm and vowel colours, and rarer brainrots sing lower and
+   * longer with a little echo. Generated here, so there's no robotic text-to-speech and no audio files.
    */
-  chant(name: string): void {
-    if (this.muted || !('speechSynthesis' in window)) return;
-    const synth = window.speechSynthesis;
-    synth.cancel();
-    const voice = this.chantVoice();
-    const line = new SpeechSynthesisUtterance(`${name}!`);
-    if (voice) line.voice = voice;
-    line.lang = voice?.lang ?? 'it-IT';
-    // The meme's narrator: a deep, deliberate delivery rather than a chipmunk.
-    line.rate = 0.92;
-    line.pitch = 0.85;
-    synth.speak(line);
-  }
-
-  private voice: SpeechSynthesisVoice | null | undefined;
-
-  /**
-   * The best voice the device has for the chant, picked once and again when the list loads late:
-   * Italian first, then the natural/neural/online voices that sound far less robotic, then male ones.
-   */
-  private chantVoice(): SpeechSynthesisVoice | null {
-    if (this.voice !== undefined) return this.voice;
-    const synth = window.speechSynthesis;
-    const score = (v: SpeechSynthesisVoice) =>
-      (v.lang.toLowerCase().startsWith('it') ? 100 : 0) +
-      (/natural|neural|online/i.test(v.name) ? 40 : 0) +
-      (/google/i.test(v.name) ? 30 : 0) +
-      (/premium|enhanced/i.test(v.name) ? 20 : 0) +
-      (/diego|giuseppe|cosimo|luca|paolo|male/i.test(v.name) ? 10 : 0) +
-      (v.localService ? 0 : 5);
-    const voices = synth.getVoices();
-    if (!voices.length) {
-      // Chrome fills the list asynchronously; choose again once it has.
-      synth.addEventListener('voiceschanged', () => (this.voice = undefined), { once: true });
-      return null;
+  chant(name: string, rarity = 0): void {
+    const ctx = this.ctx;
+    if (!ctx || this.muted) return;
+    // A stable seed from the name, so each character always sounds the same.
+    let seed = 0;
+    for (const ch of name) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+    const rnd = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+    const syllables = name.toLowerCase().match(/[^aeiou\s]*[aeiou]+/g)?.slice(0, 8) ?? ['ba'];
+    const base = 190 + rnd() * 140 - rarity * 14;
+    const beat = 0.11 + rnd() * 0.04 + rarity * 0.008;
+    const out = ctx.createGain();
+    out.gain.value = 0.5;
+    // Rarer voices get a short echo, for a bit of grandeur.
+    if (rarity >= 3) {
+      const delay = ctx.createDelay();
+      delay.delayTime.value = 0.13;
+      const fb = ctx.createGain();
+      fb.gain.value = 0.28;
+      out.connect(delay).connect(fb).connect(delay);
+      fb.connect(this.master);
     }
-    this.voice = [...voices].sort((a, b) => score(b) - score(a))[0] ?? null;
-    return this.voice;
+    out.connect(this.master);
+    const t0 = ctx.currentTime + 0.02;
+    syllables.forEach((syl, i) => {
+      const vowel = syl.match(/[aeiou]/)?.[0] ?? 'a';
+      // A sing-song contour: up through the name, a lift on the stressed syllable, down at the end.
+      const last = i === syllables.length - 1;
+      const step = [0, 3, 5, 3, 7, 5, 3, 0][i % 8] + (i === 1 ? 2 : 0) - (last ? 4 : 0);
+      const f = base * Math.pow(2, step / 12) * (0.97 + rnd() * 0.06);
+      const t = t0 + i * beat;
+      this.syllable(out, vowel, f, t, last ? beat * 2.2 : beat * 0.92);
+    });
+  }
+
+  /** One sung syllable: a buzzy source through two vowel formants, with a soft attack and a little vibrato. */
+  private syllable(out: AudioNode, vowel: string, f: number, t: number, dur: number): void {
+    const ctx = this.ctx!;
+    const formants: Record<string, [number, number]> = {
+      a: [800, 1200],
+      e: [500, 1900],
+      i: [320, 2400],
+      o: [500, 900],
+      u: [350, 700],
+    };
+    const [f1, f2] = formants[vowel] ?? formants.a;
+    const src = ctx.createOscillator();
+    src.type = 'sawtooth';
+    src.frequency.setValueAtTime(f * 0.94, t);
+    src.frequency.exponentialRampToValueAtTime(f, t + 0.04);
+    const vib = ctx.createOscillator();
+    vib.frequency.value = 6;
+    const vibAmt = ctx.createGain();
+    vibAmt.gain.value = f * 0.012;
+    vib.connect(vibAmt).connect(src.frequency);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(0.35, t + 0.025);
+    env.gain.setValueAtTime(0.35, t + dur * 0.6);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    for (const [freq, q, g] of [
+      [f1, 6, 1],
+      [f2, 9, 0.6],
+    ] as const) {
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = freq;
+      band.Q.value = q;
+      const gain = ctx.createGain();
+      gain.gain.value = g;
+      src.connect(band).connect(gain).connect(env);
+    }
+    env.connect(out);
+    src.start(t);
+    vib.start(t);
+    src.stop(t + dur + 0.05);
+    vib.stop(t + dur + 0.05);
+  }
+
+  /** A soft footstep: a short, low, filtered scuff. Kept very quiet. */
+  step(): void {
+    this.noiseBurst(0.07, 'lowpass', 700 + Math.random() * 300, 0.07);
+    this.tone('sine', 110 + Math.random() * 20, 70, 0.06, 0.04);
+  }
+
+  /** A UI click. */
+  click(): void {
+    this.tone('triangle', 1400, 900, 0.05, 0.08);
+  }
+
+  /** A gacha capsule popping open. */
+  capsule(): void {
+    this.tone('sine', 300, 900, 0.12, 0.25);
+    this.noiseBurst(0.12, 'highpass', 2500, 0.2);
+    this.tone('triangle', 1200, 1800, 0.15, 0.12, 0.08);
+  }
+
+  /** The machine's crank turning while a pull spins up: a soft ratchet. */
+  crank(seconds: number): void {
+    for (let t = 0; t < seconds; t += 0.11) this.tone('square', 260 + Math.random() * 40, 200, 0.03, 0.025, t);
+  }
+
+  /** A card flipping over. */
+  flip(): void {
+    this.noiseBurst(0.12, 'bandpass', 1800, 0.18, 3500);
+  }
+
+  /**
+   * A fanfare for a big reveal, grander the rarer: Rare a bright chime, Epic a rising arpeggio, Legendary
+   * a full chord with a shimmer, Mythic all of that plus a deep boom and a longer tail.
+   */
+  fanfare(rarity: number): void {
+    if (rarity < 2) return;
+    const root = 523;
+    const notes = rarity >= 4 ? [0, 4, 7, 12, 16, 19, 24] : rarity === 3 ? [0, 4, 7, 12] : [0, 7, 12];
+    notes.forEach((n, i) => {
+      const f = root * Math.pow(2, n / 12);
+      this.tone('triangle', f, f, 0.5 + (rarity - 2) * 0.25, 0.16, i * 0.07);
+      if (rarity >= 4) this.tone('sine', f * 2, f * 2, 0.7, 0.07, i * 0.07 + 0.03);
+    });
+    if (rarity >= 4) {
+      // The held chord.
+      for (const n of [0, 4, 7, 12]) this.tone('sawtooth', root * Math.pow(2, n / 12) / 2, root * Math.pow(2, n / 12) / 2, 1.4, 0.05, 0.5);
+      this.sparkle();
+    }
+    if (rarity >= 5) {
+      this.tone('sine', 90, 40, 1.2, 0.8);
+      this.noiseBurst(1.2, 'lowpass', 900, 0.4, 80);
+      for (const n of [0, 7, 12, 19]) this.tone('triangle', root * 2 * Math.pow(2, n / 12), root * 2 * Math.pow(2, n / 12), 1.6, 0.06, 0.9);
+    }
+  }
+
+  /** The suspense before a Legendary or Mythic card turns: a rising whoosh. */
+  suspense(): void {
+    this.noiseBurst(0.9, 'bandpass', 400, 0.25, 3000);
+    this.tone('sine', 200, 800, 0.9, 0.12);
+  }
+
+  /** Buying an upgrade: a cash-register ka-ching. */
+  buy(): void {
+    this.noiseBurst(0.05, 'highpass', 4000, 0.2);
+    this.tone('square', 1568, 1568, 0.08, 0.07, 0.04);
+    this.tone('square', 2093, 2093, 0.25, 0.07, 0.11);
+  }
+
+  /** A brainrot levelling up: a quick climbing scale. */
+  levelUp(): void {
+    [0, 4, 7, 12].forEach((n, i) => this.tone('triangle', 660 * Math.pow(2, n / 12), 660 * Math.pow(2, n / 12), 0.14, 0.18, i * 0.06));
+  }
+
+  /** The merge cauldron bubbling up. */
+  brew(): void {
+    for (let i = 0; i < 6; i++) this.tone('sine', 180 + Math.random() * 220, 400 + Math.random() * 300, 0.12, 0.12, i * 0.09);
+  }
+
+  /** Entering a new zone: a soaring two-note call. */
+  zone(): void {
+    this.tone('triangle', 784, 784, 0.3, 0.2);
+    this.tone('triangle', 1175, 1175, 0.6, 0.2, 0.18);
+  }
+
+  /** A whoosh as a panel opens. */
+  open(): void {
+    this.noiseBurst(0.15, 'bandpass', 900, 0.1, 2200);
   }
 
   coin(): void {

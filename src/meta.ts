@@ -58,6 +58,7 @@ export const BOOK_ZONES: BookZone[] = [
   { name: 'Common & Uncommon', rarities: [0, 1], reward: 500 },
   { name: 'Rare & Epic', rarities: [2, 3], reward: 5000 },
   { name: 'Legendary', rarities: [4], reward: 50000 },
+  { name: 'Mythic', rarities: [5], reward: 250000 },
 ];
 
 export function bookEntries(zone: BookZone): { name: string; rarity: number }[] {

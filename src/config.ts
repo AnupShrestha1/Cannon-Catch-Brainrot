@@ -28,7 +28,8 @@ export const ROSTER: string[][] = [
   ['Ginnasta Gelatina', 'Ventilatore Tartarughino'],
   ['Pizzarotto Pellicano', 'Ninja Macchiatino'],
   ['Elicottero Ippopotamo', 'Frigorifero Fenicottero'],
-  [],
+  // Mythic: from the Ultra pull, or by merging three Legendaries.
+  ['Razzo Rinoceronte', 'Satellito Gattino'],
   [],
 ];
 
@@ -70,7 +71,7 @@ export const GEMS = {
 };
 
 export interface GachaTier {
-  id: 'basic' | 'super';
+  id: 'basic' | 'super' | 'ultra';
   name: string;
   cost: number;
   /** [rarity, chance] pairs that sum to 1. */
@@ -106,6 +107,17 @@ export const GACHA: GachaTier[] = [
     // An Epic or better at least every 4 Super pulls, and a Legendary at least every 10.
     pity: [[3, 4], [4, 10]],
   },
+  {
+    id: 'ultra',
+    name: 'Ultra pull',
+    cost: 400,
+    // Epic or better, with a real shot at a Mythic. Worth more per gem than Super pulls on every count
+    // (`npm run sim` prints the comparison). Unlocks once a flight reaches the Storm Layer.
+    odds: [[3, 0.2], [4, 0.55], [5, 0.25]],
+    unlockBest: 400,
+    // A Legendary or better at least every 3 Ultra pulls, and a Mythic every 6.
+    pity: [[4, 3], [5, 6]],
+  },
 ];
 
 /**
@@ -118,7 +130,7 @@ export const STARTER_PULLS: Record<number, number> = { 1: 1, 3: 2, 5: 1 };
 export const STARTER_PULL_COUNT = 10;
 
 /** Merging: this many of a rarity make one random character of the next rarity up. Legendary is the top for now. */
-export const MERGE: Record<number, number> = { 0: 10, 1: 8, 2: 6, 3: 4 };
+export const MERGE: Record<number, number> = { 0: 10, 1: 8, 2: 6, 3: 4, 4: 3 };
 
 export function rollTier(tier: GachaTier): number {
   let roll = Math.random();
@@ -223,8 +235,8 @@ export const TRACKS: Track[] = ['cannon', 'finder', 'magnet', 'steering', 'chute
  */
 export const UPGRADES: Record<Track, { name: string; base: number; growth: number; max: number; effect: number }> = {
   // Basic Launch stops at cannon level 37, whose perfect launch stays inside the Storm Layer. The doc goes to 60.
-  // Tuned with `npm run sim` (the doc's 50 × 1.18 let rebirth unlock after 8 minutes): about 66 minutes now.
-  cannon: { name: 'Cannon power', base: 25, growth: 1.51, max: 36, effect: 0 },
+  // Tuned with `npm run sim` (the doc's 50 × 1.18 let rebirth unlock after 8 minutes): about 60 minutes now.
+  cannon: { name: 'Cannon power', base: 25, growth: 1.52, max: 36, effect: 0 },
   finder: { name: 'Gem finder', base: 150, growth: 1.45, max: 20, effect: 0.1 },
   magnet: { name: 'Gem magnet', base: 120, growth: 1.25, max: 25, effect: 0.1 },
   steering: { name: 'Steering', base: 100, growth: 1.22, max: 25, effect: 0.06 },

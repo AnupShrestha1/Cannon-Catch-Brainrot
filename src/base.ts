@@ -9,6 +9,7 @@ import { makeCharacter, type CharacterRig } from './characters';
 import { formatCoins } from './economy';
 import { FENCE, fromPlot, plotAt, toPlot, type PlotSlot } from './layout';
 import type { PadSlot, Save } from './store';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { flat, makeLabel, softTexture, type Label } from './world';
 
 interface PadView {
@@ -206,6 +207,7 @@ export class Base {
   private swirl = new THREE.Group();
   private brew!: THREE.MeshLambertMaterial;
   private mergeT = 0;
+  private flames: THREE.Mesh[] = [];
   /** The glowing platforms in front of the gacha machine and the merge station, and their rising rings. */
   private platforms: { ring: THREE.Mesh; top: THREE.MeshLambertMaterial; seed: number }[] = [];
 
@@ -639,38 +641,42 @@ export class Base {
   private buildMachine(): void {
     const m = this.machine;
     m.position.copy(MACHINE);
-    const red = flat(0xe63946);
-    const gold = flat(GOLD, { emissive: 0x5a3c00 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2, 2.6), red);
+    // Smooth and glossy, like a shiny toy.
+    const red = new THREE.MeshPhongMaterial({ color: 0xe63946, shininess: 80, specular: 0xffb0b8 });
+    const gold = new THREE.MeshPhongMaterial({ color: GOLD, emissive: 0x3a2600, shininess: 90, specular: 0xfff1b0 });
+    const body = new THREE.Mesh(new RoundedBoxGeometry(2.6, 2, 2.6, 4, 0.22), red);
     body.position.y = 1;
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(2.75, 0.2, 2.75), gold);
+    const trim = new THREE.Mesh(new RoundedBoxGeometry(2.75, 0.22, 2.75, 3, 0.08), gold);
     trim.position.y = 2.05;
     const chute = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, 0.9), flat(0x2b2b33));
     chute.position.set(1.32, 0.6, 0);
     // The crank faces the carpet (+x).
     this.crank.position.set(1.35, 1.45, 0);
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.12, 16), gold);
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.12, 32), gold);
     disc.rotation.z = Math.PI / 2;
     const handle = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.7, 0.14), flat(0xffffff));
     handle.position.set(0.12, 0.25, 0);
-    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), red);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 12), red);
     knob.position.set(0.12, 0.6, 0);
     this.crank.add(disc, handle, knob);
     const globe = new THREE.Mesh(
-      new THREE.SphereGeometry(1.45, 24, 16),
-      new THREE.MeshLambertMaterial({ color: 0xcdefff, transparent: true, opacity: 0.32, depthWrite: false }),
+      new THREE.SphereGeometry(1.45, 40, 28),
+      new THREE.MeshPhongMaterial({ color: 0xcdefff, transparent: true, opacity: 0.3, depthWrite: false, shininess: 120, specular: 0xffffff }),
     );
     globe.position.y = 3.3;
-    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.0, 0.45, 16), red);
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.0, 0.45, 40), red);
     lid.position.y = 4.75;
-    const topper = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 8), gold);
+    const topper = new THREE.Mesh(new THREE.SphereGeometry(0.35, 24, 16), gold);
     topper.position.y = 5.15;
     m.add(body, trim, chute, this.crank, lid, topper);
-    const capsuleGeo = new THREE.SphereGeometry(0.33, 12, 8);
-    const colors = RARITIES.slice(0, 5).map((r) => r.color);
+    const capsuleGeo = new THREE.SphereGeometry(0.33, 20, 14);
+    const colors = RARITIES.slice(0, 6).map((r) => r.color);
     for (let i = 0; i < 16; i++) {
-      const capsule = new THREE.Mesh(capsuleGeo, flat(colors[i % colors.length], { emissive: colors[i % colors.length] }));
-      (capsule.material as THREE.MeshLambertMaterial).emissiveIntensity = 0.25;
+      const capsule = new THREE.Mesh(
+        capsuleGeo,
+        new THREE.MeshPhongMaterial({ color: colors[i % colors.length], emissive: colors[i % colors.length], shininess: 100, specular: 0xffffff }),
+      );
+      (capsule.material as THREE.MeshPhongMaterial).emissiveIntensity = 0.25;
       const a = i * 2.4;
       const r = 0.35 + (i % 3) * 0.3;
       capsule.position.set(Math.cos(a) * r, 2.3 + Math.floor(i / 5) * 0.45 + (i % 2) * 0.15, Math.sin(a) * r);
@@ -721,33 +727,67 @@ export class Base {
     const m = this.merger;
     m.position.copy(MERGER);
     m.rotation.y = Math.PI;
-    const purple = flat(0x7a3ff2);
-    const gold = flat(GOLD, { emissive: 0x5a3c00 });
-    const stand = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.4, 1.2, 8), flat(0x3d3552));
-    stand.position.y = 0.6;
-    const pot = new THREE.Mesh(new THREE.SphereGeometry(1.45, 20, 12, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.65), purple);
-    pot.position.y = 2.6;
-    pot.material.side = THREE.DoubleSide;
-    const lip = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.14, 8, 28).rotateX(Math.PI / 2), gold);
-    lip.position.y = 3.25;
+    // A witch's cauldron, smooth and glossy: a round iron-purple belly on three legs over a fire, a gold rim
+    // and ring handles, and a glowing, bubbling brew.
+    const potMat = new THREE.MeshPhongMaterial({ color: 0x6a35e0, shininess: 70, specular: 0xb9a0ff, side: THREE.DoubleSide });
+    const gold = new THREE.MeshPhongMaterial({ color: GOLD, emissive: 0x3a2600, shininess: 90, specular: 0xfff1b0 });
+    const iron = new THREE.MeshPhongMaterial({ color: 0x2b2440, shininess: 40 });
+    const profile = [
+      [0.01, 0.9], [0.7, 0.95], [1.15, 1.25], [1.42, 1.75], [1.48, 2.3], [1.38, 2.85], [1.22, 3.15], [1.26, 3.25],
+    ].map(([r, y]) => new THREE.Vector2(r, y));
+    const pot = new THREE.Mesh(new THREE.LatheGeometry(profile, 48), potMat);
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(1.26, 0.13, 14, 48).rotateX(Math.PI / 2), gold);
+    lip.position.y = 3.27;
+    const belt = new THREE.Mesh(new THREE.TorusGeometry(1.47, 0.06, 10, 48).rotateX(Math.PI / 2), gold);
+    belt.position.y = 2.3;
+    for (const side of [-1, 1]) {
+      const handle = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.07, 10, 28), gold);
+      handle.position.set(0, 2.75, side * 1.5);
+      handle.rotation.y = Math.PI / 2;
+      m.add(handle);
+    }
+    // Three curved legs.
+    for (let k = 0; k < 3; k++) {
+      const a = (k / 3) * Math.PI * 2 + 0.5;
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 1.3, 12), iron);
+      leg.position.set(Math.cos(a) * 1.0, 0.55, Math.sin(a) * 1.0);
+      leg.rotation.set(Math.sin(a) * 0.35, 0, -Math.cos(a) * 0.35);
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 8), iron);
+      foot.position.set(Math.cos(a) * 1.22, 0.06, Math.sin(a) * 1.22);
+      m.add(leg, foot);
+    }
+    // The fire underneath: crossed logs and flickering flames.
+    const logMat = new THREE.MeshPhongMaterial({ color: 0x6b4226, shininess: 8 });
+    for (const turn of [0.3, -0.5, 1.4]) {
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1.3, 10).rotateZ(Math.PI / 2), logMat);
+      log.position.y = 0.16;
+      log.rotation.y = turn;
+      m.add(log);
+    }
+    this.flames = [];
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffa62b, transparent: true, opacity: 0.9 });
+    const coreMat = new THREE.MeshBasicMaterial({ color: 0xfff1a8 });
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * Math.PI * 2;
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.55, 12), k % 2 ? coreMat : flameMat);
+      flame.position.set(Math.cos(a) * 0.3, 0.45, Math.sin(a) * 0.3);
+      flame.userData.seed = k * 1.3;
+      this.flames.push(flame);
+      m.add(flame);
+    }
     this.brew = new THREE.MeshLambertMaterial({ color: 0x7dffb0, emissive: 0x2bd47a, emissiveIntensity: 0.8 });
-    const brew = new THREE.Mesh(new THREE.CircleGeometry(1.22, 28).rotateX(-Math.PI / 2), this.brew);
+    const brew = new THREE.Mesh(new THREE.CircleGeometry(1.22, 48).rotateX(-Math.PI / 2), this.brew);
     brew.position.y = 3.1;
     // Bubbles that rise out of the brew.
-    for (let i = 0; i < 6; i++) {
-      const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.16 + (i % 3) * 0.06, 8, 6), this.brew);
-      bubble.userData.seed = i * 1.7;
+    for (let i = 0; i < 8; i++) {
+      const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.14 + (i % 3) * 0.06, 16, 12), this.brew);
+      bubble.userData.seed = i * 1.3;
       this.swirl.add(bubble);
     }
     this.swirl.position.y = 3.1;
-    for (const side of [-1, 1]) {
-      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 2.6, 8), gold);
-      pipe.position.set(0.2, 1.6, side * 1.55);
-      m.add(pipe);
-    }
-    m.add(stand, pot, lip, brew, this.swirl);
+    m.add(pot, lip, belt, brew, this.swirl);
     m.traverse((o) => {
-      if (o instanceof THREE.Mesh) o.castShadow = true;
+      if (o instanceof THREE.Mesh && !(o.material instanceof THREE.MeshBasicMaterial)) o.castShadow = true;
     });
     const sign = makeLabel();
     sign.set('MERGE', '#b9ffd6');
@@ -758,6 +798,11 @@ export class Base {
   }
 
   private animateMerger(time: number, realDt: number): void {
+    for (const f of this.flames) {
+      const seed = f.userData.seed as number;
+      f.scale.set(1, 0.7 + Math.abs(Math.sin(time * 9 + seed)) * 0.6 + this.mergeT * 0.8, 1);
+      f.rotation.y = time * 2 + seed;
+    }
     this.mergeT = Math.max(0, this.mergeT - realDt * 1.2);
     const boil = 1 + this.mergeT * 3;
     this.brew.emissiveIntensity = 0.7 + Math.sin(time * 3) * 0.15 + this.mergeT;

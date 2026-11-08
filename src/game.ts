@@ -231,6 +231,8 @@ export class Game {
   private chuteWarned = false;
   private landing = '';
   private recordPassed = false;
+  /** When this flight launched, for the tutorial's steering tip. */
+  private launchT = 0;
   /** The highest zone this run has announced, so each one is celebrated once on the way up. */
   private zoneShown = 0;
   /** Gems picked up this run, and gems knocked loose by hazards or lost in a crash. */
@@ -263,7 +265,6 @@ export class Game {
   private giftIndex = 0;
   private saveTimer = 3;
   private shopTimer = 0;
-  private chantTimer = 20;
   /** Seconds toward the next once-a-second income tick. */
   private incomeTimer = 0;
   /** Rebirth needs a second tap in the shop. */
@@ -569,6 +570,7 @@ export class Game {
     this.recordLabel.sprite.position.x = this.lane - 1;
     this.spawnRun(apex, v0, tUp);
     this.state = 'ascent';
+    this.launchT = this.time;
 
     this.hud.showCharge(null);
     this.hud.setFlight(this.save.flightNo);
@@ -727,6 +729,7 @@ export class Game {
     this.hud.toast(`Gems worth ×${z.gems}`, 'small', css);
     if (first) {
       this.slowmo = Math.max(this.slowmo, 0.5);
+      this.sfx.zone();
       this.sfx.sparkle();
       this.server.reportLocal({ kind: 'zone', text: `reached ${z.name}!` });
     } else {
@@ -1014,6 +1017,7 @@ export class Game {
   /** The gacha panel: each tier with its price and odds, and the last pull's results on top. */
   private openGacha(last: { got: Owned[]; isNew: boolean[] } | null = null): void {
     const s = this.save;
+    this.sfx.open();
     const body: HTMLElement[] = [];
     if (last) body.push(this.resultCards(last.got, last.isNew));
     const have = document.createElement('p');
@@ -1042,7 +1046,7 @@ export class Game {
       el.append(head, odds);
       if (!tierUnlocked(s, tier)) {
         const note = document.createElement('p');
-        note.textContent = 'Unlocks once a flight reaches Cloud Kingdom.';
+        note.textContent = `Unlocks once a flight reaches ${ZONES[zoneIndexAt(tier.unlockBest)].name}.`;
         el.append(note);
       }
       body.push(el);
@@ -1114,8 +1118,8 @@ export class Game {
     this.completeHint('pull');
     this.autoDisplay();
     writeSave(s);
+    // The machine shakes silently; the sound comes when the capsule opens.
     this.base.shakeMachine();
-    this.sfx.swap();
     this.pulling = PULL_TIME;
     this.pendingPull = { got, tier, isNew };
   }
@@ -1133,7 +1137,7 @@ export class Game {
       size: 0.6,
       up: 5,
     });
-    this.sfx.swap();
+    this.sfx.capsule();
     if (best.rarity >= 4) platform.happytime();
     if (best.rarity >= 3) {
       const r = RARITIES[best.rarity];
@@ -1141,8 +1145,12 @@ export class Game {
     }
     // Flip the cards, then back to the machine's panel so pulling again is one more click.
     const title = pending.got.length > 1 ? `Tap the cards to flip them!` : 'Tap the card to flip it!';
-    this.hud.revealCards(this.revealItems(pending.got, pending.isNew), title, (item) => this.onCardFlip(item), () =>
-      this.openGacha(),
+    this.hud.revealCards(
+      this.revealItems(pending.got, pending.isNew),
+      title,
+      (item) => this.onCardFlip(item),
+      () => this.openGacha(),
+      () => this.sfx.suspense(),
     );
   }
 
@@ -1157,14 +1165,24 @@ export class Game {
     }));
   }
 
-  /** Each flip pops; rare and better sparkle, call out their rarity and chant their name. */
+  /**
+   * Each flip pops; Rare and better get a fanfare (grander the rarer), call out their rarity and sing their
+   * name; Epic and better shake the screen too.
+   */
   private onCardFlip(item: RevealItem): void {
+    this.sfx.flip();
     this.sfx.pop(item.rarity);
     if (item.rarity >= RARE) {
-      this.sfx.sparkle();
-      this.sfx.chant(item.name);
-      this.hud.toast(`${RARITIES[item.rarity].name.toUpperCase()}!`, 'big', RARITIES[item.rarity].css);
+      this.sfx.fanfare(item.rarity);
+      this.after(item.rarity >= 4 ? 0.7 : 0.35, () => this.sfx.chant(item.name, item.rarity));
+      this.hud.toast(`${RARITIES[item.rarity].name.toUpperCase()}!`, item.rarity >= 4 ? 'big grand' : 'big', RARITIES[item.rarity].css);
     }
+    if (item.rarity >= 3) this.shake = Math.max(this.shake, item.rarity >= 5 ? 1.2 : item.rarity >= 4 ? 0.8 : 0.4);
+  }
+
+  /** Runs something a little later (real time). */
+  private after(seconds: number, run: () => void): void {
+    setTimeout(run, seconds * 1000);
   }
 
   /**
@@ -1213,6 +1231,7 @@ export class Game {
   /** The merge station: each recipe with how many you have, and a Merge all button. */
   private openMerger(made: { got: Owned[]; isNew: boolean[] } | null = null): void {
     const s = this.save;
+    this.sfx.open();
     const body: HTMLElement[] = [];
     if (made && made.got.length) body.push(this.resultCards(made.got, made.isNew));
     const rules = document.createElement('p');
@@ -1282,12 +1301,15 @@ export class Game {
         size: 0.6,
         up: 5,
       });
-      this.sfx.chant(best.name);
       if (best.rarity >= 4) platform.happytime();
     }
-    this.sfx.sparkle();
-    this.hud.revealCards(this.revealItems(owned, isNew), 'Merged! Tap to flip', (item) => this.onCardFlip(item), () =>
-      this.openMerger(),
+    this.sfx.brew();
+    this.hud.revealCards(
+      this.revealItems(owned, isNew),
+      'Merged! Tap to flip',
+      (item) => this.onCardFlip(item),
+      () => this.openMerger(),
+      () => this.sfx.suspense(),
     );
   }
 
@@ -1307,7 +1329,7 @@ export class Game {
     const target = slot ?? s.pads.findIndex((p) => p === null);
     const rules = document.createElement('p');
     rules.className = 'sub';
-    rules.textContent = 'Merge: 10 Common → 1 Uncommon · 8 Uncommon → 1 Rare · 6 Rare → 1 Epic · 4 Epic → 1 Legendary';
+    rules.textContent = 'Merge: 10 Common → 1 Uncommon · 8 Uncommon → 1 Rare · 6 Rare → 1 Epic · 4 Epic → 1 Legendary · 3 Legendary → 1 Mythic';
     const button = (label: string, onClick: () => void, disabled = false) => {
       const b = document.createElement('button');
       b.type = 'button';
@@ -1398,7 +1420,7 @@ export class Game {
       up: 4,
     });
     this.sfx.pop(got.rarity);
-    this.sfx.chant(got.name);
+    this.sfx.chant(got.name, got.rarity);
     this.completeHint('place');
     writeSave(s);
   }
@@ -1482,14 +1504,6 @@ export class Game {
     }
     this.updateVisit();
     this.updateHomePrompt();
-
-    // Now and then a character at the base chants its name.
-    this.chantTimer -= dt;
-    if (this.chantTimer <= 0) {
-      this.chantTimer = rand(18, 30);
-      const placed = this.save.pads.filter((slot) => slot !== null);
-      if (placed.length) this.sfx.chant(placed[Math.floor(Math.random() * placed.length)].name);
-    }
   }
 
   /**
@@ -2008,7 +2022,7 @@ export class Game {
       if (item === 'cannon') this.completeHint('upgrade');
       this.hud.toast(item === 'cannon' ? `Cannon Lv ${s.cannon}!` : `${UPGRADES[item].name} up!`, 'gold');
     }
-    this.sfx.ding();
+    this.sfx.buy();
     writeSave(s);
     this.refreshShop();
   }
@@ -2105,7 +2119,7 @@ export class Game {
       slot.xp = 0;
       this.completeHint('level');
       writeSave(s);
-      this.sfx.ding();
+      this.sfx.levelUp();
       this.hud.toast(`${slot.name} Lv ${slot.level}!`, 'gold');
       this.fx.burst(Base.padPosition(i, this.tmp).setY(1), {
         count: 18,
@@ -2208,7 +2222,7 @@ export class Game {
       this.addToBook(name);
       this.autoDisplay();
       this.hud.toast(`${RARITIES[reward.rarity].name}: ${name}! It's in your backpack`, '', RARITIES[reward.rarity].css);
-      this.sfx.chant(name);
+      this.sfx.chant(name, reward.rarity);
     }
     writeSave(s);
   }
@@ -2346,6 +2360,7 @@ export class Game {
     const free = this.state === 'home' && !this.walking && this.pulling <= 0 && !this.hud.modalOpen;
     this.hud.showAction(free ? this.actionLabel() : null);
     this.updateGuide();
+    this.updateCoach();
     this.updatePadButtons(atBase);
     animateShared(this.time);
 
@@ -2418,6 +2433,55 @@ export class Game {
   }
 
   /** The green arrows: one bobbing over the objective, one on the ground by the player pointing the way. */
+  /**
+   * The tutorial coach for new players: a big banner saying what to do now, and a cartoon hand showing how
+   * (holding to charge, swiping to steer, tapping the parachute, pointing at the next button, or the walk keys).
+   */
+  private updateCoach(): void {
+    const s = this.save;
+    const hud = this.hud;
+    const touch = this.input.isTouch;
+    const newbie = s.flightNo < 3;
+    if (hud.modalOpen || hud.shopOpen) {
+      hud.coach(null);
+      return;
+    }
+    if (this.state === 'aim' && s.flightNo < 2) {
+      hud.coach(s.flightNo === 0 ? 'Hold to charge, let go to FIRE!' : 'Again! Hold, then let go', { mode: 'hold', x: 0.5, y: 0.66 });
+      return;
+    }
+    if (this.state === 'charging' && s.flightNo < 2) {
+      hud.coach('Let go when the needle is in the GREEN!', { mode: 'hold', x: 0.5, y: 0.66 });
+      return;
+    }
+    if (this.state === 'ascent' && newbie && this.time - this.launchT < 4) {
+      if (s.flightNo <= 1) hud.coach('Fly through the gems!');
+      else hud.coach(touch ? 'Drag left and right to steer!' : 'Move the mouse to steer into gems!', { mode: 'swipe', x: 0.5, y: 0.72 });
+      return;
+    }
+    if (this.state === 'fall' && newbie && this.chute === 'closed' && this.secondsToImpact() < 3.4) {
+      hud.coach(
+        touch ? 'Tap PARACHUTE now!' : 'Press SPACE to open your parachute!',
+        touch ? { mode: 'tap', el: hud.chuteBtn } : { mode: 'tap', x: 0.5, y: 0.66 },
+      );
+      return;
+    }
+    if (this.state === 'home' && !this.walking) {
+      const { text, target } = this.objective();
+      // Coach the first steps of each kind; after that, the plain prompt is enough.
+      if (text && (s.flightNo < 6 || target)) {
+        let hand: Parameters<Hud['coach']>[1] = null;
+        if (hud.actionBtn.classList.contains('on')) hand = { mode: 'point', el: hud.actionBtn };
+        else if (/Upgrade|Unlock more slots/.test(text)) hand = { mode: 'point', el: hud.upgradesBtn };
+        else if (text.startsWith('Launch')) hand = { mode: 'point', el: hud.launchBtn };
+        else if (target) hand = { mode: 'walk', x: 0.5, y: 0.84 };
+        hud.coach(text, hand);
+        return;
+      }
+    }
+    hud.coach(null);
+  }
+
   private updateGuide(): void {
     const { marker, ground } = this.guide;
     const target = this.state === 'home' && !this.hud.modalOpen && !this.hud.shopOpen ? this.guideTarget : null;
@@ -2430,10 +2494,26 @@ export class Game {
     const dz = target.z - this.pz;
     const d = Math.hypot(dx, dz);
     if (d < 2.5) return;
+    // A trail of chevrons from just ahead of the player to just short of the goal, flowing toward it.
     ground.visible = true;
-    const reach = 1.9 + Math.sin(this.time * 5) * 0.2;
-    ground.position.set(this.px + (dx / d) * reach, 0.25, this.pz + (dz / d) * reach);
-    ground.rotation.y = Math.atan2(-dx, -dz);
+    const spacing = 1.25;
+    const start = 1.2;
+    const end = d - 1.4;
+    const flow = (this.time * 2.2) % spacing;
+    const turn = Math.atan2(-dx, -dz);
+    ground.children.forEach((chevron, i) => {
+      const along = start + flow + i * spacing;
+      chevron.visible = along < end;
+      if (!chevron.visible) return;
+      const x = this.px + (dx / d) * along;
+      const z = this.pz + (dz / d) * along;
+      chevron.position.set(x, floorWorld(x, z) + 0.06, z);
+      chevron.rotation.y = turn;
+      // Fade in at the player's feet and out at the goal; a wave of brightness rolls along the trail.
+      const fade = Math.max(0, Math.min(1, (along - start) / 1.5, (end - along) / 1.5));
+      chevron.scale.setScalar(0.85 + 0.15 * Math.max(0, Math.sin(this.time * 6 - i * 0.7)));
+      for (const part of chevron.children as THREE.Mesh[]) (part.material as THREE.MeshBasicMaterial).opacity = fade;
+    });
   }
 
   /**
@@ -2446,7 +2526,12 @@ export class Game {
     const moving = atBase && (this.walking || this.stepping);
     // Stride speed follows ground speed, so easing in and out looks like stepping, not sliding.
     const pace = this.walking ? 1 : Math.min(1, this.walkVel.length() / WALK_SPEED);
-    if (moving) this.walkPhase += dt * 11 * Math.max(0.4, pace);
+    if (moving) {
+      // A soft footstep each time a foot comes down (twice per stride).
+      const before = Math.floor(this.walkPhase / Math.PI);
+      this.walkPhase += dt * 11 * Math.max(0.4, pace);
+      if (Math.floor(this.walkPhase / Math.PI) !== before && this.py < 1) this.sfx.step();
+    }
     const freefall = this.state === 'fall' && this.chute === 'closed';
     let armOut = 0.25 + Math.sin(t * 2) * 0.04;
     let armSwing = 0;

@@ -231,7 +231,7 @@ function pullAll(save: Save): Owned[] {
 /** Merges everything it can, bottom up; returns what it made that's still around. */
 function mergeAll(save: Save): Owned[] {
   const made: Owned[] = [];
-  for (let r = 0; r < 4; r++) {
+  for (let r = 0; r < 5; r++) {
     const need = mergeNeed(r);
     while (need !== null && save.inventory.filter((o) => o.rarity === r).length >= need) {
       const one = merge(save, r);
@@ -767,7 +767,7 @@ export class FakeServer {
       });
       return;
     }
-    const mergeable = [0, 1, 2, 3].some((r) => s.inventory.filter((o) => o.rarity === r).length >= (mergeNeed(r) ?? Infinity));
+    const mergeable = [0, 1, 2, 3, 4].some((r) => s.inventory.filter((o) => o.rarity === r).length >= (mergeNeed(r) ?? Infinity));
     if (mergeable) {
       this.go(bot, this.route(bot, MERGER_FRONT.x, MERGER_FRONT.z), () => {
         bot.wait = rand(1.2, 2);

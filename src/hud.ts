@@ -42,6 +42,9 @@ export interface RevealItem {
   income: string;
 }
 
+/** What the tutorial hand does: press and hold, tap, swipe to steer, point at a button, or show walking. */
+export type HandMode = 'hold' | 'tap' | 'swipe' | 'point' | 'walk';
+
 export interface TuningHooks {
   changed(): void;
   addCoins(amount: number): void;
@@ -92,9 +95,13 @@ export class Hud {
   private shopRows = byId('shopRows');
   private flight = byId('flightNo');
   private stick = byId('stick');
-  private actionBtn = byId<HTMLButtonElement>('actionBtn');
+  readonly actionBtn = byId<HTMLButtonElement>('actionBtn');
   private actionKey = '';
   private padLayer = byId('padBtns');
+  private coachEl = byId('coach');
+  private coachText = this.coachEl.querySelector<HTMLElement>('.coach-text')!;
+  private handEl = byId('hand');
+  private coachKey = '';
   private feedEl = byId('feed');
   private onlineEl = byId('online');
   private onlineKey = '';
@@ -373,6 +380,92 @@ export class Hud {
     setTimeout(() => line.remove(), 10000);
   }
 
+  /**
+   * The tutorial coach: a big bouncing banner with a step, and a cartoon hand showing how to do it. `x` and `y`
+   * are fractions of the screen for hold, tap, swipe and walk; `el` is the button a 'point' hand points down at.
+   * Null text hides both.
+   */
+  coach(text: string | null, hand: { mode: HandMode; el?: HTMLElement; x?: number; y?: number } | null = null): void {
+    const key = text ? [text, hand?.mode ?? '', hand?.el?.id ?? '', hand?.x ?? '', hand?.y ?? ''].join('|') : '';
+    if (key !== this.coachKey) {
+      this.coachKey = key;
+      this.coachEl.classList.toggle('on', !!text);
+      if (text) {
+        this.coachText.textContent = text;
+        // Restart the bounce-in for each new step.
+        this.coachEl.classList.remove('pop');
+        void this.coachEl.offsetWidth;
+        this.coachEl.classList.add('pop');
+      }
+      this.promptEl.classList.toggle('coached', !!text);
+      this.handEl.className = text && hand ? [hand.mode, 'on', this.isTouchLike ? 'touch' : ''].join(' ') : '';
+    }
+    if (!text || !hand) return;
+    // Place the fingertip: over the button (pointing down at it), or at a spot on the screen.
+    let x = (hand.x ?? 0.5) * window.innerWidth;
+    let y = (hand.y ?? 0.6) * window.innerHeight;
+    if (hand.el) {
+      const r = hand.el.getBoundingClientRect();
+      if (!r.width) {
+        this.handEl.className = '';
+        this.coachKey = '';
+        return;
+      }
+      // A pointing hand sits above the button; a tapping one taps its middle.
+      x = r.left + r.width / 2;
+      y = hand.mode === 'point' ? r.top - 6 : r.top + r.height / 2;
+    }
+    this.handEl.style.left = Math.round(x) + 'px';
+    this.handEl.style.top = Math.round(y) + 'px';
+  }
+
+  /**
+   * The big moment for an Epic or better: a flash of its colour over the screen, light rays turning behind
+   * the card, confetti bursting from it and a banner with the rarity; Mythic shakes the whole screen too.
+   */
+  private celebrate(card: HTMLElement, item: RevealItem): void {
+    const color = RARITIES[item.rarity].css;
+    const flash = document.createElement('div');
+    flash.className = 'reveal-flash';
+    flash.style.setProperty('--c', color);
+    this.revealEl.append(flash);
+    setTimeout(() => flash.remove(), 900);
+    const rays = document.createElement('div');
+    rays.className = 'rays';
+    card.prepend(rays);
+    card.classList.add('grand');
+    const r = card.getBoundingClientRect();
+    const host = this.revealEl.getBoundingClientRect();
+    const count = item.rarity >= 5 ? 70 : item.rarity >= 4 ? 45 : 22;
+    const colors = [color, '#ffd23f', '#ffffff', '#ff5fa2', '#3fc8ff', '#8a5cff'];
+    for (let i = 0; i < count; i++) {
+      const bit = document.createElement('i');
+      bit.className = 'confetti';
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 120 + Math.random() * (item.rarity >= 4 ? 320 : 200);
+      bit.style.left = `${r.left - host.left + r.width / 2}px`;
+      bit.style.top = `${r.top - host.top + r.height / 2}px`;
+      bit.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
+      bit.style.setProperty('--dy', `${Math.sin(angle) * dist - 120}px`);
+      bit.style.setProperty('--spin', `${Math.random() * 900 - 450}deg`);
+      bit.style.background = colors[i % colors.length];
+      bit.style.animationDelay = `${Math.random() * 0.12}s`;
+      this.revealEl.append(bit);
+      setTimeout(() => bit.remove(), 1800);
+    }
+    const banner = document.createElement('div');
+    banner.className = `reveal-banner r${item.rarity}`;
+    banner.style.setProperty('--c', color);
+    banner.textContent = `${RARITIES[item.rarity].name.toUpperCase()}!`;
+    this.revealEl.append(banner);
+    setTimeout(() => banner.remove(), item.rarity >= 4 ? 2200 : 1500);
+    if (item.rarity >= 5) {
+      this.revealEl.classList.remove('quake');
+      void this.revealEl.offsetWidth;
+      this.revealEl.classList.add('quake');
+    }
+  }
+
   /** How many players are on the server, and its name. */
   setOnline(count: number, server: string): void {
     const key = `${count}|${server}`;
@@ -442,7 +535,13 @@ export class Hud {
    * Trading-card reveal: the cards are dealt face down, rarest last, and each flips over when tapped (or all
    * at once with Flip all). Rare and better glow through their backs first; Epic and better have holo foil.
    */
-  revealCards(items: RevealItem[], title: string, onFlip: (item: RevealItem) => void, onDone: () => void): void {
+  revealCards(
+    items: RevealItem[],
+    title: string,
+    onFlip: (item: RevealItem) => void,
+    onDone: () => void,
+    onTease: (item: RevealItem) => void = () => {},
+  ): void {
     const ordered = [...items].sort((a, b) => a.rarity - b.rarity);
     let left = ordered.length;
     const flips: (() => void)[] = [];
@@ -512,12 +611,25 @@ export class Hud {
         front.append(shine);
         inner.append(back, front);
         card.append(inner);
-        const flip = () => {
-          if (card.classList.contains('flipped')) return;
+        if (item.rarity >= 5) card.classList.add('mythic');
+        const turn = () => {
+          card.classList.remove('charging');
           card.classList.add('flipped');
           left--;
           onFlip(item);
+          if (item.rarity >= 3) this.celebrate(card, item);
           update();
+        };
+        const flip = () => {
+          if (card.classList.contains('flipped') || card.classList.contains('charging')) return;
+          // Legendary and Mythic hold back a moment: the card shakes and blazes before it turns.
+          if (item.rarity >= 4) {
+            card.classList.add('charging');
+            onTease(item);
+            setTimeout(turn, item.rarity >= 5 ? 1300 : 900);
+          } else {
+            turn();
+          }
         };
         card.addEventListener('click', flip);
         flips.push(flip);

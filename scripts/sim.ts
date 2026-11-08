@@ -119,17 +119,16 @@ function display(save: Save, o: Owned): boolean {
 }
 
 function gacha(save: Save): void {
-  const top = GACHA[GACHA.length - 1];
   for (;;) {
     // Once the Super pull is open, save gems for it instead of spending them on Basic pulls.
-    const tier = tierUnlocked(save, top) ? top : GACHA[0];
+    const tier = [...GACHA].reverse().find((t) => tierUnlocked(save, t))!;
     const got = pull(save, tier);
     if (!got) break;
     save.inventory.pop();
     if (!display(save, got)) save.inventory.push(got);
   }
   // Merge up while possible, displaying anything that earns more.
-  for (let r = 0; r < 4; r++) {
+  for (let r = 0; r < 5; r++) {
     while (mergeNeed(r) !== null && merge(save, r)) {
       const made = save.inventory.pop()!;
       if (!display(save, made)) save.inventory.push(made);
@@ -290,7 +289,7 @@ console.log(`  rebirth unlocks           ${median('stormCannon')}`);
 // Gacha value per gem, pity included: a tier that costs more must be worth more per gem, or players should
 // (and will) skip it. Value counts each pull at what it would be worth merged up into Commons.
 const mergeValue = [1];
-for (let r = 1; r < 5; r++) mergeValue[r] = mergeValue[r - 1] * MERGE[r - 1];
+for (let r = 1; r < 6; r++) mergeValue[r] = mergeValue[r - 1] * MERGE[r - 1];
 console.log('');
 console.log('Gacha value per 1,000 gems (pity included):');
 for (const tier of GACHA) {
@@ -304,7 +303,7 @@ for (const tier of GACHA) {
   const per = (n: number) => ((n / spent) * 1000).toFixed(2);
   const value = counts.reduce((sum, n, r) => sum + n * (mergeValue[r] ?? 0), 0);
   console.log(
-    `  ${tier.name.padEnd(10)} Legendary ${per(counts[4])}, Epic or better ${per(counts[3] + counts[4])}, ` +
+    `  ${tier.name.padEnd(10)} Mythic ${per(counts[5])}, Legendary+ ${per(counts[4] + counts[5])}, Epic+ ${per(counts[3] + counts[4] + counts[5])}, ` +
       `merged-up value ${((value / mergeValue[4] / spent) * 1000).toFixed(2)} Legendaries`,
   );
 }
