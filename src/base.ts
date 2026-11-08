@@ -62,6 +62,9 @@ interface PadView {
 const LINE_X = 2.7;
 const FIRST_DEPTH = 3.6;
 const PAD_STEP = 4.2;
+/** The Collect all pad on your base's path (after the second rebirth), in plot space, and its radius. */
+export const COLLECT_Z = SETBACK / 2;
+export const COLLECT_RADIUS_PAD = 1.15;
 /** Height between floors. */
 export const FLOOR_H = 5.6;
 /**
@@ -253,6 +256,8 @@ export class Base {
   private flights = 0;
   private own: boolean;
   private marker: { group: THREE.Group; star: THREE.Mesh } | null = null;
+  /** The Collect all pad, shown on your own base from the second rebirth. */
+  private collectPad: { group: THREE.Group; ring: THREE.Mesh } | null = null;
 
   /** Builds a plot's showcase at its slot; `vacant` leaves it unclaimed, `owner` makes it another player's. */
   constructor(scene: THREE.Scene, slot: PlotSlot, options: BaseOptions = {}) {
@@ -269,7 +274,40 @@ export class Base {
     else if (options.owner) this.buildSign(`${options.owner.toUpperCase()}'S BASE`, '#9dfcff', 0x2f5fc4);
     else this.buildSign('YOUR BASE', '#ffd84a', 0xc8102e);
     this.ensureFloors(1);
-    if (own) this.buildMarker();
+    if (own) {
+      this.buildMarker();
+      this.buildCollectPad();
+    }
+  }
+
+  /**
+   * The Collect all pad: a gold disc with a coin on it on your path, a rising ring, and a sign. Stepping on it
+   * collects every slot on every floor. It appears from the second rebirth.
+   */
+  private buildCollectPad(): void {
+    const g = new THREE.Group();
+    g.position.set(0, 0, COLLECT_Z);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(COLLECT_RADIUS_PAD + 0.12, COLLECT_RADIUS_PAD + 0.22, 0.14, 40), stoneMat);
+    base.position.y = 0.07;
+    const disc = new THREE.Mesh(
+      new THREE.CylinderGeometry(COLLECT_RADIUS_PAD, COLLECT_RADIUS_PAD, 0.05, 40),
+      new THREE.MeshLambertMaterial({ color: 0xffc21a, emissive: 0xffa000, emissiveIntensity: 0.55 }),
+    );
+    disc.position.y = 0.16;
+    const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.06, 32), coinFaceMat);
+    coin.position.y = 0.2;
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(COLLECT_RADIUS_PAD * 0.85, 0.05, 6, 40).rotateX(Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xfff1a8, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    const sign = makeLabel();
+    sign.set('COLLECT ALL', '#ffd84a');
+    sign.sprite.position.y = 2.4;
+    sign.sprite.scale.multiplyScalar(0.55);
+    g.add(base, disc, coin, ring, sign.sprite);
+    g.visible = false;
+    this.group.add(g);
+    this.collectPad = { group: g, ring };
   }
 
   /** Your base's marker: a gold star turning gently high over the name board, with a soft glow. */
@@ -501,6 +539,7 @@ export class Base {
   sync(save: Pick<Save, 'pads'> & { rebirths?: number }): void {
     if (this.vacant) return;
     this.ensureFloors(floorsOf({ rebirths: save.rebirths ?? 0 }));
+    if (this.collectPad) this.collectPad.group.visible = (save.rebirths ?? 0) >= 2;
     this.views.forEach((view, i) => {
       const locked = i >= save.pads.length;
       const slot = locked ? null : save.pads[i];
@@ -535,6 +574,12 @@ export class Base {
     this.labelTimer -= realDt;
     const refreshLabels = this.labelTimer <= 0;
     if (refreshLabels) this.labelTimer = 0.2;
+    if (this.collectPad?.group.visible) {
+      const t = (time * 0.9) % 1;
+      this.collectPad.ring.position.y = 0.15 + t * 1.6;
+      this.collectPad.ring.scale.setScalar(1 - t * 0.3);
+      (this.collectPad.ring.material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - t);
+    }
     if (this.marker) {
       // Up over the top floor, bobbing and turning slowly.
       this.marker.group.position.y = 8.2 + (this.floors - 1) * FLOOR_H + Math.sin(time * 1.4) * 0.25;

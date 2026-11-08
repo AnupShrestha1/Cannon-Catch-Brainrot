@@ -4,7 +4,7 @@
 // flight is scripted rather than simulated, so the apex hits launchHeight() exactly.
 import * as THREE from 'three';
 import { Sfx } from './audio';
-import { Base, FLOOR_H, PLATFORM_RADIUS, STAIR, bumpSolids, floorWorld, stairHeight, stairSide } from './base';
+import { Base, COLLECT_RADIUS_PAD, COLLECT_Z, FLOOR_H, PLATFORM_RADIUS, STAIR, bumpSolids, floorWorld, stairHeight, stairSide } from './base';
 import { animateShared } from './characters';
 import { Hub } from './hub';
 import { brainrotIcon } from './icons';
@@ -1813,6 +1813,11 @@ export class Game {
       const pad = this.padAt(i, this.tmp);
       if (Math.hypot(pad.x - this.px, pad.z - this.pz) < COLLECT_RADIUS) this.collect(i);
     });
+    // From the second rebirth, the Collect all pad on your path collects every slot at once.
+    if (this.save.rebirths >= 2 && this.level === 0) {
+      const [cx, cz] = fromPlot(OWN, 0, COLLECT_Z);
+      if (Math.hypot(cx - this.px, cz - this.pz) < COLLECT_RADIUS_PAD) this.collectAll();
+    }
     // F (or the Launch button) heads for the cannon.
     if (!blocked && this.input.consumeKey('KeyF')) {
       this.startBoarding();
@@ -2206,6 +2211,25 @@ export class Game {
     this.floatAt(at, `+${formatCoins(amount)}`);
     this.sfx.coin();
     this.completeHint('collect');
+    writeSave(this.save);
+  }
+
+  /** Every slot's coins at once (the Collect all pad): a shower of coins from each, and one total. */
+  private collectAll(): void {
+    let total = 0;
+    this.save.pads.forEach((slot, i) => {
+      if (!slot) return;
+      const amount = Math.floor(slot.cash);
+      if (amount < 1) return;
+      slot.cash -= amount;
+      total += amount;
+      this.fx.burst(this.padAt(i, this.tmp2).setY(this.padAt(i, this.tmp2).y + 1), { count: 8, color: 0xffc21a, speed: 5, life: 0.6, size: 0.5, up: 5, gravity: 10 });
+    });
+    if (total < 1) return;
+    this.save.coins += total;
+    this.floatAt(this.tmp2.set(this.px, this.py + 2.4, this.pz), `+${formatCoins(total)}`);
+    this.sfx.coin();
+    this.sfx.sparkle();
     writeSave(this.save);
   }
 
