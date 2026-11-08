@@ -176,6 +176,7 @@ const HOME_YAW = (() => {
 const CANNON_FOOT = new THREE.Vector3(FOOT.x, 0, FOOT.z);
 const SHOP_SPOT = new THREE.Vector3(SHOP_FRONT.x, 0, SHOP_FRONT.z);
 const CAULDRON_SPOT = new THREE.Vector3(CAULDRON_FRONT.x, 0, CAULDRON_FRONT.z);
+const REBIRTH_SPOT = new THREE.Vector3(REBIRTH_FRONT.x, 0, REBIRTH_FRONT.z);
 /** Launching from further from the cannon than this teleports the player there. */
 const TELEPORT_RANGE = 14;
 /** Hazards only appear where the ascent is slower than this (m/s), so they can be dodged. */
@@ -2395,7 +2396,7 @@ export class Game {
         target: CAULDRON_SPOT,
       };
     }
-    if (this.wantsUpgradeHint()) return { text: 'Upgrade your cannon!', target: null };
+    if (this.wantsUpgradeHint()) return { text: `Upgrade your cannon at the shop: step on its rug and ${press}`, target: SHOP_SPOT };
     if (this.wantsExpandHint()) {
       return { text: `Your showcase is full! Unlock ${ECONOMY.padStep} more slots at your base`, target: this.padAt(s.pads.length, this.objTarget) };
     }
@@ -2405,6 +2406,9 @@ export class Game {
         text: 'Click Level up under your brainrot',
         target: ready >= 0 ? this.padAt(ready, this.objTarget) : null,
       };
+    }
+    if (s.cannon >= rebirthCannonLevel(s) && !this.onRebirthPad()) {
+      return { text: `Rebirth is ready! Go to the rebirth station and ${press}`, target: REBIRTH_SPOT };
     }
     if (s.flightNo < 6 && s.gems < basic.cost && !s.inventory.length && empty >= 0) {
       return { text: `Launch to collect gems in the sky (${s.gems}/${basic.cost} for a pull)`, target: CANNON_FOOT };
