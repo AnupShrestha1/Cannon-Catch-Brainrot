@@ -163,7 +163,7 @@ export const GACHA: GachaTier[] = [
  * 5th comes from the 2-minute gift. The other pulls roll the normal odds (and can come out better); from
  * the 11th pull on it's the normal odds and pity only.
  */
-export const STARTER_PULLS: Record<number, number> = { 1: 1, 3: 2, 5: 1 };
+export const STARTER_PULLS: Record<number, number> = {};
 export const STARTER_PULL_COUNT = 10;
 
 /** Merging: this many of a rarity make one random character of the next rarity up. A Mythic takes 8 Legendaries. */
@@ -242,6 +242,13 @@ export const CHUTE = {
   perfectSpan: 0.7,
   /** Seconds to impact the ground bar shows at its top. */
   barSeconds: 4,
+  /**
+   * The bullseye: a narrow window inside the gold zone (centred this many seconds above the crash zone, this
+   * wide) where opening pays the run's gems ×bullseyeBonus. About 80% of the way down the gold zone.
+   */
+  bullseyeAt: 0.14,
+  bullseyeWidth: 0.12,
+  bullseyeBonus: 1.5,
 };
 
 /**
@@ -260,7 +267,7 @@ export const TUTORIAL = {
 };
 
 /** Share of the run's gems lost in a crash. */
-export const CRASH_DROP = { tangled: 0.3, noChute: 0.5 };
+export const CRASH_DROP = { tangled: 0.15, noChute: 0.25 };
 
 export type Track = 'cannon' | 'finder' | 'magnet' | 'steering' | 'chute' | 'shield';
 
@@ -285,7 +292,7 @@ export const UPGRADES: Record<Track, { name: string; base: number; growth: numbe
 
 export const REBIRTH = {
   /** Rebirth unlocks at the cannon level whose normal launch reaches the Storm Layer. */
-  cannonLevel: 28,
+  cannonLevel: 22,
   /** A run this high counts as reaching the Storm Layer. */
   unlockHeight: 400,
   /** Permanent income bonus per rebirth. */

@@ -315,6 +315,8 @@ export class Game {
   private apex = 0;
   private chute: Chute = 'closed';
   private chuteScale = 0;
+  /** The parachute opened in the bullseye window this flight: the run's gems get a bonus. */
+  private bullseye = false;
   /** The last-moment parachute warning has flashed this fall. */
   private chuteWarned = false;
   private landing = '';
@@ -765,6 +767,7 @@ export class Game {
     this.apex = 0;
     this.chute = 'closed';
     this.chuteWarned = false;
+    this.bullseye = false;
     this.landing = '';
     this.recordPassed = false;
     this.zoneShown = 0;
@@ -1112,10 +1115,14 @@ export class Game {
     if (this.chute !== 'closed') return;
     const tau = this.secondsToImpact();
     const late = this.chuteLate();
+    const bullLo = late + CHUTE.bullseyeAt - CHUTE.bullseyeWidth / 2;
     this.hud.showGround(
       clamp(tau / CHUTE.barSeconds, 0, 1),
       late / CHUTE.barSeconds,
       (late + CHUTE.perfectSpan) / CHUTE.barSeconds,
+      [bullLo / CHUTE.barSeconds, (bullLo + CHUTE.bullseyeWidth) / CHUTE.barSeconds],
+      this.py,
+      CHUTE.bullseyeBonus,
     );
     const urgent = tau < 3.2;
     this.hud.showChute(true, urgent);
@@ -1157,8 +1164,18 @@ export class Game {
     }
     this.chute = 'open';
     const perfect = tau < late + CHUTE.perfectSpan;
-    this.landing = perfect ? 'Perfect landing' : 'Safe landing';
-    if (perfect) this.hud.toast('PERFECT TIMING!', 'gold');
+    const lo = late + CHUTE.bullseyeAt - CHUTE.bullseyeWidth / 2;
+    const bullseye = tau >= lo && tau <= lo + CHUTE.bullseyeWidth;
+    this.bullseye = bullseye;
+    this.landing = bullseye ? 'Bullseye landing' : perfect ? 'Perfect landing' : 'Safe landing';
+    if (bullseye) {
+      this.hud.toast(`BULLSEYE! ×${CHUTE.bullseyeBonus} GEMS`, 'gold big');
+      this.sfx.sparkle();
+      this.slowmo = Math.max(this.slowmo, 0.4);
+      this.fx.burst(this.tmp.set(this.px, this.py + 2, this.pz), { count: 40, color: 0xffd84a, speed: 10, life: 0.9, size: 0.6 });
+    } else if (perfect) {
+      this.hud.toast('PERFECT TIMING!', 'gold');
+    }
   }
 
   // ---------------------------------------------------------------- landing
@@ -1232,6 +1249,10 @@ export class Game {
 
   /** The run's gems go into the wallet with a toast, and the player heads straight home: no result window. */
   private showReveal(): void {
+    if (this.bullseye) {
+      this.runGems = Math.round(this.runGems * CHUTE.bullseyeBonus);
+      this.bullseye = false;
+    }
     this.save.gems += this.runGems;
     writeSave(this.save);
     if (this.runGems > 0) {

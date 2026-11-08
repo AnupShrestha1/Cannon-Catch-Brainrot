@@ -413,8 +413,8 @@ export function addScenery(scene: THREE.Scene): Scenery {
     return { y: 0.5 * s, scale: new THREE.Vector3(s * 1.2, s, s), color: pick([0x3e9a4e, 0x47a84f, 0x358a49]) };
   }, true);
 
-  // Distant hills, then snowy mountains ringing the horizon. The mountains skip fog and carry their own
-  // hazy blue, so they stay visible past the fog line.
+  // Distant rolling hills ringing the town (no far mountains: from high up they floated past the ground's
+  // edge and looked half there).
   const hillMat = lambert(0x5fae62);
   for (let i = 0; i < 11; i++) {
     const a = (i / 11) * Math.PI * 2 + range(-0.2, 0.2);
@@ -424,23 +424,6 @@ export function addScenery(scene: THREE.Scene): Scenery {
     hill.position.set(Math.cos(a) * 300, -4, Math.sin(a) * 300);
     scene.add(hill);
   }
-  const rockMat = new THREE.MeshLambertMaterial({ color: 0xa7bcdb, flatShading: true, fog: false });
-  const snowMat = new THREE.MeshLambertMaterial({ color: 0xf4f8ff, flatShading: true, fog: false });
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2 + range(-0.12, 0.12);
-    const h = range(60, 115);
-    const w = range(60, 100);
-    const peak = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.ConeGeometry(w, h, 6), rockMat);
-    body.position.y = h / 2;
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(w * 0.32, h * 0.32, 6), snowMat);
-    cap.position.y = h - h * 0.16 + 0.5;
-    peak.add(body, cap);
-    peak.rotation.y = rand() * 6;
-    peak.position.set(Math.cos(a) * 620, -15, Math.sin(a) * 620);
-    scene.add(peak);
-  }
-
   // Butterflies wander around the base.
   const wingGeo = new THREE.BufferGeometry();
   wingGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0.32, 0, 0.18, 0.28, 0, -0.2], 3));

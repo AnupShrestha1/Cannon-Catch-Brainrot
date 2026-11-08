@@ -3059,3 +3059,111 @@ body.chute-alarm::after {
     transform: translateX(calc(-50% - 3px));
   }
 }
+
+/* ---------------------------------------------------------------- the parachute bar, bigger and labelled */
+
+#groundBar {
+  /* Room on its left for the height bubble that rides the marker. */
+  left: calc(max(14px, env(safe-area-inset-left)) + 66px);
+  width: 46px;
+  top: calc(50% - 20px);
+  height: min(380px, 50vh);
+  margin-top: calc(min(380px, 50vh) / -2);
+}
+
+#groundBar .track {
+  border-width: 4px;
+  box-shadow:
+    0 5px 0 var(--ink),
+    0 0 18px rgba(0, 0, 0, 0.35);
+}
+
+#groundBar .title {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: -6px;
+  white-space: nowrap;
+  font-family: var(--display);
+  font-size: 15px;
+  color: #fff;
+}
+
+#groundBar .label {
+  font-size: 15px;
+}
+
+/* The bullseye: a thin bright gold band with a white edge, pulsing. */
+#groundBar .bullseye {
+  background: repeating-linear-gradient(90deg, #fff 0 6px, #ffb000 6px 12px);
+  box-shadow:
+    inset 0 2px 0 #fff,
+    inset 0 -2px 0 #fff,
+    0 0 12px #ffd23f;
+  animation: bull-glow 0.6s ease-in-out infinite alternate;
+}
+
+/* Zone labels to the right of the bar. */
+#groundBar .tag {
+  position: absolute;
+  left: calc(100% + 10px);
+  transform: translateY(50%);
+  white-space: nowrap;
+  font-family: var(--display);
+  font-size: 14px;
+  text-shadow: var(--stroke-thin);
+}
+
+#groundBar .crash-tag {
+  color: #ff6b78;
+}
+
+#groundBar .perfect-tag {
+  color: #ffd84a;
+}
+
+#groundBar .bull-tag {
+  padding: 1px 7px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: #ffd23f;
+  color: var(--ink);
+  text-shadow: none;
+  font-size: 15px;
+}
+
+/* The marker: thicker, sticking out on both sides, with the height in a bubble on its left. */
+#groundBar .marker {
+  left: -14px;
+  right: -14px;
+  height: 12px;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.9);
+}
+
+#groundBar .dist {
+  position: absolute;
+  right: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px 7px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+#groundBar.inbull .marker {
+  background: #ffd23f;
+  box-shadow: 0 0 18px 4px #ffd23f;
+}
+
+@keyframes bull-glow {
+  from {
+    filter: brightness(1);
+  }
+  to {
+    filter: brightness(1.35);
+  }
+}

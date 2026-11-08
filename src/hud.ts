@@ -97,6 +97,11 @@ export class Hud {
   private marker = this.ground.querySelector<HTMLElement>('.marker')!;
   private crashZone = this.ground.querySelector<HTMLElement>('.crash')!;
   private perfectZone = this.ground.querySelector<HTMLElement>('.perfect')!;
+  private bullZone = this.ground.querySelector<HTMLElement>('.bullseye')!;
+  private crashTag = this.ground.querySelector<HTMLElement>('.crash-tag')!;
+  private perfectTag = this.ground.querySelector<HTMLElement>('.perfect-tag')!;
+  private bullTag = this.ground.querySelector<HTMLElement>('.bull-tag')!;
+  private dist = this.ground.querySelector<HTMLElement>('.dist')!;
   private reveal = byId('reveal');
   private revealTitle = byId('revealTitle');
   private cards = byId('cards');
@@ -303,15 +308,28 @@ export class Hud {
     this.needle.className = `needle${perfect ? ' perfect' : green ? ' green' : ''}`;
   }
 
-  /** frac = time to impact as a share of the bar; crash and perfect are the tops of those zones. */
-  showGround(frac: number | null, crash = 0, perfect = 0): void {
+  /**
+   * The parachute bar. frac = time to impact as a share of the bar; crash and perfect are the tops of those
+   * zones; bull is the bullseye window [bottom, top]; meters is the height, shown beside the marker. Each zone
+   * is labelled at its side.
+   */
+  showGround(frac: number | null, crash = 0, perfect = 0, bull: [number, number] = [0, 0], meters = 0, bonus = 1.5): void {
     this.ground.classList.toggle('on', frac !== null);
     if (frac === null) return;
-    this.crashZone.style.height = `${crash * 100}%`;
-    this.perfectZone.style.bottom = `${crash * 100}%`;
-    this.perfectZone.style.height = `${(perfect - crash) * 100}%`;
-    this.marker.style.bottom = `calc(${frac * 100}% - 4px)`;
+    const pct = (v: number) => `${v * 100}%`;
+    this.crashZone.style.height = pct(crash);
+    this.perfectZone.style.bottom = pct(crash);
+    this.perfectZone.style.height = pct(perfect - crash);
+    this.bullZone.style.bottom = pct(bull[0]);
+    this.bullZone.style.height = pct(bull[1] - bull[0]);
+    this.crashTag.style.bottom = pct(crash / 2);
+    this.perfectTag.style.bottom = pct(Math.max(bull[1] + 0.05, (crash + perfect) / 2 + 0.03));
+    this.bullTag.style.bottom = pct((bull[0] + bull[1]) / 2);
+    this.bullTag.textContent = `×${bonus}`;
+    this.marker.style.bottom = `calc(${frac * 100}% - 6px)`;
+    this.dist.textContent = `${Math.max(0, Math.round(meters))} m`;
     this.ground.classList.toggle('danger', frac < crash);
+    this.ground.classList.toggle('inbull', frac >= bull[0] && frac <= bull[1]);
   }
 
   showChute(on: boolean, pulse = false): void {

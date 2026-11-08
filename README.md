@@ -53,9 +53,15 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 
 - **Gems in the sky.** Each flight passes rows of gems along its path. A gem is worth 1 in Low Sky, 6 in
   Cloud Kingdom and 18 in the Storm Layer. One in ten is a big gold gem worth 5 times as much, and now
-  and then gems come in pairs. A hazard hit knocks 15% of the run's gems loose. A crash loses 30% of
-  them, or 50% without a parachute. There's no result window: on landing the gems go into the wallet
+  and then gems come in pairs. A hazard hit knocks 15% of the run's gems loose. A crash loses 15% of
+  them, or 25% without a parachute. There's no result window: on landing the gems go into the wallet
   with a toast, and the player stays where they landed, ready to walk.
+- **Parachute bar**: a tall bar on the left while falling, titled PARACHUTE, with GROUND under it. A thick
+  marker slides down it with your height in a bubble beside it, toward the gold PERFECT zone and the red
+  CRASH zone at the bottom, each labelled at its side.
+- **Bullseye**: a thin striped gold band inside the PERFECT zone, about 80% of the way down (0.12 s wide,
+  roughly a sixth of the gold zone), labelled ×1.5. Open the parachute while the marker is on it (it lights
+  up) for "BULLSEYE!" and ×1.5 gems from that flight. Tight enough to need care, wide enough to hit.
 - **Parachute alarm**: from 0.9 seconds before the gold zone (about 2.2 seconds before impact), on every
   flight: OPEN PARACHUTE! flashes, the screen's edges pulse red, the parachute button bounces and glows,
   the coach's hand taps it, a banner says to press Space (or tap), and it beeps until the parachute opens.
@@ -169,9 +175,6 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     better flash the screen in their colour, turn light rays behind the card, burst confetti and show a
     big rarity banner. Legendary and Mythic hold back first: the card shakes and blazes with a rising
     whoosh before it turns. A Mythic also quakes the whole screen and has a rainbow banner and edge.
-  - The first 10 pulls are scripted to include Uncommons and a Rare by pull number (the 1st and 5th at
-    least Uncommon, the 3rd at least Rare), but never above what that machine can give: on Basic the 3rd is
-    an Uncommon. From the 11th pull on, it's the normal odds and pity only.
   - Hidden pity, never shown to the player: Basic gives an Uncommon at least every 6 pulls, Lucky a Rare
     every 8, Super an Epic every 9, Ultra a Legendary every 10, Cosmic a Legendary every 4 and a Mythic
     every 60, and Galaxy a Mythic every 20. Each counter resets when that rarity or better comes up.
@@ -255,8 +258,8 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   each).
 - **Rebirth** has its own station in the hub: a marble dais under a floating golden crystal in turning
   rings, with a pillar of light once you can rebirth; its sign says what you'd get, or the cannon level
-  still needed with a progress bar. The first unlocks at cannon level 28, whose normal launch reaches the
-  Storm Layer, and each one after asks for 2 more levels (30, 32, 34, 36, then the top level, 37). Stand on
+  still needed with a progress bar. The first unlocks at cannon level 22 (about 40 minutes in), and each one
+  after asks for 2 more levels (24, 26, 28 and so on, up to the top level, 37). Stand on
   its gold pad, press E and confirm. It resets coins, gems, upgrades, slot levels and the backpack,
   keeps the rarest brainrot and every open slot, adds +50% income per rebirth, and recolours the cannon;
   the first two also add a floor to your base. It's grand and short (about three seconds): the crystal
@@ -310,7 +313,7 @@ Not in this build: fusion of named characters, sky events, the rival, the spin w
   brass bands, trunnions and a muzzle ring, on a carriage with spoked wheels over a round stone base; the
   cauldron has a rounded belly on three legs over a crackling fire, a gold rim and handles, and a bubbling,
   glowing brew; the fountain is turned on a lathe, with gold bands and a turning gold gem on top.
-- **Less clutter**: the bunting, lanterns, flower beds, street lamps and cottage are gone, and the
+- **Less clutter**: the far snowy mountains (which looked half there from high up), the bunting, lanterns, flower beds, street lamps and cottage are gone, and the
   ground cover around the town is about half as dense. A smooth wooden fence with gold-capped posts runs
   round the town's edge, where walking stops. Paving marks the hub, the lane (with gold studs
   down the middle) and the fountain's circle; the gacha corner has a pink carpet.
