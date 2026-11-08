@@ -56,7 +56,9 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   and then gems come in pairs. A hazard hit knocks 15% of the run's gems loose. A crash loses 15% of
   them, or 25% without a parachute. There's no result window: on landing the gems go into the wallet
   with a toast, and the player stays where they landed, ready to walk.
-- **Parachute bar**: a tall bar on the left while falling, titled PARACHUTE, with GROUND under it. A thick
+- **Parachute bar**: while falling, a compact bar rides beside your character on screen (a little to
+  their right, slightly see-through), so you can watch both at once. It's titled PARACHUTE, with GROUND
+  under it. A thick
   marker slides down it with your height in a bubble beside it, toward the gold PERFECT zone and the red
   CRASH zone at the bottom, each labelled at its side.
 - **Bullseye**: a thin striped gold band inside the PERFECT zone, about 80% of the way down (0.12 s wide,
@@ -252,7 +254,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   minutes; after that, each level adds less.
 - **Each rebirth opens the next area.** Before the first rebirth, flights top out just under the Storm
   Layer (at 394 m): the apex shows "Storm Layer: rebirth to break through!" and the cannon can't be
-  upgraded past the rebirth's level (22), so no coins go into upgrades that couldn't help. After the
+  upgraded past the rebirth's level (21), so no coins go into upgrades that couldn't help. After the
   rebirth the ceiling lifts, and the Storm Layer (400 m) is reached at about cannon Lv 25 (a perfect launch
   from about Lv 22).
 - **Shields** (in the shop): each level adds one shield, and each shield blocks one hazard hit per flight
@@ -266,8 +268,8 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   each).
 - **Rebirth** has its own station in the hub: a marble dais under a floating golden crystal in turning
   rings, with a pillar of light once you can rebirth; its sign says what you'd get, or the cannon level
-  still needed with a progress bar. The first unlocks at cannon level 22 (about 40 minutes in), and each one
-  after asks for 2 more levels (24, 26, 28 and so on, up to the top level, 37). Stand on
+  still needed with a progress bar. The first unlocks at cannon level 21 (about 40 minutes in), and each one
+  after asks for 4 more levels (25, 29, 33, then the top level, 37). Stand on
   its gold pad, press E and confirm. It resets coins, gems, upgrades, slot levels and the backpack, locks the gacha
   machines again (they unlock as this run's flights reach their heights; your all-time best stays on the
   leaderboard),

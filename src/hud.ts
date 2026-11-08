@@ -332,6 +332,18 @@ export class Hud {
     this.ground.classList.toggle('inbull', frac >= bull[0] && frac <= bull[1]);
   }
 
+  /**
+   * Keeps the parachute bar beside the player on screen (x, y in pixels: where the player is), so the eye can
+   * watch both the player and the bar at once. It sits a little to their right, kept inside the screen.
+   */
+  placeGround(x: number, y: number): void {
+    const h = this.ground.offsetHeight || 200;
+    const left = Math.min(window.innerWidth - 130, Math.max(80, x + 95));
+    const top = Math.min(window.innerHeight - h / 2 - 40, Math.max(h / 2 + 40, y));
+    this.ground.style.left = `${Math.round(left)}px`;
+    this.ground.style.top = `${Math.round(top)}px`;
+  }
+
   showChute(on: boolean, pulse = false): void {
     this.chuteBtn.classList.toggle('on', on);
     this.chuteBtn.classList.toggle('pulse', on && pulse);

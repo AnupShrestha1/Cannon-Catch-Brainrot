@@ -1125,6 +1125,9 @@ export class Game {
     const tau = this.secondsToImpact();
     const late = this.chuteLate();
     const bullLo = late + CHUTE.bullseyeAt - CHUTE.bullseyeWidth / 2;
+    // The bar rides beside the player on screen.
+    const at = this.tmp.set(this.px, this.py + BODY_MID, this.pz).project(this.camera);
+    this.hud.placeGround(((at.x + 1) / 2) * window.innerWidth, ((1 - at.y) / 2) * window.innerHeight);
     this.hud.showGround(
       clamp(tau / CHUTE.barSeconds, 0, 1),
       late / CHUTE.barSeconds,

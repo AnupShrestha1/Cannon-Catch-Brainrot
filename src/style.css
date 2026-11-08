@@ -3183,3 +3183,39 @@ body.chute-alarm::after {
 #chuteBtn .key {
   font-size: 14px;
 }
+
+/* ---------------------------------------------------------------- the parachute bar rides beside the player */
+
+/* Placed each frame next to the player (left/top set in code), compact and a little see-through so it
+   doesn't cover the view; the marker and its labels stay bold. */
+#groundBar {
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: min(220px, 34vh);
+  margin-top: calc(min(220px, 34vh) / -2);
+  opacity: 0.88;
+  transition:
+    left 0.08s linear,
+    top 0.08s linear;
+}
+
+#groundBar .title {
+  font-size: 12px;
+}
+
+#groundBar .label {
+  font-size: 12px;
+}
+
+#groundBar .tag {
+  font-size: 12px;
+}
+
+#groundBar .bull-tag {
+  font-size: 13px;
+}
+
+#groundBar .dist {
+  font-size: 13px;
+}

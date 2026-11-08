@@ -294,13 +294,13 @@ export const UPGRADES: Record<Track, { name: string; base: number; growth: numbe
 
 export const REBIRTH = {
   /** Rebirth unlocks at the cannon level whose normal launch reaches the Storm Layer. */
-  cannonLevel: 22,
+  cannonLevel: 21,
   /** A run this high counts as reaching the Storm Layer. */
   unlockHeight: 400,
   /** Permanent income bonus per rebirth. */
   incomeBonus: 0.5,
-  /** Each rebirth asks for this many more cannon levels than the last (capped at the top level). */
-  cannonStep: 2,
+  /** Each rebirth asks for this many more cannon levels than the last (capped at the top level): 21, 25, 29... */
+  cannonStep: 4,
   /** The first this-many rebirths each add a floor to the base (on top of the bonus); later ones only the bonus. */
   floors: 2,
   /** A new floor comes with this many slots already open. */
