@@ -74,6 +74,10 @@ export interface Env {
   drawBoard(index: number, title: string, rows: BoardRow[]): void;
 }
 
+/** The cannon's wheel axle height (tyres resting on the plinth), and the barrel's pivot height. */
+const WHEEL_Y = 0.14 + 0.79;
+export const BARREL_Y = 1.42;
+
 export function buildEnv(scene: THREE.Scene): Env {
   scene.add(new THREE.HemisphereLight(0xdcefff, 0x5f8a45, 1.05));
   // A warm sun casting soft shadows over the base, the cannon and the trees around them.
@@ -101,22 +105,23 @@ export function buildEnv(scene: THREE.Scene): Env {
   const iron = new THREE.MeshPhongMaterial({ color: 0x2b2f38, shininess: 70, specular: 0x666a75 });
   const brass = new THREE.MeshPhongMaterial({ color: 0xffc84a, emissive: 0x3a2600, shininess: 90, specular: 0xfff1b0 });
   const stone = new THREE.MeshPhongMaterial({ color: 0xd9cfbf, shininess: 8 });
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.95, 2.2, 0.32, 40), stone);
-  base.position.y = 0.16;
+  // A low stone plinth the wheels stand on (their tyres touch its top, they don't sink into it).
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(2.05, 2.25, 0.14, 48), stone);
+  base.position.y = 0.07;
   base.receiveShadow = true;
-  const baseRim = new THREE.Mesh(new THREE.TorusGeometry(1.97, 0.07, 10, 48).rotateX(Math.PI / 2), brass);
-  baseRim.position.y = 0.33;
+  const baseRim = new THREE.Mesh(new THREE.TorusGeometry(2.07, 0.06, 10, 48).rotateX(Math.PI / 2), brass);
+  baseRim.position.y = 0.14;
   // Carriage: two rounded cheeks joined by a block, with an axle through them.
   const cheekGeo = new RoundedBoxGeometry(0.34, 1.05, 2.1, 3, 0.12);
   for (const side of [-1, 1]) {
     const cheek = new THREE.Mesh(cheekGeo, wood);
-    cheek.position.set(side * 0.82, 0.92, 0.05);
+    cheek.position.set(side * 0.82, 1.07, 0.05);
     cannon.add(cheek);
   }
   const bed = new THREE.Mesh(new RoundedBoxGeometry(1.4, 0.36, 1.8, 3, 0.1), darkWood);
-  bed.position.set(0, 0.62, 0.05);
-  const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2.9, 16).rotateZ(Math.PI / 2), iron);
-  axle.position.set(0, 0.78, 0);
+  bed.position.set(0, 0.77, 0.05);
+  const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3.3, 16).rotateZ(Math.PI / 2), iron);
+  axle.position.set(0, WHEEL_Y, 0);
   cannon.add(bed, axle);
   // Spoked wheels with iron tyres and brass hubs.
   const tyreGeo = new THREE.TorusGeometry(0.7, 0.09, 12, 40);
@@ -125,7 +130,8 @@ export function buildEnv(scene: THREE.Scene): Env {
   const hubGeo = new THREE.SphereGeometry(0.17, 16, 12);
   for (const side of [-1, 1]) {
     const wheel = new THREE.Group();
-    wheel.position.set(side * 1.25, 0.78, 0);
+    // Out past the barrel's widest point, so it clears them even swung to either side.
+    wheel.position.set(side * 1.5, WHEEL_Y, 0);
     wheel.rotation.y = Math.PI / 2;
     wheel.add(new THREE.Mesh(tyreGeo, iron), new THREE.Mesh(felloeGeo, wood), new THREE.Mesh(hubGeo, brass));
     for (let k = 0; k < 6; k++) {
@@ -136,7 +142,7 @@ export function buildEnv(scene: THREE.Scene): Env {
     cannon.add(wheel);
   }
   const barrel = new THREE.Group();
-  barrel.position.set(0, 1.25, 0.38);
+  barrel.position.set(0, BARREL_Y, 0.38);
   barrel.rotation.x = -0.12;
   const tubeMat = new THREE.MeshPhongMaterial({ color: 0x3d4450, shininess: 80, specular: 0x8890a0 });
   // The barrel turned on a lathe: rounded breech, swelling reinforce, a waist, and a flared muzzle with a bore.

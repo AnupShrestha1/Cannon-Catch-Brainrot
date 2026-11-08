@@ -103,6 +103,11 @@ export class Hud {
   private handEl = byId('hand');
   private coachKey = '';
   private feedEl = byId('feed');
+  private chatForm = byId<HTMLFormElement>('chat');
+  private chatInput = byId<HTMLInputElement>('chatInput');
+  readonly chatBtn = byId<HTMLButtonElement>('chatBtn');
+  /** Called with what the player typed in the chat. */
+  onChat: (text: string) => void = () => {};
   private onlineEl = byId('online');
   private onlineKey = '';
   private revealEl = byId('cardReveal');
@@ -121,6 +126,8 @@ export class Hud {
   private last = { alt: -1, zone: '', best: -1, stack: '', prompt: '', coins: '', income: -1, gems: '', pack: -1, gift: '', shop: '' };
 
   constructor() {
+    this.bindChat();
+    for (const id of ['modalBody', 'shopRows', 'cards']) this.dragScroll(byId(id));
     // Modals answer the keyboard and the backdrop too, so there's always a way out. Capture phase and
     // stopImmediatePropagation keep the key from also reaching the game (Space would launch).
     window.addEventListener(
@@ -384,6 +391,103 @@ export class Hud {
     while (this.feedEl.children.length > 6) this.feedEl.firstElementChild?.remove();
     setTimeout(() => line.classList.add('old'), 9000);
     setTimeout(() => line.remove(), 10000);
+  }
+
+  /** Opens the chat box and puts the cursor in it. */
+  openChat(): void {
+    this.chatForm.classList.add('open');
+    this.chatInput.focus();
+  }
+
+  closeChat(): void {
+    this.chatForm.classList.remove('open');
+    this.chatInput.value = '';
+    this.chatInput.blur();
+  }
+
+  /** Whether the player is typing in the chat. */
+  get chatting(): boolean {
+    return document.activeElement === this.chatInput;
+  }
+
+  /** Sends what's typed (Enter), closes on Escape or when it loses focus empty. */
+  private bindChat(): void {
+    this.chatBtn.addEventListener('click', () => (this.chatForm.classList.contains('open') ? this.closeChat() : this.openChat()));
+    this.chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = this.chatInput.value.replace(/\s+/g, ' ').trim().slice(0, 80);
+      this.closeChat();
+      if (text) this.onChat(text);
+    });
+    this.chatInput.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape') this.closeChat();
+    });
+    this.chatInput.addEventListener('blur', () => {
+      if (!this.chatInput.value.trim()) this.chatForm.classList.remove('open');
+    });
+  }
+
+  /**
+   * Mouse drag-to-scroll for a scrolling panel (touch already scrolls by dragging): grab anywhere and pull, with
+   * a little momentum on release. A real drag swallows the click it ends with, so buttons still work on a tap.
+   */
+  private dragScroll(el: HTMLElement): void {
+    let startY = 0;
+    let startTop = 0;
+    let lastY = 0;
+    let lastT = 0;
+    let velocity = 0;
+    let dragging = false;
+    let moved = false;
+    let glide = 0;
+    el.classList.add('drag-scroll');
+    el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      cancelAnimationFrame(glide);
+      dragging = true;
+      moved = false;
+      startY = lastY = e.clientY;
+      startTop = el.scrollTop;
+      lastT = performance.now();
+      velocity = 0;
+    });
+    window.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      if (!moved && Math.abs(e.clientY - startY) > 6) {
+        moved = true;
+        el.classList.add('dragging');
+      }
+      if (!moved) return;
+      el.scrollTop = startTop - (e.clientY - startY);
+      const now = performance.now();
+      velocity = (lastY - e.clientY) / Math.max(1, now - lastT);
+      lastY = e.clientY;
+      lastT = now;
+    });
+    window.addEventListener('pointerup', () => {
+      if (!dragging) return;
+      dragging = false;
+      el.classList.remove('dragging');
+      if (!moved) return;
+      // Glide on, slowing down.
+      let v = velocity * 16;
+      const step = () => {
+        v *= 0.92;
+        el.scrollTop += v;
+        if (Math.abs(v) > 0.4) glide = requestAnimationFrame(step);
+      };
+      glide = requestAnimationFrame(step);
+    });
+    el.addEventListener(
+      'click',
+      (e) => {
+        if (!moved) return;
+        e.stopPropagation();
+        e.preventDefault();
+        moved = false;
+      },
+      true,
+    );
   }
 
   /**

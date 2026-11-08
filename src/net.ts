@@ -48,6 +48,7 @@ import {
   SLOTS,
   fromPlot,
   laneFront,
+  plotEntrance,
   plotAt,
   pullPad,
   toPlot,
@@ -362,6 +363,29 @@ function headStart(save: Save, minutes: number): void {
 }
 
 
+/** What bots might say back to a chat line, and how likely anyone answers at all (else it's ignored). */
+function chatReply(t: string): { lines: string[]; chance: number; greeting?: boolean } | null {
+  const has = (re: RegExp) => re.test(t);
+  if (has(/\b(hi+|hello+|hey+|yo+|sup|hola|howdy|hai|helo|hiya)\b/)) {
+    return { lines: ['hi!', 'hey 👋', 'hello!', 'yo', 'hii', 'heyy', 'hi :D', 'sup'], chance: 0.85, greeting: true };
+  }
+  if (has(/how (are|r) (you|u)|\bhru\b|\bwyd\b|what'?s up|wassup/)) {
+    return { lines: ['good hbu', 'chillin', 'grinding gems lol', 'good! just got a rare', 'tired lol', 'pretty good'], chance: 0.75 };
+  }
+  if (has(/\b(thanks|thank you|thx|ty|tysm)\b/)) return { lines: ['np', 'np!', 'yw', '👍'], chance: 0.6 };
+  if (has(/\b(bye|gtg|cya|see ya|goodbye|g2g)\b/)) return { lines: ['bye!', 'cya', 'bye 👋', 'see ya', 'byee'], chance: 0.7 };
+  if (has(/mythic/)) return { lines: ['mythics are super rare', 'cosmic machine has the best mythic odds', 'merge 8 legendaries for one', 'never got one 😭'], chance: 0.7 };
+  if (has(/\bgems?\b/)) return { lines: ['launch higher, cloud kingdom gems are x3', 'fly through them lol', 'upgrade gem finder'], chance: 0.65 };
+  if (has(/merge|cauldron|pot\b/)) return { lines: ['purple pot behind the cannon', 'merge station by the cannon'], chance: 0.65 };
+  if (has(/upgrade|shop|cannon/)) return { lines: ['shop stall next to the cannon', 'upgrade cannon first fr', 'cannon power is the best upgrade'], chance: 0.6 };
+  if (has(/rebirth/)) return { lines: ['more money forever', 'x1.5 income but u restart'], chance: 0.6 };
+  if (has(/trade|trading/)) return { lines: ['no trading yet lol', 'trade what'], chance: 0.6 };
+  if (has(/\b(gg|nice|wow|cool|pog|poggers|lets go|let's go)\b/)) return { lines: ['ty', 'gg', '😄', 'ikr', 'gg'], chance: 0.5 };
+  if (has(/\b(lol|lmao|haha+|xd|lmfao)\b/)) return { lines: ['lol', '😂', 'lmao', 'haha'], chance: 0.4 };
+  if (t.includes('?')) return { lines: ['idk', 'not sure lol', 'good question', 'no idea', 'try it and see'], chance: 0.45 };
+  return { lines: ['lol', 'fr', 'true', 'ok', 'nice', 'same', 'real', '?'], chance: 0.22 };
+}
+
 /** How long a player stays this session: a quick look, a normal session, or in for the long haul. */
 function sessionLength(): number {
   const r = Math.random();
@@ -454,6 +478,36 @@ export class FakeServer {
     this.after(rand(0.6, 1.8), () => this.say(bot, pick(GREETINGS)));
   }
 
+  /**
+   * The local player said something in the chat. Like real people, bots answer some things and ignore others:
+   * nearly always a hello or a question to them by name, often a question about the game, now and then
+   * anything else. Answers come a moment later, as long as it takes to type them.
+   */
+  localChat(text: string): void {
+    this.events.push({ kind: 'chat', name: this.local.name, text });
+    const t = text.toLowerCase();
+    const named = this.bots.find((b) => !b.afk && !b.leaving && t.includes(b.name.toLowerCase()));
+    const reply = chatReply(t);
+    if (!reply) return;
+    const chance = named ? Math.max(0.85, reply.chance) : reply.chance;
+    if (Math.random() > chance) return;
+    const first = named ?? this.someone();
+    if (!first) return;
+    const answer = (bot: Bot, delay: number) => {
+      const fresh = reply.lines.filter((l) => !this.recent.includes(l));
+      const line = pick(fresh.length ? fresh : reply.lines);
+      this.after(delay + line.length * 0.07, () => {
+        if (!bot.afk) this.say(bot, line);
+      });
+    };
+    answer(first, rand(1, 2.6));
+    // A hello often gets two.
+    if (reply.greeting && Math.random() < 0.45) {
+      const second = this.someone(first);
+      if (second) answer(second, rand(2.4, 4.5));
+    }
+  }
+
   /** The local player liked one of a bot's brainrots. */
   like(id: number): void {
     const bot = this.bots.find((b) => b.id === id);
@@ -504,7 +558,7 @@ export class FakeServer {
     const a = rand(Math.PI * 1.1, Math.PI * 1.9);
     const [x, z] = joining
       ? [FOUNTAIN.x + Math.cos(a) * (FOUNTAIN.r + rand(1.5, 3)), FOUNTAIN.z + Math.sin(a) * (FOUNTAIN.r + rand(1.5, 3))]
-      : fromPlot(slot, rand(-8, 8), rand(0.6, 3));
+      : fromPlot(slot, rand(-0.8, 0.8), rand(-18, -1));
     const bot: Bot = {
       id: this.nextId++,
       name,
@@ -782,8 +836,9 @@ export class FakeServer {
   }
 
   /**
-   * Waypoints to a world point: out of the plot it's in to the lane, through the lane's mouth when crossing
-   * between the lane and the hub, and into the target's plot from the lane, so nobody walks through pedestals.
+   * Waypoints to a world point: out of the plot it's in (down its aisle, out of the entrance, along its path to
+   * the lane), through the lane's mouth when crossing between the lane and the hub, and into the target's plot
+   * the same way, so nobody walks through pedestals or over kerbs.
    */
   private route(bot: Bot, tx: number, tz: number): [number, number][] {
     const path: [number, number][] = [];
@@ -795,8 +850,16 @@ export class FakeServer {
     };
     const from = plotAt(bot.x, bot.z);
     const to = plotAt(tx, tz);
-    if (from && from !== to) add(laneFront(from, toPlot(from, bot.x, bot.z)[0]));
-    if (to && from !== to) add(laneFront(to, toPlot(to, tx, tz)[0]));
+    if (from && from !== to) {
+      add(fromPlot(from, 0, Math.min(-0.5, toPlot(from, bot.x, bot.z)[1])));
+      add(plotEntrance(from));
+      add(laneFront(from));
+    }
+    if (to && from !== to) {
+      add(laneFront(to));
+      add(plotEntrance(to));
+      add(fromPlot(to, 0, Math.min(-0.5, toPlot(to, tx, tz)[1])));
+    }
     add([tx, tz]);
     return path;
   }
@@ -870,10 +933,11 @@ export class FakeServer {
       // Admire something on display, from the side it faces.
       const filled = s.pads.map((p, i) => (p ? i : -1)).filter((i) => i >= 0);
       const pad = Base.padPosition(filled.length ? pick(filled) : 0);
-      const [x, z] = this.at(bot, pad.x + rand(-0.6, 0.6), pad.z < -5 ? -5.4 : -0.4);
+      // In the aisle beside it.
+      const [x, z] = this.at(bot, rand(-0.4, 0.4), pad.z + rand(-0.8, 0.8));
       this.go(bot, this.route(bot, x, z), () => (bot.wait = rand(2, 5)));
     } else if (roll < 0.84) {
-      const [x, z] = this.at(bot, rand(-8, 8), rand(0.6, 3));
+      const [x, z] = this.at(bot, rand(-0.8, 0.8), rand(-20, -1));
       this.go(bot, this.route(bot, x, z), () => (bot.wait = rand(1.5, 4)));
     } else if (roll < 0.92) {
       this.stroll(bot);
@@ -953,7 +1017,7 @@ export class FakeServer {
   private visitSomeone(bot: Bot): void {
     const hosts = [...this.bots.filter((b) => b !== bot).map((b) => b.slotRef), SLOTS[OWN_SLOT], SLOTS[OWN_SLOT]];
     const host = pick(hosts);
-    const [x, z] = fromPlot(host, rand(-8, 8), Math.random() < 0.6 ? rand(-0.8, 1.5) : -5.4);
+    const [x, z] = fromPlot(host, rand(-0.8, 0.8), Math.random() < 0.4 ? rand(1.5, 3) : rand(-18, -2));
     this.go(bot, this.route(bot, x, z), () => {
       bot.wait = rand(3, 7);
       if (Math.random() < 0.6) {
@@ -970,7 +1034,7 @@ export class FakeServer {
 
   /** Back to the front of its own plot. */
   private goHome(bot: Bot): void {
-    const [x, z] = this.at(bot, rand(-8, 8), rand(0.6, 2.5));
+    const [x, z] = this.at(bot, rand(-0.8, 0.8), rand(-16, -1));
     this.go(bot, this.route(bot, x, z), () => (bot.wait = rand(0.5, 2)));
   }
 

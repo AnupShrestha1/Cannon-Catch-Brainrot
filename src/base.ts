@@ -1,5 +1,6 @@
-// A player's plot: a showcase of two rows of 5 pedestals along the lane, on a tiled floor with the owner's name
-// board at the back. Pedestals show their brainrot, a rarity glow, and a big coin spinning over its head with the
+// A player's plot: a showcase set back from the lane, running away from it: two lines of 5 pedestals with an aisle
+// between them, on a tiled floor edged by a low kerb in the owner's colour, a short path in from the lane, and
+// the owner's name board at the back. Pedestals show their brainrot, a rarity glow, and a big coin spinning over its head with the
 // coins waiting there; locked ones are roped off until the base is expanded. It only draws the save; Game owns
 // the rules (and the level-up buttons, which are HTML). The cannon, cauldron, shop and gacha machines are
 // shared, in the hub (hub.ts); this file also says what is solid and how high the floor is, town-wide.
@@ -15,6 +16,7 @@ import {
   PAD_RADIUS,
   PLOT_DEPTH,
   PLOT_HALF,
+  SETBACK,
   SHOP,
   SHOP_FRONT,
   SLOTS,
@@ -27,6 +29,7 @@ import {
 } from './layout';
 import type { PadSlot, Save } from './store';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { tileTexture } from './tiles';
 import { flat, makeLabel, softTexture, type Label } from './world';
 
 interface PadView {
@@ -53,10 +56,15 @@ interface PadView {
   seed: number;
 }
 
-/** Pedestal spacing along a row, and the two rows' depths in plot space (the lane is at +z). */
+/** The two lines of pedestals either side of the aisle, the first pedestal's depth, and the spacing down a line. */
+const LINE_X = 2.7;
+const FIRST_DEPTH = 3.6;
 const PAD_STEP = 4.2;
-const FRONT_ROW = -2.9;
-const BACK_ROW = -8.1;
+/** Where the name board's posts stand, in plot space. */
+const BOARD_Z = -PLOT_DEPTH + 0.9;
+const BOARD_POST_X = 3.9;
+/** The gap in the front kerb, where the path comes in. */
+const ENTRANCE = 3.4;
 /** Radius of the cauldron's step-on platform. */
 export const PLATFORM_RADIUS = 1.25;
 /** Height of the coin over a brainrot's head. */
@@ -75,24 +83,9 @@ const coinMat = flat(0xffc21a, { emissive: 0x8a5f00 });
 const coinFaceMat = flat(0xffe066, { emissive: 0x8a6a00 });
 const coinRimMat = flat(0xe0a000, { emissive: 0x5a3c00 });
 const stoneMat = new THREE.MeshPhongMaterial({ color: 0xf1ebe0, shininess: 25 });
-const floorMat = new THREE.MeshLambertMaterial({ color: 0xf3ead8 });
-const groutMat = new THREE.MeshBasicMaterial({ color: 0xd9c9aa });
 const lockedTop = 0x6f7783;
 const emptyTop = 0xdfeaf6;
 const GOLD = 0xffc84a;
-
-/** Thin grout lines across a showcase floor, as one flat geometry facing up. */
-function groutGeo(w: number, d: number): THREE.BufferGeometry {
-  const pos: number[] = [];
-  // Two triangles per strip, wound counter-clockwise seen from above.
-  const strip = (x0: number, z0: number, x1: number, z1: number) =>
-    pos.push(x0, 0, z0, x0, 0, z1, x1, 0, z1, x0, 0, z0, x1, 0, z1, x1, 0, z0);
-  for (let x = -w / 2 + 2.1; x < w / 2 - 0.5; x += 2.1) strip(x - 0.03, -d / 2, x + 0.03, d / 2);
-  for (let z = -d / 2 + 2.2; z < d / 2 - 0.5; z += 2.2) strip(-w / 2, z - 0.03, w / 2, z + 0.03);
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  return geo;
-}
 
 /** Other players' plots share one label for their (never shown) coin counters, so they don't each draw canvases. */
 let vacantLabel: Label | null = null;
@@ -124,7 +117,7 @@ export function plotSolids(): Solids {
     Base.padPosition(i, at);
     circles.push([at.x, at.z, 1.7]);
   }
-  for (const side of [-1, 1]) circles.push([side * 3.4, -PLOT_DEPTH + 0.4, 0.3]);
+  for (const side of [-1, 1]) circles.push([side * BOARD_POST_X, BOARD_Z, 0.3]);
   plotSolidsCache = { circles, walls: [] };
   return plotSolidsCache;
 }
@@ -191,7 +184,7 @@ function pushOut(x: number, z: number, r: number, { circles, walls }: Solids): [
 function plotNear(x: number, z: number): PlotSlot | null {
   for (const slot of SLOTS) {
     const [lx, lz] = toPlot(slot, x, z);
-    if (Math.abs(lx) < PLOT_HALF + 1 && lz < 1.5 && lz > -PLOT_DEPTH - 1) return slot;
+    if (Math.abs(lx) < PLOT_HALF + 1 && lz < SETBACK && lz > -PLOT_DEPTH - 1) return slot;
   }
   return null;
 }
@@ -257,13 +250,12 @@ export class Base {
   }
 
   /**
-   * Where slot i stands in plot space: two rows of 5 along the lane, the front row (0-4) first, each row
-   * starting from the end nearest the hub.
+   * Where slot i stands in plot space: two lines of 5 running back from the lane either side of the aisle,
+   * filled in pairs from the front (0 and 1 nearest the lane), so the open slots are the ones up front.
    */
   static padPosition(i: number, out = new THREE.Vector3()): THREE.Vector3 {
-    const row = i < 5 ? 0 : 1;
-    const col = i % 5;
-    return out.set((col - 2) * PAD_STEP, PAD_TOP, row === 0 ? FRONT_ROW : BACK_ROW);
+    const side = i % 2 === 0 ? -1 : 1;
+    return out.set(side * LINE_X, PAD_TOP, -FIRST_DEPTH - Math.floor(i / 2) * PAD_STEP);
   }
 
   /** Slot i of a plot, in world space. */
@@ -303,8 +295,8 @@ export class Base {
       rig.halo.scale.multiplyScalar(0.8);
       rig.group.scale.setScalar(1.3);
       Base.padPosition(i, rig.group.position);
-      // Facing the lane.
-      rig.group.rotation.y = 0;
+      // Facing the lane, turned a little toward the aisle, so they show to passers-by and to visitors.
+      rig.group.rotation.y = i % 2 === 0 ? 0.6 : -0.6;
       this.group.add(rig.group);
       view.rig = rig;
       view.arrive = 1;
@@ -476,48 +468,68 @@ export class Base {
     return lock;
   }
 
-  /** The showcase floor: pale stone tiles edged in the owner's colour, nearly flush with the lane. */
+  /**
+   * The showcase floor: pale tiles, edged by a low, rounded kerb in the owner's colour (a subtle edge, not a
+   * fence: it's open at the front, and nothing stops anyone stepping over it), and a short tiled path from the
+   * lane to the gap in the kerb.
+   */
   private buildFloor(edge: number): void {
     const w = PLOT_HALF * 2;
     const d = PLOT_DEPTH;
-    const border = new THREE.Mesh(
-      new RoundedBoxGeometry(w + 0.6, 0.14, d + 0.6, 2, 0.06),
-      new THREE.MeshLambertMaterial({ color: edge, emissive: edge, emissiveIntensity: 0.2 }),
+    const floor = new THREE.Mesh(
+      new RoundedBoxGeometry(w, 0.18, d, 2, 0.07),
+      new THREE.MeshLambertMaterial({ map: tileTexture('#f4ecdc', w, d) }),
     );
-    border.position.set(0, 0.03, -d / 2);
-    border.receiveShadow = true;
-    const floor = new THREE.Mesh(new RoundedBoxGeometry(w, 0.18, d, 2, 0.07), floorMat);
     floor.position.set(0, 0.04, -d / 2);
     floor.receiveShadow = true;
-    const grout = new THREE.Mesh(groutGeo(w, d), groutMat);
-    grout.position.set(0, 0.135, -d / 2);
-    this.group.add(border, floor, grout);
+    this.group.add(floor);
+    const kerbMat = new THREE.MeshPhongMaterial({ color: edge, emissive: edge, emissiveIntensity: 0.18, shininess: 40 });
+    const kerb = (x: number, z: number, sx: number, sz: number) => {
+      const mesh = new THREE.Mesh(new RoundedBoxGeometry(sx, 0.3, sz, 2, 0.12), kerbMat);
+      mesh.position.set(x, 0.15, z);
+      mesh.castShadow = mesh.receiveShadow = true;
+      this.group.add(mesh);
+    };
+    const t = 0.36;
+    kerb(-w / 2, -d / 2, t, d + t);
+    kerb(w / 2, -d / 2, t, d + t);
+    kerb(0, -d, w + t, t);
+    const front = (w - ENTRANCE) / 2;
+    kerb(-(ENTRANCE + front) / 2, 0, front, t);
+    kerb((ENTRANCE + front) / 2, 0, front, t);
+    const path = new THREE.Mesh(
+      new RoundedBoxGeometry(ENTRANCE - 0.4, 0.08, SETBACK + 0.6, 2, 0.03),
+      new THREE.MeshLambertMaterial({ map: tileTexture('#e2d2b2', ENTRANCE - 0.4, SETBACK + 0.6) }),
+    );
+    path.position.set(0, 0.035, SETBACK / 2);
+    path.receiveShadow = true;
+    this.group.add(path);
   }
 
   /** The owner's name board at the back of the plot, facing the lane, on two posts. */
   private buildSign(text: string, color: string, board: number): void {
     const g = new THREE.Group();
-    g.position.set(0, 0, -PLOT_DEPTH + 0.4);
+    g.position.set(0, 0, BOARD_Z);
     const postMat = new THREE.MeshPhongMaterial({ color: 0x9a6a3c, shininess: 20 });
     const knobMat = new THREE.MeshPhongMaterial({ color: GOLD, emissive: 0x3a2600, shininess: 80 });
     for (const side of [-1, 1]) {
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 3.6, 12), postMat);
-      post.position.set(side * 3.4, 1.8, 0);
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.21, 4.6, 12), postMat);
+      post.position.set(side * BOARD_POST_X, 2.3, 0);
       post.castShadow = true;
-      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.26, 16, 12), knobMat);
-      knob.position.set(side * 3.4, 3.7, 0);
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), knobMat);
+      knob.position.set(side * BOARD_POST_X, 4.7, 0);
       g.add(post, knob);
     }
     const panel = new THREE.Mesh(
-      new RoundedBoxGeometry(7.6, 1.4, 0.3, 3, 0.12),
+      new RoundedBoxGeometry(8.6, 1.6, 0.3, 3, 0.12),
       new THREE.MeshPhongMaterial({ color: board, shininess: 40 }),
     );
-    panel.position.y = 2.95;
+    panel.position.y = 3.85;
     panel.castShadow = true;
     const label = makeLabel();
     label.set(text, color);
-    label.sprite.position.set(0, 2.95, 0.4);
-    label.sprite.scale.multiplyScalar(0.62);
+    label.sprite.position.set(0, 3.85, 0.4);
+    label.sprite.scale.multiplyScalar(0.72);
     g.add(panel, label.sprite);
     this.group.add(g);
   }

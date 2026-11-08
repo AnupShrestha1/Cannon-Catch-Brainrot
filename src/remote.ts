@@ -8,7 +8,7 @@ import type { FakeServer, RemotePlayer } from './net';
 import { makeLabel, makePlayer, type Label, type PlayerRig } from './world';
 
 /** Other players' brainrots are only drawn when the local player is in their plot or this close to its middle. */
-const DETAIL_RANGE = 22;
+const DETAIL_RANGE = 26;
 
 interface Avatar {
   rig: PlayerRig;
@@ -22,7 +22,7 @@ interface Avatar {
 }
 
 /** A speech bubble: a white rounded box with dark text and a little tail, drawn on a canvas. */
-function makeBubble(): { sprite: THREE.Sprite; draw: (text: string) => void } {
+export function makeBubble(): { sprite: THREE.Sprite; draw: (text: string) => void } {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 128;
@@ -83,7 +83,7 @@ export class RemoteView {
         base: new Base(scene, slot, { vacant: true }),
         owner: null,
         padsKey: '',
-        center: fromPlot(slot, 0, -5),
+        center: fromPlot(slot, 0, -12),
       });
     }
   }

@@ -39,6 +39,8 @@ the Network URL it prints.
 | At the base: level up a brainrot | Click Level up under it | Tap Level up under it |
 | At the base: store or sell the brainrot you're next to | E | The action button |
 | Backpack | Bag in the dock, or B | Bag in the dock |
+| Chat | Enter (or the Chat button), type, Enter to send, Esc to close | Chat button |
+| Scroll a panel (book, backpack, shop) | Drag it, or the mouse wheel | Drag it |
 
 Release the charge in the green band for +15% height, or the gold band for +30%.
 
@@ -59,8 +61,11 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   central lane, with no fences, so it feels like neighbours. At the lane's end is a shared hub: looking
   down the lane toward it, the cannon, the merge cauldron and the upgrade shop are on the right, and the
   row of gacha machines is on the left. Everyone uses the same cannon, cauldron, shop and machines; a plot
-  is only its owner's showcase. A smooth three-tier fountain with arcing water closes the far end of the
-  lane. Only things standing on the ground are solid (pedestals, machines, the cannon, the stall, the
+  is only its owner's showcase. Plots stand 4 m back from the lane, reached by a short tiled path, with
+  9 m of grass between neighbours, and run away from the lane (as in the second sketch). A smooth
+  three-tier fountain with arcing water closes the far end of the lane. The hub, the lane, the plot paths
+  and the fountain's circle are paved in subtle Lego-style tiles (each square a slightly different shade,
+  with a soft stud), and each surface sits at its own height so edges never overlap or flicker. Only things standing on the ground are solid (pedestals, machines, the cannon, the stall, the
   cauldron, the fountain). The shared cannon is at the world origin, so flights and their cameras are
   unchanged. With real multiplayer the server assigns each player a plot; this client is the first plot
   on the cannon side.
@@ -121,12 +126,15 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     tornado, a gold horseshoe and a four-leaf clover: Uncommon 55%, Rare 33%, Epic 10%, Legendary 2%.
   - SUPER (100 gems, 150 m), a blue-and-gold slot machine with three reels, chasing bulbs and a lever:
     Rare 50%, Epic 38%, Legendary 12%.
-  - ULTRA (400 gems, 400 m), a tall purple slot machine with an arched marquee and a crown: Epic 20%,
-    Legendary 55%, Mythic 25%.
+  - ULTRA (400 gems, 400 m), a tall purple slot machine with an arched marquee and a crown: Epic 22%,
+    Legendary 73%, Mythic 5%.
   - COSMIC (600 gems, 550 m), a black-and-gold pedestal under a glowing orb in two whirling gimbal rings,
-    with stars in orbit: Legendary 30%, Mythic 70%, and a Mythic at least every 2 pulls.
+    with stars in orbit: Legendary 88%, Mythic 12%.
+  - Mythics are very rare: about one per 7,700 gems from Ultra and one per 4,800 from Cosmic, pity
+    included (a Mythic is guaranteed only after 60 Ultra or 25 Cosmic pulls without one), or 8 Legendaries
+    merged.
   - Each tier is worth more per gem than the one below (`npm run sim`, merged-up value in Legendaries per
-    1,000 gems): Basic 2.31, Lucky 2.53, Super 2.81, Ultra 3.71, Cosmic 4.21. Lucky unlocks at about 2
+    1,000 gems): Basic 2.32, Lucky 2.50, Super 2.81, Ultra 3.00, Cosmic 3.14. Lucky unlocks at about 2
     minutes without slowing the first pulls.
   - A locked machine is dimmed and grey, chained, with a gold padlock, and its sign says the height that
     unlocks it, your best so far and a progress bar. The first time you come back from a flight that
@@ -141,7 +149,9 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     or not unlocked: the machine shakes its head.
   - Mythic is the new top rarity (350 coins/s), with two characters from the design doc: Razzo
     Rinoceronte (a rhino strapped to a sputtering rocket) and Satellito Gattino (a kitten with satellite
-    dish ears that sweep the sky). Mythics come from the Ultra pull, or from merging three Legendaries.
+    dish ears that sweep the sky). Mythics come from the Ultra and Cosmic machines, or from merging eight
+    Legendaries. Mythic statues shimmer with a moving rainbow over their whole body (keeping their cel
+    shading).
   - Opening: the machine shakes silently and the sound comes when the capsule pops open. On the cards,
     every flip whooshes and pops, and Rare and better get a fanfare that grows with rarity. Epic and
     better flash the screen in their colour, turn light rays behind the card, burst confetti and show a
@@ -154,7 +164,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   - Hidden pity, never shown to the player: on Basic pulls, every 15th pull without an Uncommon or better
     is one, and likewise a Rare by 30, an Epic by 60 and a Legendary by 90. Lucky: a Rare or better by 4,
     an Epic by 15, a Legendary by 60. Super: an Epic or better by 4 and a Legendary by 10. Ultra: a
-    Legendary or better by 3 and a Mythic by 6. Cosmic: a Mythic by 2. Each counter resets when that rarity or better comes up, by luck
+    Legendary or better by 3 and a Mythic by 60. Cosmic: a Mythic by 25. Each counter resets when that rarity or better comes up, by luck
     or by pity, so an Uncommon on pull 2 means the next guaranteed one is pull 17, not pull 15.
   - Results go on display by themselves: empty slots fill best first, and a rarer pull swaps out a
     level-1 brainrot (which goes to the backpack with its coins collected). Levelled ones are never moved.
@@ -165,7 +175,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     is one more press. Merges reveal their results the same way.
 - **Merge station**, a bubbling cauldron behind the cannon. Step on the purple platform in front of it
   and press E (the pot jumps and wobbles on each merge): 10 Common → 1 Uncommon, 8 Uncommon →
-  1 Rare, 6 Rare → 1 Epic, 4 Epic → 1 Legendary, 3 Legendary → 1 Mythic, from the backpack. A merge gives a random character of
+  1 Rare, 6 Rare → 1 Epic, 4 Epic → 1 Legendary, 8 Legendary → 1 Mythic, from the backpack. A merge gives a random character of
   the next rarity. Merge all runs every recipe from the bottom up in one click, and merged brainrots go
   on display if they beat what's there.
 - **Backpack**: brainrots not on display. Sell one or all of a rarity (60 seconds of its income each),
@@ -173,8 +183,11 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - **Shop**: a market stall with a striped awning and goods on the counter, and a keeper with an apron and
   a moustache who turns to watch customers and waves when you arrive. Upgrades in the dock teleports you
   to its counter and opens the shop (from the cannon too); standing on its rug and pressing E opens it.
-- **Showcase**: each plot is a tiled floor edged in its owner's colour (gold for yours), two rows of 5
-  pedestals along the lane facing it, and a name board at the back. 4 slots are open at the start; locked ones are roped off, and each base
+- **Showcase**: each plot is a tiled area edged by a low, rounded kerb in its owner's colour (gold for
+  yours), open at the front where its path comes in from the lane: a subtle edge, not a fence, that you
+  can step over. Inside, two lines of 5 pedestals run back from the lane either side of an aisle (filled in
+  pairs from the front), with the brainrots turned toward the lane and the aisle, and the owner's name
+  board stands tall at the back. Walking down the aisle collects from both lines. 4 slots are open at the start; locked ones are roped off, and each base
   expansion in Upgrades opens 2 more (600, then 3,600, then 21,600 coins). Empty open slots pulse a
   ring of light.
 - **Slots**: a brainrot on display earns coins once a second by rarity (Common 1/s up to Legendary 90/s),
@@ -211,7 +224,12 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - Offline earnings: brainrots keep earning while you're away, at half rate for up to 2 hours.
 - Daily rewards: a 7-day login streak (coins, a Rare on day 3, an Epic on day 7, both to the backpack).
 - Collection book: every character as a silhouette until pulled, with a one-time reward per completed
-  page (500, 5,000 and 50,000 coins).
+  page (500, 5,000 and 50,000 coins). Drag it (or any panel) up and down to scroll, with a little glide.
+- **Chat**: press Enter or the Chat button, type and press Enter. Your message shows in the feed and in a
+  bubble over your head. Bots answer like people do: nearly always a hello ("hey 👋", sometimes two of
+  them), often "how are you", thanks, goodbyes and questions about the game (gems, Mythics, merging, the
+  shop, rebirth, trading), now and then anything else, and they ignore the rest. Name someone and they'll
+  usually answer. Replies take as long as they'd take to type. While typing, keys don't move or fire.
 - Session gifts: 20 gems at 2 minutes (two more pulls, to keep a new player going), then 30 gems and a
   minute of income at 5 minutes, 50 gems and 2 minutes at 10, 100 gems (a Super pull) and 2 minutes at
   20, and 200 gems and 4 minutes at 40.
@@ -340,6 +358,7 @@ All first-pass numbers live in `src/config.ts`.
 | `src/platform.ts` | The CrazyGames SDK wrapper |
 | `src/base.ts` | A plot's showcase (floor, name board, pedestals, brainrots, coins), and what's solid and how high the floor is, town-wide |
 | `src/hub.ts` | The shared hub: paving, the cauldron, the shop stall and keeper, the five gacha machines with their pads and locks, the fountain |
+| `src/tiles.ts` | The Lego-style tile texture for paving and plot floors |
 | `src/characters.ts` | The 10 character models and their idle animations |
 | `src/world.ts` | Sky pieces, cannon, player avatar, gems, hazards, guide arrows, labels |
 | `src/layout.ts` | The town: the lane, the eight plot slots, where the hub's things stand, and walking limits |

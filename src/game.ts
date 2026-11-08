@@ -23,7 +23,7 @@ import {
   walkStep,
 } from './layout';
 import { CAPACITY, FakeServer, describePad } from './net';
-import { RemoteView } from './remote';
+import { RemoteView, makeBubble } from './remote';
 import {
   CHARGE,
   CHUTE,
@@ -77,6 +77,7 @@ import { BOOK_ZONES, DAILY, bookEntries, dailyCoins, dailyStatus, dayKey, offlin
 import { platform } from './platform';
 import { clearSave, loadSave, writeSave, type Owned, type PadSlot, type Save } from './store';
 import {
+  BARREL_Y,
   buildEnv,
   makeBird,
   GEM_SCALE,
@@ -142,7 +143,7 @@ const LANDING_Z = 3.5;
 const OWN = SLOTS[OWN_SLOT];
 /** Where returning players start: in the lane in front of their plot, looking at it. */
 const HOME_SPOT = (() => {
-  const [x, z] = laneFront(OWN, 0);
+  const [x, z] = laneFront(OWN);
   return new THREE.Vector3(x, 0, z);
 })();
 const HOME_YAW = (() => {
@@ -164,8 +165,9 @@ const AIM_HOLD = 0.9;
 /** Distance from the barrel's pivot to where the player sits in it. */
 const BARREL_REACH = 3;
 const WALK_SPEED = 9;
-/** Walking up within this distance of a slot's centre collects its coins (the pedestal itself is solid). */
-const COLLECT_RADIUS = 2.9;
+/** Walking up within this distance of a slot's centre collects its coins (the pedestal itself is solid): walking
+ * down a plot's aisle collects both lines. */
+const COLLECT_RADIUS = 3.2;
 /** How wide the player is, for bumping into things at the base. */
 const PLAYER_RADIUS = 0.45;
 /** Level-up buttons show for slots this close to the player. */
@@ -322,6 +324,9 @@ export class Game {
   private camSnap = false;
   /** When the parachute alarm last beeped. */
   private beepAt = 0;
+  /** The player's speech bubble, and how long it stays up. */
+  private bubble = makeBubble();
+  private bubbleT = 0;
   private screen = new THREE.Vector3();
   /** What to do when the current walk arrives. */
   private arrive: (() => void) | null = null;
@@ -370,6 +375,7 @@ export class Game {
       if (o instanceof THREE.Mesh) o.castShadow = true;
     });
     this.scene.add(this.player.group);
+    this.player.group.add(this.bubble.sprite);
     this.fx = new Particles(this.scene);
     this.streaks = new Streaks(this.scene);
     this.input = new Input(canvas);
@@ -470,7 +476,15 @@ export class Game {
     hud.onBuy = (item) => this.buy(item);
     hud.onAction = () => this.useHere();
     hud.onPadButton = (i) => this.levelUp(i);
+    hud.onChat = (text) => this.sayLocal(text);
     window.addEventListener('keydown', (e) => {
+      // Typing in the chat or the tuning panel isn't a shortcut.
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.code === 'Enter' && !hud.modalOpen && !hud.shopOpen) {
+        e.preventDefault();
+        hud.openChat();
+        return;
+      }
       if (e.code === 'KeyT') hud.tunePanel.classList.toggle('hidden');
       const atBase = !hud.modalOpen && (this.state === 'home' || this.state === 'aim');
       if (e.code === 'KeyB' && atBase) this.openBackpack();
@@ -499,6 +513,13 @@ export class Game {
       },
     });
     hud.setSound(!this.save.muted);
+  }
+
+  /** The player says something: into the feed, in a bubble over their head, and to everyone on the server. */
+  private sayLocal(text: string): void {
+    this.server.localChat(text);
+    this.bubble.draw(text);
+    this.bubbleT = 5;
   }
 
   /** The game's own mute, overridden by CrazyGames' mute setting. */
@@ -1650,7 +1671,7 @@ export class Game {
     } else {
       this.walkVel.set(0, 0);
     }
-    if (this.input.consumeKey('KeyE') || this.input.consumeKey('Enter')) this.useHere();
+    if (this.input.consumeKey('KeyE')) this.useHere();
   }
 
   // ---------------------------------------------------------------- multiplayer (fake server)
@@ -2618,6 +2639,8 @@ export class Game {
         : Math.sin(this.time * (1.5 + flutter * 12)) * (0.05 + flutter * 0.08);
     this.player.chute.scale.y = this.chuteScale * (1 - flutter * 0.15 + Math.sin(this.time * 20) * flutter * 0.05);
     this.updateHelmet(realDt);
+    this.bubbleT = Math.max(0, this.bubbleT - realDt);
+    this.bubble.sprite.visible = this.bubbleT > 0;
 
     const free = this.state === 'home' && !this.walking && this.pulling <= 0 && !this.hud.modalOpen;
     this.hud.showAction(free ? this.actionLabel() : null);
@@ -2942,7 +2965,7 @@ export class Game {
     const kick = r > 0 ? Math.sin((1 - r) * Math.PI * 3) * r * 0.22 : 0;
     const bulge = this.gulp > 0 ? Math.sin((1 - this.gulp) * Math.PI * 2.5) * this.gulp * 0.16 : 0;
     barrel.scale.set(1 + squash * 0.08 - kick * 0.4 + bulge, 1 - squash * 0.12 + kick - bulge * 0.6, 1 + squash * 0.08 - kick * 0.4 + bulge);
-    barrel.position.y = 1.25 - r * r * 0.35;
+    barrel.position.y = BARREL_Y - r * r * 0.35;
     barrel.rotation.z = tilt;
   }
 

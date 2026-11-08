@@ -30,6 +30,7 @@ import {
   pullPad,
 } from './layout';
 import { PLATFORM_RADIUS, floorWorld } from './base';
+import { tileTexture } from './tiles';
 import { flat, makePlayer, softTexture, type PlayerRig } from './world';
 
 const GOLD = 0xffc84a;
@@ -328,28 +329,33 @@ export class Hub {
 
   /** Warm stone paving: the hub's plaza, the lane up between the plots, the fountain's circle and the cannon's dais. */
   private buildPaving(): void {
-    const stone = new THREE.MeshLambertMaterial({ color: 0xeadcc0 });
-    const lane = new THREE.MeshLambertMaterial({ color: 0xe2d2b2 });
     const edge = new THREE.MeshLambertMaterial({ color: 0xcdb892 });
-    const flatBox = (w: number, d: number, mat: THREE.Material, x: number, z: number, y = 0.03, r = 0.4) => {
-      const mesh = new THREE.Mesh(new RoundedBoxGeometry(w, 0.06, d, 2, Math.min(r, 0.03)), mat);
+    // Each surface sits at its own height so overlapping edges never flicker: hub, then lane, then the
+    // fountain's circle on top where the lane meets it.
+    const flatBox = (w: number, d: number, mat: THREE.Material, x: number, z: number, y: number) => {
+      const mesh = new THREE.Mesh(new RoundedBoxGeometry(w, 0.06, d, 2, 0.03), mat);
       mesh.position.set(x, y, z);
       mesh.receiveShadow = true;
       this.group.add(mesh);
       return mesh;
     };
+    const tiled = (color: string, w: number, d: number) => new THREE.MeshLambertMaterial({ map: tileTexture(color, w, d) });
     const minX = TOWN.minX + 3;
     const maxX = TOWN.maxX - 3;
-    flatBox(maxX - minX + 0.8, HUB_EDGE - HUB_BACK + 0.8, edge, (minX + maxX) / 2, (HUB_EDGE + HUB_BACK) / 2, 0.02);
-    flatBox(maxX - minX, HUB_EDGE - HUB_BACK, stone, (minX + maxX) / 2, (HUB_EDGE + HUB_BACK) / 2, 0.03);
-    // The lane, with a kerb either side and a row of inlaid gold studs down the middle.
-    const laneLen = FOUNTAIN.z - HUB_EDGE;
-    flatBox(LANE_HALF * 2 + 0.6, laneLen + 0.4, edge, LANE_X, HUB_EDGE + laneLen / 2, 0.02);
-    flatBox(LANE_HALF * 2, laneLen, lane, LANE_X, HUB_EDGE + laneLen / 2, 0.03);
-    const studs = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.22, 0.22, 0.04, 16), flat(GOLD, { emissive: 0x5a3c00 }), 40);
+    const hubW = maxX - minX;
+    const hubD = HUB_EDGE - HUB_BACK;
+    flatBox(hubW + 0.8, hubD + 0.8, edge, (minX + maxX) / 2, (HUB_EDGE + HUB_BACK) / 2, 0.015);
+    flatBox(hubW, hubD, tiled('#eadcc0', hubW, hubD), (minX + maxX) / 2, (HUB_EDGE + HUB_BACK) / 2, 0.025);
+    // The lane, with a kerb either side and a row of inlaid gold studs down the middle; it stops where the
+    // fountain's circle begins.
+    const laneEnd = FOUNTAIN.z - 9.4;
+    const laneLen = laneEnd - HUB_EDGE;
+    flatBox(LANE_HALF * 2 + 0.6, laneLen, edge, LANE_X, HUB_EDGE + laneLen / 2, 0.02);
+    flatBox(LANE_HALF * 2, laneLen, tiled('#e2d2b2', LANE_HALF * 2, laneLen), LANE_X, HUB_EDGE + laneLen / 2, 0.033);
+    const studs = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.22, 0.22, 0.04, 16), flat(GOLD, { emissive: 0x5a3c00 }), 60);
     let n = 0;
-    for (let z = HUB_EDGE + 2; z < FOUNTAIN.z - 8 && n < 40; z += 3) {
-      this.dummy.position.set(LANE_X, 0.07, z);
+    for (let z = HUB_EDGE + 2; z < laneEnd - 1 && n < 60; z += 3) {
+      this.dummy.position.set(LANE_X, 0.075, z);
       this.dummy.updateMatrix();
       studs.setMatrixAt(n++, this.dummy.matrix);
     }
@@ -359,10 +365,11 @@ export class Hub {
     // The fountain's round plaza at the lane's end.
     const ring = new THREE.Mesh(new THREE.CircleGeometry(10, 64), edge);
     ring.rotation.x = -Math.PI / 2;
-    ring.position.set(FOUNTAIN.x, 0.04, FOUNTAIN.z);
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(9.5, 64), stone);
+    ring.position.set(FOUNTAIN.x, 0.07, FOUNTAIN.z);
+    const discTex = tileTexture('#eadcc0', 19, 19);
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(9.5, 64), new THREE.MeshLambertMaterial({ map: discTex }));
     disc.rotation.x = -Math.PI / 2;
-    disc.position.set(FOUNTAIN.x, 0.05, FOUNTAIN.z);
+    disc.position.set(FOUNTAIN.x, 0.075, FOUNTAIN.z);
     ring.receiveShadow = disc.receiveShadow = true;
     this.group.add(ring, disc);
     // The cannon's dais: a round step with a gold inlay.
@@ -377,8 +384,8 @@ export class Hub {
     const last = machineAt(GACHA.length - 1);
     const len = first.z - last.z + 7;
     const midZ = (first.z + last.z) / 2;
-    flatBox(10.6, len + 0.5, flat(GOLD, { emissive: 0x4a3200 }), MACHINE_X + 2.2, midZ, 0.05);
-    flatBox(10, len, new THREE.MeshLambertMaterial({ color: 0xffb3d9 }), MACHINE_X + 2.2, midZ, 0.06);
+    flatBox(10.6, len + 0.5, flat(GOLD, { emissive: 0x4a3200 }), MACHINE_X + 2.2, midZ, 0.04);
+    flatBox(10, len, new THREE.MeshLambertMaterial({ color: 0xffb3d9 }), MACHINE_X + 2.2, midZ, 0.05);
   }
 
   // ---------------------------------------------------------------- the cauldron

@@ -28,6 +28,39 @@ function toon(color: number, extra: THREE.MeshToonMaterialParameters = {}): THRE
   return new THREE.MeshToonMaterial({ color, gradientMap: toonRamp, ...extra });
 }
 
+/** Shared clock for the Mythic rainbow. */
+const rainbowTime = { value: 0 };
+const rainbowCache = new Map<THREE.Material, THREE.MeshToonMaterial>();
+
+/**
+ * A Mythic's shimmering rainbow: the same cel-shaded material, with bands of rainbow colour that sweep up and
+ * around the model over time. The light bands still show through (it tints by brightness), so it keeps its shape.
+ */
+function rainbowOf(source: THREE.MeshToonMaterial): THREE.MeshToonMaterial {
+  let m = rainbowCache.get(source);
+  if (m) return m;
+  m = source.clone();
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uRainbowTime = rainbowTime;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRainbowPos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRainbowPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRainbowPos;\nuniform float uRainbowTime;')
+      .replace(
+        '#include <tonemapping_fragment>',
+        `float rbPhase = vRainbowPos.y * 0.9 + (vRainbowPos.x + vRainbowPos.z) * 0.35 - uRainbowTime * 0.45;
+        vec3 rb = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + rbPhase));
+        float rbLum = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, rb * (0.3 + rbLum * 1.15), 0.62);
+        #include <tonemapping_fragment>`,
+      );
+  };
+  m.customProgramCacheKey = () => 'mythic-rainbow';
+  rainbowCache.set(source, m);
+  return m;
+}
+
 /** Back faces in ink, a little larger than each part: an outline that works for any shape. */
 const outlineMat = new THREE.MeshBasicMaterial({ color: 0x1d2340, side: THREE.BackSide });
 
@@ -475,6 +508,14 @@ export function makeCharacter(rarity: number, name: string): CharacterRig {
   const figure = new THREE.Group();
   group.add(figure);
   const animate = (MODELS[name] ?? cubeModel)(figure, rarityMaterial(rarity));
+  // Mythics shimmer with a moving rainbow over their whole body.
+  if (rarity === 5) {
+    figure.traverse((o) => {
+      if (o instanceof THREE.Mesh && o.material instanceof THREE.MeshToonMaterial && !NO_OUTLINE.has(o.material)) {
+        o.material = rainbowOf(o.material);
+      }
+    });
+  }
   outline(figure);
   const cloud = makeCloud(0.75, 3);
   group.add(cloud);
@@ -497,6 +538,7 @@ export function makeSilhouette(rarity: number, name: string): THREE.Group {
 
 /** Animations that live on shared materials: the bulb flicker and the Secret rainbow. */
 export function animateShared(t: number): void {
+  rainbowTime.value = t;
   bulbMat.emissiveIntensity = Math.sin(t * 7) + Math.sin(t * 17) > 0.4 ? 1 : 0.25;
   const secret = rarityMaterial(RARITIES.length - 1);
   secret.color.setHSL((t * 0.25) % 1, 0.9, 0.6);

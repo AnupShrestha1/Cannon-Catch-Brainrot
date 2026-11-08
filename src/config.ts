@@ -132,12 +132,12 @@ export const GACHA: GachaTier[] = [
     short: 'ULTRA',
     color: '#b45cff',
     cost: 400,
-    // Epic or better, with a real shot at a Mythic. Worth more per gem than Super pulls on every count
+    // Epic or better, mostly Legendary, and a slim chance at a Mythic. Worth more per gem than Super pulls
     // (`npm run sim` prints the comparison). Unlocks once a flight reaches the Storm Layer.
-    odds: [[3, 0.2], [4, 0.55], [5, 0.25]],
+    odds: [[3, 0.22], [4, 0.73], [5, 0.05]],
     unlockBest: 400,
-    // A Legendary or better at least every 3 Ultra pulls, and a Mythic every 6.
-    pity: [[4, 3], [5, 6]],
+    // A Legendary or better at least every 3 Ultra pulls; a Mythic is guaranteed only after 60 without one.
+    pity: [[4, 3], [5, 60]],
   },
   {
     id: 'cosmic',
@@ -145,11 +145,12 @@ export const GACHA: GachaTier[] = [
     short: 'COSMIC',
     color: '#ffc21a',
     cost: 600,
-    // Legendary or better, mostly Mythic: the late-game machine, for flights high in the Storm Layer.
-    odds: [[4, 0.3], [5, 0.7]],
+    // Always Legendary or better, with the best odds of a Mythic: the late-game machine, for flights high in
+    // the Storm Layer. Mythics stay very rare even here.
+    odds: [[4, 0.88], [5, 0.12]],
     unlockBest: 550,
-    // A Mythic at least every 2 Cosmic pulls.
-    pity: [[5, 2]],
+    // A Mythic at least every 25 Cosmic pulls.
+    pity: [[5, 25]],
   },
 ];
 
@@ -162,8 +163,8 @@ export const GACHA: GachaTier[] = [
 export const STARTER_PULLS: Record<number, number> = { 1: 1, 3: 2, 5: 1 };
 export const STARTER_PULL_COUNT = 10;
 
-/** Merging: this many of a rarity make one random character of the next rarity up. Legendary is the top for now. */
-export const MERGE: Record<number, number> = { 0: 10, 1: 8, 2: 6, 3: 4, 4: 3 };
+/** Merging: this many of a rarity make one random character of the next rarity up. A Mythic takes 8 Legendaries. */
+export const MERGE: Record<number, number> = { 0: 10, 1: 8, 2: 6, 3: 4, 4: 8 };
 
 export function rollTier(tier: GachaTier): number {
   let roll = Math.random();

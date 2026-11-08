@@ -2,10 +2,12 @@
 // fences between neighbours, and a shared hub at the lane's end. Looking down the lane toward the hub, the
 // cannon, the merge cauldron and the upgrade shop are on the right, and the row of gacha machines is on the
 // left. Everyone uses the same cannon, cauldron, shop and machines; a plot is only its owner's showcase.
+// Plots stand a few metres back from the lane (a short path leads in) and well apart, and run away from it:
+// two lines of pedestals perpendicular to the lane with an aisle between them, edged by a low kerb.
 //
 // World frame: the shared cannon sits at the origin and fires straight up (flights run in the plane z = 0,
 // seen from +z), so flights and their cameras never move. The lane runs along +z from the hub. A plot is
-// built in its own space: origin at the middle of its lane edge, +z toward the lane, the showcase down -z.
+// built in its own space: origin at the middle of its front edge, +z toward the lane, the showcase down -z.
 // toPlot and fromPlot convert between a plot's space and the world.
 
 /** The lane's centre line (x) and half its width. */
@@ -14,19 +16,22 @@ export const LANE_HALF = 4;
 /** Where the hub ends and the lane and plots begin (z), and the hub's back edge. */
 export const HUB_EDGE = 10;
 export const HUB_BACK = -24;
-/** Plots sit this far apart along the lane, and reach this far back from it. */
-export const PLOT_PITCH = 22;
-export const PLOT_DEPTH = 11;
-/** Half a plot's length along the lane. */
-export const PLOT_HALF = 10.5;
+/** Plot centres are this far apart along the lane; a plot is this deep, and half this wide along the lane. */
+export const PLOT_PITCH = 24;
+export const PLOT_DEPTH = 25;
+export const PLOT_HALF = 6.5;
+/** The gap between the lane's edge and a plot's front, crossed by a short path. */
+export const SETBACK = 4;
 export const PLOTS_PER_SIDE = 4;
+/** Along the lane, the first plot's centre. */
+const FIRST_PLOT_Z = HUB_EDGE + 8;
 /** Where the lane ends, and the fountain that closes it. */
-export const LANE_END = HUB_EDGE + PLOT_PITCH * PLOTS_PER_SIDE;
+export const LANE_END = FIRST_PLOT_Z + PLOT_PITCH * (PLOTS_PER_SIDE - 1) + PLOT_HALF + 6;
 export const FOUNTAIN = { x: LANE_X, z: LANE_END + 6, r: 4.4 };
 
 export interface PlotSlot {
   index: number;
-  /** World position of the middle of the plot's lane edge, and the plot's turn about y (+z faces the lane). */
+  /** World position of the middle of the plot's front edge, and the plot's turn about y (+z faces the lane). */
   x: number;
   z: number;
   rot: number;
@@ -38,10 +43,10 @@ export interface PlotSlot {
  */
 export const SLOTS: PlotSlot[] = [];
 for (let k = 0; k < PLOTS_PER_SIDE; k++) {
-  SLOTS.push({ index: k, x: LANE_X - LANE_HALF, z: HUB_EDGE + PLOT_PITCH * (k + 0.5), rot: Math.PI / 2 });
+  SLOTS.push({ index: k, x: LANE_X - LANE_HALF - SETBACK, z: FIRST_PLOT_Z + PLOT_PITCH * k, rot: Math.PI / 2 });
 }
 for (let k = 0; k < PLOTS_PER_SIDE; k++) {
-  SLOTS.push({ index: PLOTS_PER_SIDE + k, x: LANE_X + LANE_HALF, z: HUB_EDGE + PLOT_PITCH * (k + 0.5), rot: -Math.PI / 2 });
+  SLOTS.push({ index: PLOTS_PER_SIDE + k, x: LANE_X + LANE_HALF + SETBACK, z: FIRST_PLOT_Z + PLOT_PITCH * k, rot: -Math.PI / 2 });
 }
 
 /** The slot this client owns. A server will assign this; until then it's the first plot on the cannon side. */
@@ -83,8 +88,8 @@ export function pullPad(i: number, ten: boolean): { x: number; z: number } {
 
 /** The world area the town covers (hub, plots, lane and fountain), for keeping scenery out. */
 export const TOWN = {
-  minX: MACHINE_X - 6,
-  maxX: SHOP.x + SHOP.halfD + 6,
+  minX: Math.min(MACHINE_X - 6, LANE_X - LANE_HALF - SETBACK - PLOT_DEPTH - 3),
+  maxX: Math.max(SHOP.x + SHOP.halfD + 6, LANE_X + LANE_HALF + SETBACK + PLOT_DEPTH + 3),
   minZ: HUB_BACK - 2,
   maxZ: FOUNTAIN.z + FOUNTAIN.r + 4,
 };
@@ -122,9 +127,14 @@ export function plotAt(x: number, z: number): PlotSlot | null {
   return null;
 }
 
-/** A point in the lane just in front of a plot, level with a spot along it. */
-export function laneFront(slot: PlotSlot, lx = 0): [number, number] {
-  return fromPlot(slot, Math.max(-PLOT_HALF + 1, Math.min(PLOT_HALF - 1, lx)), 2);
+/** A point in the lane just in front of a plot's path. */
+export function laneFront(slot: PlotSlot): [number, number] {
+  return fromPlot(slot, 0, SETBACK + 1.5);
+}
+
+/** The plot's entrance, where its path from the lane meets its kerb. */
+export function plotEntrance(slot: PlotSlot): [number, number] {
+  return fromPlot(slot, 0, 0.6);
 }
 
 /** Keeps a step inside the town; everything solid is handled by bumpSolids. */
