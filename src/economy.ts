@@ -153,8 +153,14 @@ export function mergeChosen(save: Save, chosen: Owned[]): Owned | null {
   return got;
 }
 
-export function incomeMultiplier(save: Save): number {
-  return 1 + save.rebirths * REBIRTH.incomeBonus;
+/** Income multiplier from rebirths: compounding, ×(1 + incomeBonus) for every one. */
+export function incomeMultiplier(save: Pick<Save, 'rebirths'>): number {
+  return Math.pow(1 + REBIRTH.incomeBonus, save.rebirths);
+}
+
+/** A multiplier for display: "1.5", "2.25", "3.38", "11", "57". */
+export function formatMult(m: number): string {
+  return m >= 10 ? String(Math.round(m)) : String(+m.toFixed(2));
 }
 
 /** Income of one character on a pad, after its level and rebirths. */

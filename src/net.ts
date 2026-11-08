@@ -17,7 +17,7 @@
 // new zones, chat, and actions on shared things: firing the cannon, spinning a machine, stirring the cauldron),
 // and a few messages from the local player (their stats, the plot they're visiting, likes, big moments, whether
 // they're in the cannon). Swapping in a real server means replacing this file, not the game.
-import { CHARGE, FLIGHT, GACHA, GEMS, MAX_ZONE, RARITIES, REBIRTH, TRACKS, ZONES, ECONOMY, zoneIndexAt } from './config';
+import { CHARGE, FLIGHT, GACHA, GEMS, MAX_ZONE, RARITIES, TRACKS, ZONES, ECONOMY, zoneIndexAt } from './config';
 import { Base, bumpSolids, floorWorld } from './base';
 import {
   buyUpgrade,
@@ -30,6 +30,8 @@ import {
   mergeNeed,
   padIncome,
   flightApex,
+  formatMult,
+  incomeMultiplier,
   pull,
   putOnPad,
   rebirthCannonLevel,
@@ -290,7 +292,7 @@ function pullAll(save: Save): void {
 /** Merges everything it can, bottom up; returns what it made that's still around. */
 function mergeAll(save: Save): Owned[] {
   const made: Owned[] = [];
-  for (let r = 0; r < 5; r++) {
+  for (let r = 0; r < 6; r++) {
     const need = mergeNeed(r);
     while (need !== null && save.inventory.filter((o) => o.rarity === r).length >= need) {
       const one = merge(save, r);
@@ -908,7 +910,7 @@ export class FakeServer {
       this.usePullPad(bot, choice.index, choice.count);
       return;
     }
-    const mergeable = [0, 1, 2, 3, 4].some((r) => s.inventory.filter((o) => o.rarity === r).length >= (mergeNeed(r) ?? Infinity));
+    const mergeable = [0, 1, 2, 3, 4, 5].some((r) => s.inventory.filter((o) => o.rarity === r).length >= (mergeNeed(r) ?? Infinity));
     if (mergeable) {
       this.go(bot, this.route(bot, CAULDRON_FRONT.x + rand(-0.4, 0.4), CAULDRON_FRONT.z + rand(-0.4, 0.4)), () => {
         bot.wait = rand(1.2, 2);
@@ -1168,7 +1170,7 @@ export class FakeServer {
     this.events.push({
       kind: 'rebirth',
       name: bot.name,
-      text: `rebirthed! ×${1 + s.rebirths * REBIRTH.incomeBonus} income${newFloor ? ' and a new floor' : ''}`,
+      text: `rebirthed! ×${formatMult(incomeMultiplier(s))} income${newFloor ? ' and a new floor' : ''}`,
       color: '#ffd84a',
     });
     if (Math.random() < 0.6) this.after(1.5, () => this.say(bot, pick(['REBIRTH LETS GO', 'new floor!!', 'finally rebirthed', 'ez'])));

@@ -62,6 +62,42 @@ function rainbowOf(source: THREE.MeshToonMaterial): THREE.MeshToonMaterial {
   return m;
 }
 
+const celestialCache = new Map<THREE.Material, THREE.MeshToonMaterial>();
+
+/**
+ * A Celestial's shading: a slow-moving nebula of deep blue, violet and cyan over the whole body, flecked with
+ * gold stars that twinkle. Like the Mythic rainbow, it keeps the cel shading's light bands underneath.
+ */
+function celestialOf(source: THREE.MeshToonMaterial): THREE.MeshToonMaterial {
+  let m = celestialCache.get(source);
+  if (m) return m;
+  m = source.clone();
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uRainbowTime = rainbowTime;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCelPos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCelPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCelPos;\nuniform float uRainbowTime;')
+      .replace(
+        '#include <tonemapping_fragment>',
+        `float celW = 0.5 + 0.5 * sin(vCelPos.y * 2.4 + vCelPos.x * 1.3 - uRainbowTime * 0.7);
+        float celV = 0.5 + 0.5 * sin(vCelPos.z * 3.1 + vCelPos.y * 0.8 + uRainbowTime * 0.5);
+        vec3 neb = mix(vec3(0.06, 0.05, 0.32), vec3(0.55, 0.22, 0.95), celW);
+        neb = mix(neb, vec3(0.25, 0.85, 1.0), celV * 0.45);
+        float celLum = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
+        vec3 cell = floor(vCelPos * 16.0);
+        float h = fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+        float star = step(0.9, h) * (0.5 + 0.5 * sin(uRainbowTime * 4.0 + h * 40.0));
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, neb * (0.45 + celLum * 1.1), 0.82) + vec3(1.0, 0.86, 0.45) * star * 1.3;
+        #include <tonemapping_fragment>`,
+      );
+  };
+  m.customProgramCacheKey = () => 'celestial-nebula';
+  celestialCache.set(source, m);
+  return m;
+}
+
 /** Back faces in ink, a little larger than each part: an outline that works for any shape. */
 const outlineMat = new THREE.MeshBasicMaterial({ color: 0x1d2340, side: THREE.BackSide });
 
@@ -648,7 +684,89 @@ const MODELS_MYTHIC: Record<string, Model> = {
   },
 };
 
-Object.assign(MODELS, MODELS_STORM, MODELS_MYTHIC);
+const MODELS_CELESTIAL: Record<string, Model> = {
+  // An owl made of the night sky, wearing a crown of stars, with a ringed planet orbiting it.
+  'Galattico Gufo': (f, accent) => {
+    const body = at(ball(0.48, mat(0x2a2a6a)), 0, 0.62, 0);
+    body.scale.set(1, 1.1, 0.95);
+    const belly = at(ball(0.32, mat(0xb9c4ff)), 0, 0.56, 0.24);
+    belly.scale.set(1, 1.15, 0.6);
+    f.add(body, belly);
+    for (const side of [-1, 1]) {
+      const tuft = at(cone(0.1, 0.28, mat(0x2a2a6a)), side * 0.26, 1.18, 0);
+      tuft.rotation.z = -side * 0.4;
+      const wing = at(ball(0.26, mat(0x3b3b8a)), side * 0.46, 0.6, -0.02);
+      wing.scale.set(0.35, 1, 0.8);
+      f.add(tuft, wing, at(cone(0.06, 0.14, mat(0xffc84a)), side * 0.12, 0.08, 0.2));
+    }
+    const beak = at(cone(0.06, 0.16, mat(0xffc84a)), 0, 0.78, 0.46);
+    beak.rotation.x = Math.PI / 2 + 0.3;
+    f.add(beak);
+    eyes(f, 0, 0.92, 0.4, 0.15);
+    // A crown of gold stars.
+    const crown = at(new THREE.Group(), 0, 1.32, 0);
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * Math.PI * 2;
+      const star = at(ball(0.07, bulbMat), Math.cos(a) * 0.2, 0, Math.sin(a) * 0.2);
+      crown.add(star);
+    }
+    f.add(crown);
+    // A little ringed planet in orbit.
+    const orbit = at(new THREE.Group(), 0, 0.7, 0);
+    const planet = at(new THREE.Group(), 0.85, 0, 0);
+    planet.add(ball(0.13, accent));
+    const pring = ring(0.2, 0.025, mat(0xffe08a));
+    pring.rotation.x = Math.PI / 2 + 0.4;
+    planet.add(pring);
+    orbit.add(planet);
+    f.add(orbit);
+    return (t) => {
+      orbit.rotation.y = t * 1.2;
+      crown.rotation.y = -t * 0.8;
+      body.position.y = 0.62 + Math.sin(t * 2) * 0.03;
+    };
+  },
+
+  // A penguin who is also a planet: a round body circled by a tilted ring of moons, waddling in orbit.
+  'Pianeta Pinguino': (f, accent) => {
+    const body = at(ball(0.46, mat(0x1d2a5a)), 0, 0.58, 0);
+    body.scale.set(1, 1.15, 1);
+    const front = at(ball(0.34, mat(0xe8f0ff)), 0, 0.55, 0.2);
+    front.scale.set(1, 1.2, 0.6);
+    f.add(body, front);
+    for (const side of [-1, 1]) {
+      const flipper = at(ball(0.2, mat(0x1d2a5a)), side * 0.46, 0.6, 0);
+      flipper.scale.set(0.3, 1, 0.6);
+      flipper.rotation.z = side * 0.3;
+      f.add(flipper, at(ball(0.11, mat(0xffa63c)), side * 0.15, 0.06, 0.12));
+    }
+    const beak = at(cone(0.07, 0.18, mat(0xffa63c)), 0, 0.86, 0.44);
+    beak.rotation.x = Math.PI / 2;
+    f.add(beak);
+    eyes(f, 0, 0.98, 0.38, 0.13);
+    // The planetary ring with little moons on it.
+    const tilt = at(new THREE.Group(), 0, 0.6, 0);
+    tilt.rotation.set(0.35, 0, 0.25);
+    const band = ring(0.72, 0.04, accent);
+    band.rotation.x = Math.PI / 2;
+    tilt.add(band);
+    const moons = new THREE.Group();
+    for (let k = 0; k < 3; k++) {
+      const a = (k / 3) * Math.PI * 2;
+      moons.add(at(ball(0.07, mat(0xfff1c0)), Math.cos(a) * 0.72, 0, Math.sin(a) * 0.72));
+    }
+    tilt.add(moons);
+    f.add(tilt);
+    return (t) => {
+      moons.rotation.y = t * 1.5;
+      // A proud waddle.
+      body.rotation.z = Math.sin(t * 3) * 0.06;
+      front.rotation.z = body.rotation.z;
+    };
+  },
+};
+
+Object.assign(MODELS, MODELS_STORM, MODELS_MYTHIC, MODELS_CELESTIAL);
 
 /** Fallback for characters without a model yet: a cube in the rarity colour. */
 const cubeModel: Model = (f, accent) => {
@@ -704,11 +822,12 @@ export function makeCharacter(rarity: number, name: string): CharacterRig {
     const shut = p < 0.14 ? Math.sin((p / 0.14) * Math.PI) : 0;
     for (const e of blinkers) e.scale.y = 1 - shut * 0.9;
   };
-  // Mythics shimmer with a moving rainbow over their whole body.
-  if (rarity === 5) {
+  // Mythics shimmer with a moving rainbow over their whole body; Celestials with a starry nebula.
+  if (rarity >= 5) {
+    const shade = rarity === 5 ? rainbowOf : celestialOf;
     figure.traverse((o) => {
       if (o instanceof THREE.Mesh && o.material instanceof THREE.MeshToonMaterial && !NO_OUTLINE.has(o.material)) {
-        o.material = rainbowOf(o.material);
+        o.material = shade(o.material);
       }
     });
   }

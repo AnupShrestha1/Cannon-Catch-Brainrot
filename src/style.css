@@ -2497,7 +2497,8 @@ button.primary,
 }
 
 .reveal-banner.r4,
-.reveal-banner.r5 {
+.reveal-banner.r5,
+.reveal-banner.r6 {
   font-size: 84px;
   animation-duration: 2.2s;
 }

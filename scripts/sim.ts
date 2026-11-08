@@ -131,7 +131,7 @@ function gacha(save: Save): void {
     if (!display(save, got)) save.inventory.push(got);
   }
   // Merge up while possible, displaying anything that earns more.
-  for (let r = 0; r < 5; r++) {
+  for (let r = 0; r < 6; r++) {
     while (mergeNeed(r) !== null && merge(save, r)) {
       const made = save.inventory.pop()!;
       if (!display(save, made)) save.inventory.push(made);

@@ -259,6 +259,8 @@ export class Base {
   private flights = 0;
   private own: boolean;
   private marker: { group: THREE.Group; star: THREE.Mesh } | null = null;
+  /** Gold cups for the Celestials collected (your own base only). */
+  private trophies: THREE.Group | null = null;
   /** The Collect all pad, shown on your own base from the second rebirth. */
   private collectPad: { group: THREE.Group; ring: THREE.Mesh; total: Label; shown: number } | null = null;
   /** The Upgrade all pad, beside it on the other side of the path. */
@@ -355,6 +357,37 @@ export class Base {
     g.visible = false;
     this.group.add(g);
     this.upgradePad = { group: g, ring, total, key: '' };
+  }
+
+  /** Gold trophy cups on top of the name board, one per Celestial collected. */
+  setTrophies(n: number): void {
+    if (!this.own) return;
+    if (!this.trophies) {
+      this.trophies = new THREE.Group();
+      this.trophies.position.set(0, 4.75, BOARD_Z);
+      this.group.add(this.trophies);
+    }
+    if (this.trophies.children.length === n) return;
+    this.trophies.clear();
+    const gold = new THREE.MeshPhongMaterial({ color: GOLD, emissive: 0x7a5200, shininess: 120, specular: 0xffffff });
+    const profile = [[0.01, 0], [0.32, 0.02], [0.32, 0.12], [0.1, 0.18], [0.08, 0.5], [0.42, 0.75], [0.46, 1.15], [0.4, 1.17], [0.36, 0.8], [0.01, 0.62]].map(
+      ([r, y]) => new THREE.Vector2(r, y),
+    );
+    for (let i = 0; i < n; i++) {
+      const cup = new THREE.Group();
+      cup.add(new THREE.Mesh(new THREE.LatheGeometry(profile, 32), gold));
+      for (const side of [-1, 1]) {
+        const handle = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.05, 10, 24, Math.PI * 1.2), gold);
+        handle.position.set(side * 0.45, 0.85, 0);
+        handle.rotation.z = side > 0 ? -Math.PI / 2 : Math.PI / 2 + Math.PI * 0.2;
+        cup.add(handle);
+      }
+      const gemStar = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), new THREE.MeshBasicMaterial({ color: 0x9fb8ff }));
+      gemStar.position.set(0, 1.45, 0);
+      cup.add(gemStar);
+      cup.position.x = (i - (n - 1) / 2) * 1.3;
+      this.trophies.add(cup);
+    }
   }
 
   /** Your base's marker: a gold star turning gently high over the name board, with a soft glow. */
@@ -656,6 +689,12 @@ export class Base {
       this.collectPad.ring.position.y = 0.15 + t * 1.6;
       this.collectPad.ring.scale.setScalar(1 - t * 0.3);
       (this.collectPad.ring.material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - t);
+    }
+    if (this.trophies) {
+      this.trophies.children.forEach((cup, i) => {
+        cup.rotation.y = Math.sin(time * 0.8 + i) * 0.4;
+        cup.children[cup.children.length - 1].rotation.y = time * 2;
+      });
     }
     if (this.marker) {
       // Up over the top floor, bobbing and turning slowly.

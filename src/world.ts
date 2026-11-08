@@ -612,6 +612,17 @@ const gemHaloMats = new Map<number, THREE.SpriteMaterial>();
 const gemOutline = new THREE.MeshBasicMaterial({ color: 0x1d2340, side: THREE.BackSide });
 
 /** A faceted gem with a soft glow, in its zone's colour; big ones are larger and gold-rimmed. */
+/** Celestial gems (Outer Space) shimmer through every colour: their shared material and halo cycle hue. */
+export function animateGems(t: number): void {
+  const color = ZONES[ZONES.length - 1].gemColor;
+  const mat = gemMats.get(color);
+  const halo = gemHaloMats.get(color);
+  const hue = (t * 0.25) % 1;
+  mat?.color.setHSL(hue, 0.85, 0.72);
+  mat?.emissive.setHSL(hue, 0.9, 0.4);
+  halo?.color.setHSL((hue + 0.1) % 1, 1, 0.75);
+}
+
 export function makeGem(color: number, big: boolean): GemRig {
   let mat = gemMats.get(color);
   if (!mat) {

@@ -43,6 +43,7 @@ import {
   MAX_ZONE,
   RARE,
   RARITIES,
+  ROSTER,
   REBIRTH,
   TRACKS,
   TUTORIAL,
@@ -65,6 +66,7 @@ import {
   emptyPad,
   flightApex,
   floorsOf,
+  formatMult,
   maxPads,
   zoneCap,
   putOnPad,
@@ -95,6 +97,7 @@ import {
   makeBird,
   GEM_SCALE,
   makeGem,
+  animateGems,
   makeGuide,
   makeLabel,
   makePlane,
@@ -473,6 +476,7 @@ export class Game {
     this.resize();
 
     this.base.sync(this.save);
+    this.base.setTrophies(this.trophyCount());
     if (this.save.flightNo > 0) {
       // Returning players start in the showcase, where their brainrots have been earning.
       this.px = HOME_SPOT.x;
@@ -725,7 +729,7 @@ export class Game {
       const { mult, floor } = this.rebirthPrize();
       this.hub.setRebirth(
         ready,
-        ready ? `×${mult} income${floor ? ` + Floor ${floor}` : ''}` : `Cannon Lv ${s.cannon}/${need}`,
+        ready ? `×${formatMult(mult)} income${floor ? ` + Floor ${floor}` : ''}` : `Cannon Lv ${s.cannon}/${need}`,
         s.cannon / need,
       );
     }
@@ -1609,6 +1613,17 @@ export class Game {
     this.completeHint('merge');
     this.autoDisplay();
     writeSave(s);
+    // A Celestial is the end game's trophy: a big show, and a gold cup on your base's name board.
+    const celestial = owned.find((o) => o.rarity === 6);
+    if (celestial) {
+      this.base.setTrophies(this.trophyCount());
+      this.after(0.6, () => {
+        this.hud.grandBanner('TROPHY!', `${celestial.name} · Celestial`);
+        this.sfx.rebirth();
+        this.launchFireworks(this.hub.mergerExit(new THREE.Vector3()), 9, 1);
+      });
+      this.server.reportLocal({ kind: 'pull', text: `merged a CELESTIAL ${celestial.name}!`, rarity: 6 });
+    }
     this.hub.stir();
     const best = owned.reduce((a, b) => (b.rarity > a.rarity ? b : a), owned[0]);
     if (best) {
@@ -2684,6 +2699,11 @@ export class Game {
     writeSave(s);
   }
 
+  /** Celestial characters collected: each is a trophy. */
+  private trophyCount(): number {
+    return ROSTER[6].filter((name) => this.save.collected.includes(name)).length;
+  }
+
   /** Whether the player stands on the rebirth station's pad. */
   private onRebirthPad(): boolean {
     return Math.hypot(REBIRTH_FRONT.x - this.px, REBIRTH_FRONT.z - this.pz) < PLATFORM_RADIUS;
@@ -2693,7 +2713,7 @@ export class Game {
   private rebirthPrize(): { mult: number; floor: number | null } {
     const s = this.save;
     const after = { rebirths: s.rebirths + 1 };
-    return { mult: incomeMultiplier(s) + REBIRTH.incomeBonus, floor: floorsOf(after) > floorsOf(s) ? floorsOf(after) : null };
+    return { mult: incomeMultiplier(after), floor: floorsOf(after) > floorsOf(s) ? floorsOf(after) : null };
   }
 
   /** The rebirth station: what it costs and gives, then a confirm. */
@@ -2707,7 +2727,7 @@ export class Game {
     const { mult, floor } = this.rebirthPrize();
     this.sfx.open();
     const lines = [
-      `×${mult} income forever (now ×${incomeMultiplier(s)}).`,
+      `×${formatMult(mult)} income forever (now ×${formatMult(incomeMultiplier(s))}).`,
       floor ? `Your base grows a new floor: Floor ${floor}, with ${REBIRTH.newFloorPads} open slots.` : 'Your base keeps all its floors.',
       'You keep your rarest brainrot and every open slot.',
       'Coins, gems, upgrades, slot levels and the backpack start over.',
@@ -2727,8 +2747,8 @@ export class Game {
     writeSave(s);
     this.level = 0;
     const floors = floorsOf(s);
-    this.hud.feed('You', `rebirthed! ×${incomeMultiplier(s)} income${newFloor ? ` and Floor ${floors}` : ''}`, 'rebirth', '#ffd84a');
-    this.grandRebirth(`×${incomeMultiplier(s)} income${newFloor ? ` · Floor ${floors} unlocked!` : ''}`);
+    this.hud.feed('You', `rebirthed! ×${formatMult(incomeMultiplier(s))} income${newFloor ? ` and Floor ${floors}` : ''}`, 'rebirth', '#ffd84a');
+    this.grandRebirth(`×${formatMult(incomeMultiplier(s))} income${newFloor ? ` · Floor ${floors} unlocked!` : ''}`);
   }
 
   /**
@@ -3150,6 +3170,7 @@ export class Game {
     this.updateCoach();
     this.updatePadButtons(atBase);
     animateShared(this.time);
+    animateGems(this.time);
 
     const shadow = this.env.shadow;
     const s = 0.9 + this.py * 0.04;

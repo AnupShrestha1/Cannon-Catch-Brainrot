@@ -14,7 +14,8 @@ export const RARITIES: RarityDef[] = [
   { name: 'Epic', color: 0xa64dff, css: '#a64dff', income: 25 },
   { name: 'Legendary', color: 0xffc21a, css: '#ffc21a', income: 90 },
   { name: 'Mythic', color: 0xff3b3b, css: '#ff3b3b', income: 350 },
-  { name: 'Secret', color: 0xffffff, css: '#ffffff', income: 1500 },
+  // The end-game rarity: only from merging Mythics, and each one is a trophy.
+  { name: 'Celestial', color: 0x9fb8ff, css: '#9fb8ff', income: 3000 },
 ];
 
 /** Pulls at this rarity and above get a bigger reveal. */
@@ -30,7 +31,8 @@ export const ROSTER: string[][] = [
   ['Elicottero Ippopotamo', 'Frigorifero Fenicottero'],
   // Mythic: from the Ultra pull, or by merging three Legendaries.
   ['Razzo Rinoceronte', 'Satellito Gattino'],
-  [],
+  // Celestial: only by merging five Mythics.
+  ['Galattico Gufo', 'Pianeta Pinguino'],
 ];
 
 export interface Zone {
@@ -48,14 +50,15 @@ export const ZONES: Zone[] = [
   { name: 'Cloud Kingdom', from: 150, sky: 0xffc98a, gems: 6, gemColor: 0xff5fb4, hazard: 0x8a4b2a },
   { name: 'Storm Layer', from: 400, sky: 0x5b3f8f, gems: 18, gemColor: 0xb57bff, hazard: 0x1e1e2c },
   { name: 'Edge of Space', from: 650, sky: 0x16224d, gems: 45, gemColor: 0x7dffd8, hazard: 0xb8c0cc },
-  { name: 'Cosmic', from: 1500, sky: 0x2a0d45, gems: 50, gemColor: 0xffffff, hazard: 0xff7a3d },
+  // The end-game area: celestial gems, which shimmer through every colour.
+  { name: 'Outer Space', from: 1000, sky: 0x0b0620, gems: 150, gemColor: 0xfff1c0, hazard: 0xff7a3d },
 ];
 
 /**
- * This build has Low Sky, Cloud Kingdom, the Storm Layer and the Edge of Space. Each rebirth opens the next:
- * the Storm Layer after the first, the Edge of Space after the second.
+ * Low Sky, Cloud Kingdom, the Storm Layer, the Edge of Space and Outer Space. Each rebirth opens the next:
+ * the Storm Layer after the first, the Edge of Space after the second, Outer Space after the third.
  */
-export const MAX_ZONE = 3;
+export const MAX_ZONE = 4;
 
 export function zoneIndexAt(y: number): number {
   let index = 0;
@@ -169,8 +172,11 @@ export const GACHA: GachaTier[] = [
 export const STARTER_PULLS: Record<number, number> = {};
 export const STARTER_PULL_COUNT = 10;
 
-/** Merging: this many of a rarity make one random character of the next rarity up. A Mythic takes 8 Legendaries. */
-export const MERGE: Record<number, number> = { 0: 10, 1: 8, 2: 6, 3: 4, 4: 8 };
+/**
+ * Merging: this many of a rarity make one random character of the next rarity up. A Mythic takes 8
+ * Legendaries, and a Celestial (the end-game trophy, never pulled) takes 5 Mythics.
+ */
+export const MERGE: Record<number, number> = { 0: 10, 1: 8, 2: 6, 3: 4, 4: 8, 5: 5 };
 
 export function rollTier(tier: GachaTier): number {
   let roll = Math.random();
@@ -186,7 +192,8 @@ export function rollTier(tier: GachaTier): number {
 // The first few levels climb fast, so a good launch reaches Cloud Kingdom within the first few minutes.
 // The Storm Layer (400 m) comes at level 25, a few levels after the first rebirth's (21), and the Edge of Space
 // (650 m) at level 31, a few after the second's (25), so a reborn player soon has a new area to reach.
-const HEIGHT_ANCHORS: [number, number][] = [[1, 90], [6, 155], [25, 410], [31, 650], [45, 820], [60, 1550]];
+// Outer Space (1,000 m) at level 36, a few after the third rebirth's (29); the cannon tops out at 51.
+const HEIGHT_ANCHORS: [number, number][] = [[1, 90], [6, 155], [25, 410], [31, 650], [36, 1000], [51, 1800]];
 
 export function launchHeight(level: number): number {
   const l = Math.min(60, Math.max(1, level));
@@ -285,7 +292,7 @@ export const TRACKS: Track[] = ['cannon', 'shield', 'finder', 'magnet', 'steerin
 export const UPGRADES: Record<Track, { name: string; base: number; growth: number; max: number; effect: number }> = {
   // Basic Launch stops at cannon level 37, whose perfect launch stays inside the Storm Layer. The doc goes to 60.
   // Tuned with `npm run sim` (the doc's 50 × 1.18 let rebirth unlock after 8 minutes): about 60 minutes now.
-  cannon: { name: 'Cannon power', base: 25, growth: 1.52, max: 36, effect: 0 },
+  cannon: { name: 'Cannon power', base: 25, growth: 1.52, max: 50, effect: 0 },
   finder: { name: 'Gem finder', base: 150, growth: 1.45, max: 20, effect: 0.1 },
   magnet: { name: 'Gem magnet', base: 120, growth: 1.25, max: 25, effect: 0.1 },
   steering: { name: 'Steering', base: 100, growth: 1.22, max: 25, effect: 0.06 },
@@ -300,7 +307,7 @@ export const REBIRTH = {
   cannonLevel: 21,
   /** A run this high counts as reaching the Storm Layer. */
   unlockHeight: 400,
-  /** Permanent income bonus per rebirth. */
+  /** Each rebirth multiplies income by (1 + incomeBonus) again: ×1.5, ×2.25, ×3.4... Rebirth as often as you like. */
   incomeBonus: 0.5,
   /** Each rebirth asks for this many more cannon levels than the last (capped at the top level): 21, 25, 29... */
   cannonStep: 4,

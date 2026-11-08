@@ -52,7 +52,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 ## Rules in this build
 
 - **Gems in the sky.** Each flight passes rows of gems along its path. A gem is worth 1 in Low Sky, 6 in
-  Cloud Kingdom, 18 in the Storm Layer and 45 at the Edge of Space. One in ten is a big gold gem worth 5 times as much, and now
+  Cloud Kingdom, 18 in the Storm Layer, 45 at the Edge of Space and 150 in Outer Space. One in ten is a big gold gem worth 5 times as much, and now
   and then gems come in pairs. A hazard hit knocks 15% of the run's gems loose. A crash loses 15% of
   them, or 25% without a parachute. There's no result window: on landing the gems go into the wallet
   with a toast, and the player stays where they landed, ready to walk.
@@ -189,7 +189,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     is one more press. Merges reveal their results the same way.
 - **Merge station**, a bubbling cauldron behind the cannon. Step on the purple platform in front of it
   and press E (the pot jumps and wobbles on each merge): 10 Common → 1 Uncommon, 8 Uncommon →
-  1 Rare, 6 Rare → 1 Epic, 4 Epic → 1 Legendary, 8 Legendary → 1 Mythic, from the backpack. A merge gives a random character of
+  1 Rare, 6 Rare → 1 Epic, 4 Epic → 1 Legendary, 8 Legendary → 1 Mythic, 5 Mythic → 1 Celestial, from the backpack. A merge gives a random character of
   the next rarity. You choose what goes in: the station lists your backpack by rarity, one card per character
   with how many you have; tap a card to pick one more of it (once all are picked, a tap clears them), or
   Pick 10 (or whatever the recipe needs) to fill a recipe at once, then Merge picked (in as many full groups
@@ -269,13 +269,23 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - **Edge of Space** (650 m and up): the fourth area. The sky turns deep navy, the haze clears and stars come
   out, the clouds are left below, and gems are worth 45 each. Its hazards are meteors: cratered rocks
   tumbling across with a blazing tail. The Galaxy machine (700 m) unlocks up here.
+- **Outer Space** (1,000 m and up): the end-game area, opened by the third rebirth and reached around cannon
+  Lv 36 (the cannon now goes to Lv 51). The sky is nearly black and full of stars, meteors fly, and its gems
+  are celestial: worth 150 each, shimmering through every colour.
+- **Celestial**: the end-game rarity, above Mythic. It's never pulled from a machine: the only way to get one
+  is to merge 5 Mythics. Each earns 3,000 coins/s (a Mythic earns 350). Two characters: Galattico Gufo, an
+  owl made of the night sky with a crown of stars and a ringed planet in orbit, and Pianeta Pinguino, a
+  penguin who is also a planet, circled by a tilted ring of moons. Celestials are shaded as a slow-moving
+  nebula of deep blue, violet and cyan, flecked with twinkling gold stars. Each one is a trophy: merging it
+  sets off a "TROPHY!" banner with fireworks, a gold cup appears on top of your name board for each one you
+  own, and the book has a Celestial · Trophies page (5,000,000 coins when complete).
 - **Shields** (in the shop): each level adds one shield, and each shield blocks one hazard hit per flight
   (no gems lost, no stun). They're stingy: 300 coins for the first (a few minutes in), then ten times the
   last for each (3K, 30K, 300K, 3M), up to 5. In flight a faint cyan bubble surrounds you with a ring
   orbiting per shield left, and a counter under the run's gems shows how many; a block flares the bubble
   with a glassy ping ("BLOCKED! 1 shield left"), and the last one pops it. Shields refill every flight
   and reset on rebirth.
-- **Upgrades** (the shop): cannon power (to level 37 in this build), gem finder (+10% gems per pickup
+- **Upgrades** (the shop): cannon power (to level 51), gem finder (+10% gems per pickup
   each), gem magnet (+10% grab radius each), steering (+6% turn speed each), parachute (+5% safe window
   each).
 - **Rebirth** has its own station in the hub: a marble dais under a floating golden crystal in turning
@@ -285,7 +295,8 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   its gold pad, press E and confirm. It resets coins, gems, upgrades, slot levels and the backpack, locks the gacha
   machines again (they unlock as this run's flights reach their heights; your all-time best stays on the
   leaderboard),
-  keeps the rarest brainrot and every open slot, adds +50% income per rebirth, and recolours the cannon;
+  keeps the rarest brainrot and every open slot, multiplies income by ×1.5 again with every rebirth (compounding: ×1.5, ×2.25, ×3.4, ×5.1... and you can
+  rebirth as many times as you like), and recolours the cannon;
   the first two also add a floor to your base. It's grand and short (about three seconds): the crystal
   dips and blasts up in a pillar of light with a shockwave across the ground, the screen flashes gold, a
   huge REBIRTH! banner slams in over turning rays and confetti, the camera tilts up, and a volley of
