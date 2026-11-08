@@ -259,9 +259,9 @@ export const TUTORIAL = {
 /** Share of the run's gems lost in a crash. */
 export const CRASH_DROP = { tangled: 0.3, noChute: 0.5 };
 
-export type Track = 'cannon' | 'finder' | 'magnet' | 'steering' | 'chute';
+export type Track = 'cannon' | 'finder' | 'magnet' | 'steering' | 'chute' | 'shield';
 
-export const TRACKS: Track[] = ['cannon', 'finder', 'magnet', 'steering', 'chute'];
+export const TRACKS: Track[] = ['cannon', 'shield', 'finder', 'magnet', 'steering', 'chute'];
 
 /**
  * Cost of the k-th purchase is base × growth^(k−1). `max` counts purchases; `effect` is the gain per
@@ -275,6 +275,9 @@ export const UPGRADES: Record<Track, { name: string; base: number; growth: numbe
   magnet: { name: 'Gem magnet', base: 120, growth: 1.25, max: 25, effect: 0.1 },
   steering: { name: 'Steering', base: 100, growth: 1.22, max: 25, effect: 0.06 },
   chute: { name: 'Parachute', base: 150, growth: 1.28, max: 20, effect: 0.05 },
+  // One shield per level, each blocking one hit per flight. Stingy on purpose: the first is cheap enough to buy
+  // in the first few minutes, then each costs ten times the last (300, 3K, 30K, 300K, 3M).
+  shield: { name: 'Shield', base: 300, growth: 10, max: 5, effect: 1 },
 };
 
 export const REBIRTH = {

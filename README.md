@@ -237,6 +237,12 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   big NEW ZONE banner with a sparkle and a moment of slow motion. The cannon's first levels climb fast
   (90 m at level 1, 155 m at level 6), so a good launch reaches Cloud Kingdom within the first few
   minutes; after that, each level adds less (410 m at level 28).
+- **Shields** (in the shop): each level adds one shield, and each shield blocks one hazard hit per flight
+  (no gems lost, no stun). They're stingy: 300 coins for the first (a few minutes in), then ten times the
+  last for each (3K, 30K, 300K, 3M), up to 5. In flight a faint cyan bubble surrounds you with a ring
+  orbiting per shield left, and a counter under the run's gems shows how many; a block flares the bubble
+  with a glassy ping ("BLOCKED! 1 shield left"), and the last one pops it. Shields refill every flight
+  and reset on rebirth.
 - **Upgrades** (the shop): cannon power (to level 37 in this build), gem finder (+10% gems per pickup
   each), gem magnet (+10% grab radius each), steering (+6% turn speed each), parachute (+5% safe window
   each).

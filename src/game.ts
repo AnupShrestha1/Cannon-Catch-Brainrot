@@ -194,6 +194,26 @@ const damp = (rate: number, dt: number) => 1 - Math.exp(-rate * dt);
 /** Eases angle a toward b the short way round. */
 const lerpAngle = (a: number, b: number, t: number) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t;
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
+/** The shield bubble: a faint cyan shell with up to five thin rings that orbit it, one per shield. */
+function makeShieldBubble(): THREE.Group {
+  const g = new THREE.Group();
+  g.position.y = BODY_MID;
+  const shell = new THREE.Mesh(
+    new THREE.SphereGeometry(1.35, 32, 20),
+    new THREE.MeshBasicMaterial({ color: 0x7fe8ff, transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending }),
+  );
+  g.add(shell);
+  for (let i = 0; i < 5; i++) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(1.42, 0.03, 6, 48),
+      new THREE.MeshBasicMaterial({ color: 0xbff6ff, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    g.add(ring);
+  }
+  g.visible = false;
+  return g;
+}
+
 /** A ball dropped on the floor: falls, then two smaller bounces. */
 const bounceOut = (t: number) => {
   const n = 7.5625;
@@ -365,6 +385,10 @@ export class Game {
   /** Fireworks: their own big particle pool, and the rockets in the air. */
   private sparks!: Sparks;
   private rockets: { pos: THREE.Vector3; vel: THREE.Vector3; fuse: number; color: number; loud: number }[] = [];
+  /** Shields left this flight, and the bubble's flare after a block (1 easing to 0). */
+  private shields = 0;
+  private shieldFlash = 0;
+  private shieldBubble!: THREE.Group;
   /** Brainrots picked in the merge station. */
   private mergePick: Owned[] = [];
 
@@ -395,6 +419,8 @@ export class Game {
     });
     this.scene.add(this.player.group);
     this.player.group.add(this.bubble.sprite);
+    this.shieldBubble = makeShieldBubble();
+    this.player.group.add(this.shieldBubble);
     this.fx = new Particles(this.scene);
     this.sparks = new Sparks(this.scene);
     this.streaks = new Streaks(this.scene);
@@ -711,6 +737,7 @@ export class Game {
     // takes over: a cannon aimed left feels like the mouse started on the left.
     const swing = this.aimShown;
     this.vx = swing * FLIGHT.steerSpeed * 0.8;
+    this.shields = this.save.shield;
     this.aimTarget = swing * this.lane * 0.75;
     this.aimHold = Math.abs(swing) > 0.05 ? AIM_HOLD : 0;
     this.targetX = this.aimHold > 0 ? this.aimTarget : this.px;
@@ -960,6 +987,17 @@ export class Game {
   private hitBird(b: Bird): void {
     b.hit = true;
     b.vy = 14;
+    if (this.shields > 0) {
+      // A shield takes the hit: the bubble flares and pops, the hazard bounces off, nothing is lost.
+      this.shields -= 1;
+      this.shieldFlash = 1;
+      this.invuln = 0.6;
+      this.shake = Math.max(this.shake, 0.25);
+      this.fx.burst(this.tmp.set(this.px, this.py + BODY_MID, 0), { count: 26, color: 0x7fe8ff, speed: 9, life: 0.6, size: 0.5 });
+      this.sfx.shieldBlock();
+      this.hud.toast(this.shields ? `BLOCKED! ${this.shields} shield${this.shields > 1 ? 's' : ''} left` : 'BLOCKED! Last shield gone', 'good small');
+      return;
+    }
     this.invuln = 0.9;
     this.stun = 0.3;
     this.shake = Math.max(this.shake, 0.4);
@@ -2432,6 +2470,10 @@ export class Game {
               ? `Apex ${apex(s.cannon)} m, the top of this build`
               : `Apex ${apex(s.cannon)} m → ${apex(s.cannon + 1)} m`;
           break;
+        case 'shield':
+          level = s.shield ? `${s.shield} shield${s.shield > 1 ? 's' : ''}` : 'None';
+          detail = cost === null ? 'Maxed out: 5 hits blocked every flight' : `Blocks ${s.shield + 1} hit${s.shield ? 's' : ''} per flight`;
+          break;
         default: {
           const what = { finder: 'Gems per pickup', magnet: 'Grab radius', steering: 'Turn speed', chute: 'Safe window' }[track];
           level = pct(track);
@@ -2460,7 +2502,10 @@ export class Game {
     s.coins -= cost;
     buyUpgrade(s, item);
     if (item === 'cannon') this.completeHint('upgrade');
-    this.hud.toast(item === 'cannon' ? `Cannon Lv ${s.cannon}!` : `${UPGRADES[item].name} up!`, 'gold');
+    this.hud.toast(
+      item === 'cannon' ? `Cannon Lv ${s.cannon}!` : item === 'shield' ? `${s.shield} shield${s.shield > 1 ? 's' : ''}!` : `${UPGRADES[item].name} up!`,
+      'gold',
+    );
     this.sfx.buy();
     writeSave(s);
     this.refreshShop();
@@ -2945,6 +2990,7 @@ export class Game {
         : Math.sin(this.time * (1.5 + flutter * 12)) * (0.05 + flutter * 0.08);
     this.player.chute.scale.y = this.chuteScale * (1 - flutter * 0.15 + Math.sin(this.time * 20) * flutter * 0.05);
     this.updateHelmet(realDt);
+    this.updateShield(realDt, inFlight);
     this.bubbleT = Math.max(0, this.bubbleT - realDt);
     this.bubble.sprite.visible = this.bubbleT > 0;
 
@@ -3265,6 +3311,30 @@ export class Game {
     body.position.y = 0.9;
     body.rotation.set(pitch, 0, 0);
     body.scale.set(sx, sy, sx);
+  }
+
+  /**
+   * The shield bubble round the player in flight while shields are left: faint and shimmering, a ring per
+   * shield orbiting it. A block makes it flare up and wobble (and the last one pops it).
+   */
+  private updateShield(dt: number, inFlight: boolean): void {
+    const bubble = this.shieldBubble;
+    this.shieldFlash = Math.max(0, this.shieldFlash - dt * 2.5);
+    const on = inFlight && (this.shields > 0 || this.shieldFlash > 0);
+    bubble.visible = on;
+    this.hud.setShields(inFlight || this.state === 'aim' || this.state === 'charging' ? (this.state === 'aim' || this.state === 'charging' ? this.save.shield : this.shields) : null);
+    if (!on) return;
+    const f = this.shieldFlash;
+    const shell = bubble.children[0] as THREE.Mesh;
+    const mat = shell.material as THREE.MeshBasicMaterial;
+    mat.opacity = this.shields > 0 ? 0.16 + Math.sin(this.time * 4) * 0.04 + f * 0.5 : f * 0.6;
+    const wobble = 1 + Math.sin(f * Math.PI * 4) * 0.12 * f + (this.shields > 0 ? 0 : (1 - f) * 0.5);
+    bubble.scale.set(wobble, 1 / Math.sqrt(wobble), wobble);
+    // One orbiting ring per shield left.
+    bubble.children.slice(1).forEach((ring, i) => {
+      ring.visible = i < this.shields;
+      ring.rotation.set(this.time * (1.2 + i * 0.3), i * 1.1, this.time * 0.7 + i);
+    });
   }
 
   /** The helmet is on in the cannon and in flight; boarding drops it onto the player's head with a bounce. */

@@ -79,6 +79,15 @@ export class Hud {
   private zone = byId('zone');
   private best = byId('best');
   private stack = byId('stack');
+  /** Shields left this flight, under the run's gems. */
+  private shieldsEl = (() => {
+    const el = document.createElement('div');
+    el.id = 'shields';
+    el.className = 'pill';
+    byId('stack').after(el);
+    return el;
+  })();
+  private shieldsKey = '';
   private promptEl = byId('prompt');
   private toasts = byId('toasts');
   private floats = byId('floats');
@@ -215,6 +224,22 @@ export class Hud {
   }
 
   /** The gems collected this run, shown at the top during a flight; null hides it. */
+  /** Shields left (null hides the counter); a lost one makes it shake. */
+  setShields(n: number | null): void {
+    const key = n === null || n === 0 ? '' : String(n);
+    if (key === this.shieldsKey) return;
+    const lost = key !== '' && this.shieldsKey !== '' && Number(key) < Number(this.shieldsKey);
+    const gone = key === '' && this.shieldsKey !== '';
+    this.shieldsKey = key;
+    this.shieldsEl.classList.toggle('on', key !== '');
+    if (key) this.shieldsEl.textContent = `🛡 ${key}`;
+    if (lost || gone) {
+      this.shieldsEl.classList.remove('hit');
+      void this.shieldsEl.offsetWidth;
+      this.shieldsEl.classList.add('hit');
+    }
+  }
+
   setRunGems(gems: number | null): void {
     const key = gems === null ? '' : String(gems);
     if (key === this.last.stack) return;

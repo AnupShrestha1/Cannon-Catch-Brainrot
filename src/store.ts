@@ -31,6 +31,8 @@ export interface Save {
   magnet: number;
   steering: number;
   chute: number;
+  /** Shields bought: each blocks one hit per flight. */
+  shield: number;
   rebirths: number;
   coins: number;
   /** The gacha currency, collected in the sky. */
@@ -76,6 +78,7 @@ export function defaultSave(): Save {
     best: 0,
     cannon: 1,
     finder: 0,
+    shield: 0,
     magnet: 0,
     steering: 0,
     chute: 0,

@@ -3021,3 +3021,41 @@ body.chute-alarm::after {
   font-size: 11px;
   opacity: 0.9;
 }
+
+/* ---------------------------------------------------------------- shields */
+
+/* Shields left this flight, just under the run's gems. */
+#shields {
+  position: absolute;
+  top: calc(max(14px, env(safe-area-inset-top)) + 58px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  padding: 4px 14px;
+  color: #bff6ff;
+  font-size: 22px;
+}
+
+#shields.on {
+  display: flex;
+}
+
+#shields.hit {
+  animation: shield-hit 0.45s ease-out;
+}
+
+@keyframes shield-hit {
+  0%,
+  100% {
+    transform: translateX(-50%);
+  }
+  20% {
+    transform: translateX(calc(-50% - 8px)) scale(1.2);
+  }
+  50% {
+    transform: translateX(calc(-50% + 6px));
+  }
+  75% {
+    transform: translateX(calc(-50% - 3px));
+  }
+}

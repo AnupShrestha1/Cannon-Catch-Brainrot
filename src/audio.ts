@@ -281,6 +281,13 @@ export class Sfx {
     this.noiseBurst(0.04, 'highpass', 2200, 0.04 + strength * 0.06);
   }
 
+  /** A shield blocking a hit: a bright glassy ping and a soft whoosh. */
+  shieldBlock(): void {
+    this.tone('sine', 1500, 2200, 0.25, 0.2);
+    this.tone('triangle', 900, 1300, 0.3, 0.12, 0.03);
+    this.noiseBurst(0.2, 'highpass', 2500, 0.15);
+  }
+
   /** A hop at the base: a short springy boing. */
   hop(): void {
     this.tone('sine', 300, 620, 0.12, 0.12);

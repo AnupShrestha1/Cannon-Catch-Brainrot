@@ -58,7 +58,7 @@ export function rebirthSave(save: Save): { kept: Owned | null; newFloor: boolean
   save.coins = 0;
   save.gems = 0;
   save.cannon = 1;
-  save.finder = save.magnet = save.steering = save.chute = 0;
+  save.finder = save.magnet = save.steering = save.chute = save.shield = 0;
   let open = Math.max(ECONOMY.startPads, save.pads.length);
   // A new floor: everything below it opens, and it comes with a few slots of its own.
   if (newFloor) open = ECONOMY.padsPerFloor * floorsBefore + REBIRTH.newFloorPads;
