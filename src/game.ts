@@ -99,6 +99,7 @@ import {
   makeLabel,
   makePlane,
   makeStormCloud,
+  makeMeteor,
   makePlayer,
   skyColorAt,
   type BirdRig,
@@ -126,12 +127,13 @@ interface Gem {
   seed: number;
 }
 
-type HazardKind = 'bird' | 'plane' | 'storm';
+type HazardKind = 'bird' | 'plane' | 'storm' | 'meteor';
 
 const HAZARDS: Record<HazardKind, { radius: number; speed: [number, number]; toast: string }> = {
   bird: { radius: FLIGHT.hazardRadius, speed: [4, 7], toast: 'BONK!' },
   plane: { radius: 1.4, speed: [9, 13], toast: 'WHAM!' },
   storm: { radius: 1.9, speed: [0.6, 1.2], toast: 'ZAP!' },
+  meteor: { radius: 1.3, speed: [5, 8], toast: 'KABOOM!' },
 };
 
 interface Bird {
@@ -885,8 +887,10 @@ export class Game {
   /** Birds below the Storm Layer; planes and thunderclouds inside it. */
   private addBird(y: number): void {
     const zone = zoneIndexAt(y);
-    const kind: HazardKind = zone < 2 ? 'bird' : Math.random() < 0.5 ? 'plane' : 'storm';
-    const rig = kind === 'bird' ? makeBird(ZONES[zone].hazard) : kind === 'plane' ? makePlane() : makeStormCloud();
+    // Birds low down, planes and storm clouds in the Storm Layer, meteors at the Edge of Space.
+    const kind: HazardKind = zone < 2 ? 'bird' : zone >= 3 ? 'meteor' : Math.random() < 0.5 ? 'plane' : 'storm';
+    const rig =
+      kind === 'bird' ? makeBird(ZONES[zone].hazard) : kind === 'plane' ? makePlane() : kind === 'meteor' ? makeMeteor() : makeStormCloud();
     this.scene.add(rig.group);
     this.birds.push({
       kind,
@@ -3052,7 +3056,9 @@ export class Game {
         b.y = b.baseY + Math.sin(this.time * 2 + b.seed) * (b.kind === 'bird' ? 0.6 : 0.3);
         if (b.kind !== 'storm') b.rig.group.rotation.y = b.dir > 0 ? 0 : Math.PI;
       }
-      if (b.rig.spinner) b.rig.spinner.rotation.x = this.time * 40;
+      // A plane's propeller whirs; a meteor tumbles slowly.
+      if (b.rig.spinner && b.kind === 'meteor') b.rig.spinner.rotation.set(this.time * 1.4 + b.seed, this.time * 2 + b.seed, 0);
+      else if (b.rig.spinner) b.rig.spinner.rotation.x = this.time * 40;
       if (b.rig.flash) b.rig.flash.visible = Math.sin(this.time * 9 + b.seed * 3) > 0.6;
       const flap = Math.sin(this.time * 14 + b.seed) * 0.8;
       for (const wing of b.rig.wings) wing.rotation.x = flap * (wing.userData.side as number);

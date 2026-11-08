@@ -194,6 +194,22 @@ export function buildEnv(scene: THREE.Scene): Env {
   shadow.position.y = 0.03;
   scene.add(shadow);
 
+  // Stars for the Edge of Space: a shell of points round the camera, fading in above 600 m.
+  const starGeo = new THREE.BufferGeometry();
+  const starPos: number[] = [];
+  for (let i = 0; i < 900; i++) {
+    const u = Math.random() * 2 - 1;
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(1 - u * u);
+    starPos.push(Math.cos(a) * r * 300, u * 300, Math.sin(a) * r * 300);
+  }
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+  const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, fog: false });
+  const stars = new THREE.Points(starGeo, starMat);
+  stars.frustumCulled = false;
+  stars.visible = false;
+  scene.add(stars);
+
   // Background clouds recycle through a 240 m window around the camera, so every height has some.
   const decor: THREE.Group[] = [];
   for (let i = 0; i < 46; i++) {
@@ -227,7 +243,8 @@ export function buildEnv(scene: THREE.Scene): Env {
       for (const cloud of decor) {
         while (cloud.position.y < cameraY - 120) cloud.position.y += 240;
         while (cloud.position.y > cameraY + 120) cloud.position.y -= 240;
-        cloud.visible = cloud.position.y > 22;
+        // None above the Storm Layer: space is clear.
+        cloud.visible = cloud.position.y > 22 && cloud.position.y < 640;
       }
     },
     drawBoard(index, title, rows) {
@@ -235,9 +252,14 @@ export function buildEnv(scene: THREE.Scene): Env {
     },
     updateScenery(t, sky, fog, camera) {
       scenery.update(t);
-      horizon.copy(sky).lerp(white, 0.3);
+      // High up, the haze gives way to the dark of space, and the stars come out.
+      const space = Math.min(1, Math.max(0, (camera.y - 600) / 120));
+      horizon.copy(sky).lerp(white, 0.3 * (1 - space));
       fog.color.copy(horizon);
       dome.update(sky, horizon, camera);
+      stars.visible = space > 0;
+      starMat.opacity = space;
+      stars.position.copy(camera);
     },
   };
 }
@@ -491,6 +513,38 @@ const boltMat = new THREE.MeshBasicMaterial({ color: 0xfff27a });
 const boltGeo = new THREE.BoxGeometry(0.18, 1.6, 0.18);
 
 /** A dark thundercloud with a lightning bolt that flickers beneath it. */
+const meteorRockMat = flat(0x5a4436);
+const meteorCraterMat = flat(0x3a2a22);
+const meteorFlameMat = new THREE.MeshBasicMaterial({ color: 0xff8a2b, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending });
+const meteorCoreMat = new THREE.MeshBasicMaterial({ color: 0xfff1a8, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
+
+/** A meteor for the Edge of Space: a tumbling cratered rock trailing a blazing tail. */
+export function makeMeteor(): BirdRig {
+  const group = new THREE.Group();
+  const rock = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9, 1), meteorRockMat);
+  body.scale.set(1, 0.85, 0.95);
+  rock.add(body);
+  for (let i = 0; i < 4; i++) {
+    const crater = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), meteorCraterMat);
+    const a = i * 1.7;
+    crater.position.set(Math.cos(a) * 0.72, Math.sin(a * 1.3) * 0.5, Math.sin(a) * 0.6);
+    crater.scale.setScalar(0.6 + (i % 2) * 0.4);
+    rock.add(crater);
+  }
+  // The blazing tail streams up and back behind it.
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.8, 3.2, 20, 1, true), meteorFlameMat);
+  tail.position.set(0, 1.9, 0);
+  const core = new THREE.Mesh(new THREE.ConeGeometry(0.45, 2, 16, 1, true), meteorCoreMat);
+  core.position.set(0, 1.3, 0);
+  const glow = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: softTexture(), color: 0xff7a2b, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+  );
+  glow.scale.setScalar(3.4);
+  group.add(rock, tail, core, glow);
+  return { group, wings: [], spinner: rock };
+}
+
 export function makeStormCloud(): BirdRig {
   const group = new THREE.Group();
   for (let i = 0; i < 5; i++) {

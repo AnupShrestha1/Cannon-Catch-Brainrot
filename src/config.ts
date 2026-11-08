@@ -47,12 +47,15 @@ export const ZONES: Zone[] = [
   { name: 'Low Sky', from: 0, sky: 0x8fd3ff, gems: 1, gemColor: 0x3fc8ff, hazard: 0x3b3b46 },
   { name: 'Cloud Kingdom', from: 150, sky: 0xffc98a, gems: 6, gemColor: 0xff5fb4, hazard: 0x8a4b2a },
   { name: 'Storm Layer', from: 400, sky: 0x5b3f8f, gems: 18, gemColor: 0xb57bff, hazard: 0x1e1e2c },
-  { name: 'Edge of Space', from: 800, sky: 0x16224d, gems: 20, gemColor: 0x7dffd8, hazard: 0xb8c0cc },
+  { name: 'Edge of Space', from: 650, sky: 0x16224d, gems: 45, gemColor: 0x7dffd8, hazard: 0xb8c0cc },
   { name: 'Cosmic', from: 1500, sky: 0x2a0d45, gems: 50, gemColor: 0xffffff, hazard: 0xff7a3d },
 ];
 
-/** Basic Launch has Low Sky, Cloud Kingdom and Storm Layer. */
-export const MAX_ZONE = 2;
+/**
+ * This build has Low Sky, Cloud Kingdom, the Storm Layer and the Edge of Space. Each rebirth opens the next:
+ * the Storm Layer after the first, the Edge of Space after the second.
+ */
+export const MAX_ZONE = 3;
 
 export function zoneIndexAt(y: number): number {
   let index = 0;
@@ -181,9 +184,9 @@ export function rollTier(tier: GachaTier): number {
 // Normal-launch apex per cannon level, log-linear between these anchors, so each zone's level
 // in the design doc is the first level whose normal launch reaches it.
 // The first few levels climb fast, so a good launch reaches Cloud Kingdom within the first few minutes.
-// The Storm Layer (400 m) comes at level 25, just after the first rebirth's level (22), so a reborn player
-// has a new area to reach soon after.
-const HEIGHT_ANCHORS: [number, number][] = [[1, 90], [6, 155], [25, 410], [45, 820], [60, 1550]];
+// The Storm Layer (400 m) comes at level 25, a few levels after the first rebirth's (21), and the Edge of Space
+// (650 m) at level 31, a few after the second's (25), so a reborn player soon has a new area to reach.
+const HEIGHT_ANCHORS: [number, number][] = [[1, 90], [6, 155], [25, 410], [31, 650], [45, 820], [60, 1550]];
 
 export function launchHeight(level: number): number {
   const l = Math.min(60, Math.max(1, level));

@@ -52,7 +52,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 ## Rules in this build
 
 - **Gems in the sky.** Each flight passes rows of gems along its path. A gem is worth 1 in Low Sky, 6 in
-  Cloud Kingdom and 18 in the Storm Layer. One in ten is a big gold gem worth 5 times as much, and now
+  Cloud Kingdom, 18 in the Storm Layer and 45 at the Edge of Space. One in ten is a big gold gem worth 5 times as much, and now
   and then gems come in pairs. A hazard hit knocks 15% of the run's gems loose. A crash loses 15% of
   them, or 25% without a parachute. There's no result window: on landing the gems go into the wallet
   with a toast, and the player stays where they landed, ready to walk.
@@ -263,7 +263,12 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   Layer (at 394 m): the apex shows "Storm Layer: rebirth to break through!" and the cannon can't be
   upgraded past the rebirth's level (21), so no coins go into upgrades that couldn't help. After the
   rebirth the ceiling lifts, and the Storm Layer (400 m) is reached at about cannon Lv 25 (a perfect launch
-  from about Lv 22).
+  from about Lv 22). The same happens one area up: until the second rebirth, flights stop just under the
+  Edge of Space and the cannon stops at that rebirth's level (25); after it, the Edge of Space is reached at
+  about cannon Lv 31 (a perfect launch from about Lv 27).
+- **Edge of Space** (650 m and up): the fourth area. The sky turns deep navy, the haze clears and stars come
+  out, the clouds are left below, and gems are worth 45 each. Its hazards are meteors: cratered rocks
+  tumbling across with a blazing tail. The Galaxy machine (700 m) unlocks up here.
 - **Shields** (in the shop): each level adds one shield, and each shield blocks one hazard hit per flight
   (no gems lost, no stun). They're stingy: 300 coins for the first (a few minutes in), then ten times the
   last for each (3K, 30K, 300K, 3M), up to 5. In flight a faint cyan bubble surrounds you with a ring
