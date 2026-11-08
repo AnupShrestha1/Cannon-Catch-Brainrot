@@ -106,16 +106,18 @@ export function maxPads(save: Pick<Save, 'rebirths'>): number {
 export function expansionCost(save: Save): number | null {
   const pads = save.pads.length;
   if (pads >= maxPads(save)) return null;
-  const step = (pads - ECONOMY.startPads) / ECONOMY.padStep;
-  const early = Math.min(step, 3);
-  return Math.round(
-    ECONOMY.firstExpansion * Math.pow(ECONOMY.expansionGrowth, early) * Math.pow(ECONOMY.lateExpansionGrowth, Math.max(0, step - 3)),
-  );
+  const floor = Math.floor(pads / ECONOMY.padsPerFloor);
+  if (floor === 0) return Math.round(ECONOMY.firstExpansion * Math.pow(ECONOMY.expansionGrowth, (pads - ECONOMY.startPads) / ECONOMY.padStep));
+  // Floors above: priced per floor, so the top floor's slots don't run away (Floor 2: 470K, 890K, 1.7M;
+  // Floor 3: 1.9M, 3.6M, 6.8M; Floor 4: 7.5M, 14M, 27M).
+  const step = Math.max(0, (pads % ECONOMY.padsPerFloor) - REBIRTH.newFloorPads) / ECONOMY.padStep;
+  const floorStart = ECONOMY.firstExpansion * Math.pow(ECONOMY.expansionGrowth, 3) * Math.pow(ECONOMY.lateExpansionGrowth, 2);
+  return Math.round(floorStart * Math.pow(ECONOMY.floorExpansionGrowth, floor - 1) * Math.pow(ECONOMY.lateExpansionGrowth, step));
 }
 
 /**
  * Rebirth: back to the start (coins, gems, upgrades, brainrots) for a permanent income bonus, keeping the rarest
- * brainrot and every open slot. The first two also add a floor to the base, with a few of its slots open.
+ * brainrot and every open slot. The first three also add a floor to the base, with a few of its slots open.
  * Returns what was kept, and whether a floor was added.
  */
 export function rebirthSave(save: Save): { kept: Owned | null; newFloor: boolean } {

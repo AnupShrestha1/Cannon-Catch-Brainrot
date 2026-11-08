@@ -261,6 +261,8 @@ export class Base {
   private marker: { group: THREE.Group; star: THREE.Mesh } | null = null;
   /** Gold cups for the Celestials collected (your own base only). */
   private trophies: THREE.Group | null = null;
+  /** The name board's text, to rename your own base. */
+  private signLabel: Label | null = null;
   /** The Collect all pad, shown on your own base from the second rebirth. */
   private collectPad: { group: THREE.Group; ring: THREE.Mesh; total: Label; shown: number } | null = null;
   /** The Upgrade all pad, beside it on the other side of the path. */
@@ -359,12 +361,14 @@ export class Base {
     this.upgradePad = { group: g, ring, total, key: '' };
   }
 
-  /** Gold trophy cups on top of the name board, one per Celestial collected. */
+  /**
+   * Gold trophy cups, one per Celestial collected: on top of the name board while the base has one floor, and
+   * on the top deck above the board once there are more (a deck would cut through them).
+   */
   setTrophies(n: number): void {
     if (!this.own) return;
     if (!this.trophies) {
       this.trophies = new THREE.Group();
-      this.trophies.position.set(0, 4.75, BOARD_Z);
       this.group.add(this.trophies);
     }
     if (this.trophies.children.length === n) return;
@@ -691,6 +695,9 @@ export class Base {
       (this.collectPad.ring.material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - t);
     }
     if (this.trophies) {
+      if (this.floors > 1) this.trophies.position.set(0, (this.floors - 1) * FLOOR_H + 0.05, BOARD_Z + 1.3);
+      else this.trophies.position.set(0, 4.75, BOARD_Z);
+      this.trophies.scale.setScalar(this.floors > 1 ? 1.25 : 1);
       this.trophies.children.forEach((cup, i) => {
         cup.rotation.y = Math.sin(time * 0.8 + i) * 0.4;
         cup.children[cup.children.length - 1].rotation.y = time * 2;
@@ -922,11 +929,23 @@ export class Base {
     );
     panel.position.y = 3.85;
     panel.castShadow = true;
+    // The text is printed flat on the board's face (a sprite would turn to the camera and cut into the board).
     const label = makeLabel();
     label.set(text, color);
-    label.sprite.position.set(0, 3.85, 0.4);
-    label.sprite.scale.multiplyScalar(0.72);
-    g.add(panel, label.sprite);
+    const w = label.sprite.scale.x * 0.72;
+    const face = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, w * (96 / 512)),
+      new THREE.MeshBasicMaterial({ map: label.sprite.material.map, transparent: true, depthWrite: false }),
+    );
+    face.position.set(0, 3.85, 0.17);
+    g.add(panel, face);
     this.group.add(g);
+    this.signLabel = label;
+  }
+
+  /** Your own base's board: "NAME'S BASE" once you've picked a name. */
+  setOwnerName(name: string): void {
+    if (!this.own) return;
+    this.signLabel?.set(name ? `${name.toUpperCase()}'S BASE` : 'YOUR BASE', '#ffd84a');
   }
 }

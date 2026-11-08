@@ -268,56 +268,269 @@ export interface PlayerRig {
   group: THREE.Group;
   body: THREE.Group;
   chute: THREE.Group;
-  /** The everyday cap, and the crash helmet worn in the cannon and in flight (hidden at first). */
+  /** The everyday hat, and the crash helmet worn in the cannon and in flight (hidden at first). */
   cap: THREE.Group;
   helmet: THREE.Group;
   /** Shoulder and hip joints, left then right. Arms hang down at rotation 0 and raise outward with side × z. */
   arms: THREE.Group[];
   legs: THREE.Group[];
+  /** Re-dresses the avatar in place (the profile editor). */
+  dress(outfit: Outfit): void;
+  /** A part that spins (the propeller hat), if any. */
+  spinner: THREE.Object3D | null;
 }
 
-/** A simple cartoon face drawn on a canvas: two tall eyes and a smile. */
-function faceTexture(): THREE.Texture {
+export const FACES = ['smile', 'grin', 'cool', 'wink', 'wow', 'sleepy', 'cat'] as const;
+export type Face = (typeof FACES)[number];
+export const HEADS = ['block', 'round', 'tall'] as const;
+export type Head = (typeof HEADS)[number];
+export const HATS = ['cap', 'none', 'beanie', 'tophat', 'cowboy', 'crown', 'propeller', 'party'] as const;
+export type Hat = (typeof HATS)[number];
+export const PATTERNS = ['stripe', 'plain', 'stripes', 'dots', 'star', 'split', 'zigzag'] as const;
+export type Pattern = (typeof PATTERNS)[number];
+
+const faceCache = new Map<string, THREE.Texture>();
+
+/** A cartoon face drawn on a canvas, in one of a few expressions. */
+export function faceTexture(face: Face = 'smile'): THREE.Texture {
+  const hit = faceCache.get(face);
+  if (hit) return hit;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 128;
   const g = canvas.getContext('2d')!;
-  g.fillStyle = '#1d1d24';
-  for (const x of [44, 84]) {
+  const ink = '#1d1d24';
+  g.strokeStyle = ink;
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  const eye = (x: number) => {
+    g.fillStyle = ink;
     g.beginPath();
     g.ellipse(x, 52, 8, 13, 0, 0, Math.PI * 2);
     g.fill();
-  }
-  g.fillStyle = '#ffffff';
-  for (const x of [41, 81]) {
+    g.fillStyle = '#ffffff';
     g.beginPath();
-    g.arc(x, 46, 3.5, 0, Math.PI * 2);
+    g.arc(x - 3, 46, 3.5, 0, Math.PI * 2);
     g.fill();
+  };
+  const arc = (x: number, y: number, r: number, a0: number, a1: number, w = 7) => {
+    g.lineWidth = w;
+    g.beginPath();
+    g.arc(x, y, r, a0, a1);
+    g.stroke();
+  };
+  if (face === 'smile') {
+    eye(44);
+    eye(84);
+    arc(64, 74, 22, 0.15 * Math.PI, 0.85 * Math.PI);
+  } else if (face === 'grin') {
+    eye(44);
+    eye(84);
+    // A big open D-shaped grin with a row of teeth.
+    g.fillStyle = '#5a1020';
+    g.beginPath();
+    g.moveTo(38, 76);
+    g.arc(64, 76, 26, 0, Math.PI);
+    g.closePath();
+    g.fill();
+    g.fillStyle = '#ffffff';
+    g.fillRect(44, 76, 40, 8);
+  } else if (face === 'cool') {
+    // Sunglasses and a smirk.
+    g.fillStyle = ink;
+    g.beginPath();
+    g.roundRect(26, 40, 34, 22, 8);
+    g.roundRect(68, 40, 34, 22, 8);
+    g.fill();
+    g.fillRect(56, 44, 16, 5);
+    g.fillStyle = 'rgba(255,255,255,0.7)';
+    g.fillRect(32, 44, 10, 4);
+    g.fillRect(74, 44, 10, 4);
+    arc(70, 70, 18, 0.2 * Math.PI, 0.7 * Math.PI);
+  } else if (face === 'wink') {
+    eye(44);
+    arc(84, 58, 10, 1.1 * Math.PI, 1.9 * Math.PI);
+    arc(64, 74, 22, 0.15 * Math.PI, 0.85 * Math.PI);
+    g.fillStyle = '#ff6b8a';
+    g.beginPath();
+    g.ellipse(70, 97, 8, 6, 0, 0, Math.PI * 2);
+    g.fill();
+  } else if (face === 'wow') {
+    eye(44);
+    eye(84);
+    g.fillStyle = '#5a1020';
+    g.beginPath();
+    g.ellipse(64, 88, 10, 13, 0, 0, Math.PI * 2);
+    g.fill();
+  } else if (face === 'sleepy') {
+    arc(44, 50, 10, 0.1 * Math.PI, 0.9 * Math.PI);
+    arc(84, 50, 10, 0.1 * Math.PI, 0.9 * Math.PI);
+    arc(64, 92, 8, 1.1 * Math.PI, 1.9 * Math.PI, 6);
+    g.font = '900 22px system-ui, sans-serif';
+    g.fillStyle = '#3a6cff';
+    g.fillText('z', 100, 30);
+  } else {
+    // Cat: happy closed eyes, a w mouth and whiskers.
+    arc(44, 58, 10, 1.1 * Math.PI, 1.9 * Math.PI);
+    arc(84, 58, 10, 1.1 * Math.PI, 1.9 * Math.PI);
+    arc(56, 76, 8, 0, Math.PI, 6);
+    arc(72, 76, 8, 0, Math.PI, 6);
+    g.lineWidth = 3;
+    for (const [x0, x1, y] of [
+      [24, 6, 74],
+      [24, 6, 86],
+      [104, 122, 74],
+      [104, 122, 86],
+    ]) {
+      g.beginPath();
+      g.moveTo(x0, y);
+      g.lineTo(x1, y + (y - 80) * 0.6);
+      g.stroke();
+    }
   }
-  g.strokeStyle = '#1d1d24';
-  g.lineWidth = 7;
-  g.lineCap = 'round';
-  g.beginPath();
-  g.arc(64, 74, 22, 0.15 * Math.PI, 0.85 * Math.PI);
-  g.stroke();
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  faceCache.set(face, tex);
   return tex;
 }
 
-/**
- * A blocky avatar with rounded edges: square head with a drawn face, a cap, a T-shirt, jeans and sneakers.
- * The player faces away from the camera (-z), so the camera sees their back and the parachute pack.
- */
-/** A player's colours. */
+const shirtCache = new Map<string, THREE.Texture>();
+
+/** The T-shirt's print: a pattern over the shirt colour, in a lighter (or, on pale shirts, darker) shade. */
+function shirtTexture(pattern: Pattern, color: number): THREE.Texture {
+  const key = `${pattern}${color}`;
+  const hit = shirtCache.get(key);
+  if (hit) return hit;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const g = canvas.getContext('2d')!;
+  const base = new THREE.Color(color);
+  g.fillStyle = `#${base.getHexString()}`;
+  g.fillRect(0, 0, 128, 128);
+  const hsl = { h: 0, s: 0, l: 0 };
+  base.getHSL(hsl);
+  const accent = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l > 0.6 ? hsl.l - 0.3 : Math.min(0.95, hsl.l + 0.35));
+  const ink = pattern === 'stripe' ? '#ffffff' : `#${accent.getHexString()}`;
+  g.fillStyle = ink;
+  g.strokeStyle = ink;
+  if (pattern === 'stripe') g.fillRect(0, 44, 128, 22);
+  else if (pattern === 'stripes') for (let y = 6; y < 128; y += 32) g.fillRect(0, y, 128, 14);
+  else if (pattern === 'dots') {
+    for (let y = 0; y < 4; y++)
+      for (let x = 0; x < 4; x++) {
+        g.beginPath();
+        g.arc(16 + x * 32 + (y % 2) * 16, 16 + y * 32, 8, 0, Math.PI * 2);
+        g.fill();
+      }
+  } else if (pattern === 'star') {
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 ? 18 : 44;
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      g.lineTo(64 + Math.cos(a) * r, 68 + Math.sin(a) * r);
+    }
+    g.closePath();
+    g.fill();
+  } else if (pattern === 'split') g.fillRect(64, 0, 64, 128);
+  else if (pattern === 'zigzag') {
+    g.lineWidth = 12;
+    for (const y of [40, 88]) {
+      g.beginPath();
+      for (let x = 0; x <= 128; x += 16) g.lineTo(x, y + (x % 32 ? 10 : -10));
+      g.stroke();
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  shirtCache.set(key, tex);
+  return tex;
+}
+
+/** A player's look: colours, plus (optional, for the profile editor) head, face, hat, shirt print and parachute. */
 export interface Outfit {
   skin: number;
   shirt: number;
   pants: number;
+  /** The hat's (and the crash helmet's) colour. */
   cap: number;
+  head?: Head;
+  face?: Face;
+  hat?: Hat;
+  pattern?: Pattern;
+  chute?: number;
 }
 
 export const DEFAULT_OUTFIT: Outfit = { skin: 0xf7c873, shirt: 0xff7a1a, pants: 0x2f5fc4, cap: 0xe63946 };
 
+/** Builds a hat at the origin (the top of the head), facing -z. Returns it and any part that spins. */
+function makeHat(hat: Hat, color: number): { group: THREE.Group; spinner: THREE.Object3D | null } {
+  const group = new THREE.Group();
+  let spinner: THREE.Object3D | null = null;
+  const m = new THREE.MeshLambertMaterial({ color });
+  const dark = new THREE.MeshLambertMaterial({ color: 0x24263a });
+  const white = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const gold = new THREE.MeshPhongMaterial({ color: 0xffc84a, emissive: 0x4a3000, shininess: 100, side: THREE.DoubleSide });
+  const rounded = (w: number, h: number, d: number, r = 0.07) => new RoundedBoxGeometry(w, h, d, 2, r);
+  const put = (mesh: THREE.Mesh, x: number, y: number, z: number) => {
+    mesh.position.set(x, y, z);
+    group.add(mesh);
+    return mesh;
+  };
+  if (hat === 'cap') {
+    put(new THREE.Mesh(rounded(0.64, 0.22, 0.64, 0.08), m), 0, -0.03, 0);
+    put(new THREE.Mesh(rounded(0.52, 0.05, 0.32, 0.02), m), 0, -0.12, -0.42);
+  } else if (hat === 'beanie' || hat === 'propeller') {
+    const dome = put(new THREE.Mesh(new THREE.SphereGeometry(0.36, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), m), 0, -0.1, 0);
+    dome.scale.y = 0.85;
+    put(new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.06, 8, 28).rotateX(Math.PI / 2), hat === 'beanie' ? white : dark), 0, -0.08, 0);
+    if (hat === 'beanie') put(new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 10), white), 0, 0.24, 0);
+    else {
+      put(new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.18, 8), dark), 0, 0.26, 0);
+      const prop = new THREE.Group();
+      prop.position.y = 0.35;
+      const blades: [number, number][] = [
+        [0xff4d5e, 0],
+        [0x3fb6ff, Math.PI / 2],
+        [0xffd23f, Math.PI],
+        [0x3ccf5a, Math.PI * 1.5],
+      ];
+      for (const [c, a] of blades) {
+        const blade = new THREE.Mesh(rounded(0.3, 0.03, 0.1, 0.012), new THREE.MeshLambertMaterial({ color: c }));
+        blade.position.set(Math.cos(a) * 0.16, 0, Math.sin(a) * 0.16);
+        blade.rotation.y = -a;
+        prop.add(blade);
+      }
+      group.add(prop);
+      spinner = prop;
+    }
+  } else if (hat === 'tophat') {
+    put(new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.05, 32), dark), 0, -0.02, 0);
+    put(new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, 0.55, 28), dark), 0, 0.27, 0);
+    put(new THREE.Mesh(new THREE.CylinderGeometry(0.305, 0.305, 0.1, 28), m), 0, 0.06, 0);
+  } else if (hat === 'cowboy') {
+    const brim = put(new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.05, 32), m), 0, -0.02, 0);
+    brim.scale.z = 0.85;
+    put(new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.32, 0.32, 24), m), 0, 0.15, 0);
+    put(new THREE.Mesh(new THREE.CylinderGeometry(0.325, 0.325, 0.07, 24), dark), 0, 0.04, 0);
+  } else if (hat === 'crown') {
+    put(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.16, 24, 1, true), gold), 0, 0.04, 0);
+    const jewel = new THREE.MeshPhongMaterial({ color, shininess: 120 });
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      put(new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.18, 8), gold), Math.cos(a) * 0.28, 0.2, Math.sin(a) * 0.28);
+      put(new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), jewel), Math.cos(a) * 0.3, 0.05, Math.sin(a) * 0.3);
+    }
+  } else if (hat === 'party') {
+    put(new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.6, 24), m), 0, 0.26, 0);
+    put(new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.04, 8, 20).rotateX(Math.PI / 2), white), 0, 0.08, 0);
+    put(new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 8), white), 0, 0.58, 0);
+  }
+  return { group, spinner };
+}
+
+/**
+ * A blocky avatar with rounded edges: a head with a drawn face, a hat, a printed T-shirt, jeans and sneakers.
+ * The player faces away from the camera (-z), so the camera sees their back and the parachute pack.
+ */
 export function makePlayer(outfit: Outfit = DEFAULT_OUTFIT): PlayerRig {
   const group = new THREE.Group();
   const body = new THREE.Group();
@@ -326,26 +539,23 @@ export function makePlayer(outfit: Outfit = DEFAULT_OUTFIT): PlayerRig {
 
   const rounded = (w: number, h: number, d: number, r = 0.07) => new RoundedBoxGeometry(w, h, d, 2, r);
   const skin = new THREE.MeshLambertMaterial({ color: outfit.skin });
-  const shirt = new THREE.MeshLambertMaterial({ color: outfit.shirt });
+  const shirt = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const sleeveMat = new THREE.MeshLambertMaterial({ color: outfit.shirt });
   const pants = new THREE.MeshLambertMaterial({ color: outfit.pants });
   const shoe = new THREE.MeshLambertMaterial({ color: 0x24263a });
-  const cap = new THREE.MeshLambertMaterial({ color: outfit.cap });
 
   const torso = new THREE.Mesh(rounded(0.82, 0.72, 0.42), shirt);
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.83, 0.12, 0.43), new THREE.MeshLambertMaterial({ color: 0xffffff }));
-  stripe.position.y = 0.1;
-  const head = new THREE.Mesh(rounded(0.6, 0.6, 0.6, 0.15), skin);
+  const headGeos: Record<Head, THREE.BufferGeometry> = {
+    block: rounded(0.6, 0.6, 0.6, 0.15),
+    round: new THREE.SphereGeometry(0.37, 28, 18),
+    tall: rounded(0.54, 0.74, 0.56, 0.14),
+  };
+  const head = new THREE.Mesh(headGeos.block, skin);
   head.position.y = 0.68;
-  const face = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.5, 0.5),
-    new THREE.MeshBasicMaterial({ map: faceTexture(), transparent: true }),
-  );
+  const faceMat = new THREE.MeshBasicMaterial({ map: faceTexture(), transparent: true });
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), faceMat);
   face.rotation.y = Math.PI;
   face.position.set(0, 0.66, -0.306);
-  const crown = new THREE.Mesh(rounded(0.64, 0.22, 0.64, 0.08), cap);
-  crown.position.y = 0.95;
-  const brim = new THREE.Mesh(rounded(0.52, 0.05, 0.32, 0.02), cap);
-  brim.position.set(0, 0.86, -0.42);
   const pack = new THREE.Mesh(rounded(0.6, 0.62, 0.24), new THREE.MeshLambertMaterial({ color: 0x2b6cb0 }));
   pack.position.set(0, 0.04, 0.32);
 
@@ -360,7 +570,7 @@ export function makePlayer(outfit: Outfit = DEFAULT_OUTFIT): PlayerRig {
     shoulder.position.set(side * 0.6, 0.3, 0);
     const arm = new THREE.Mesh(armGeo, skin);
     arm.position.y = -0.3;
-    const sleeve = new THREE.Mesh(sleeveGeo, shirt);
+    const sleeve = new THREE.Mesh(sleeveGeo, sleeveMat);
     sleeve.position.y = -0.08;
     shoulder.add(arm, sleeve);
     const hip = new THREE.Group();
@@ -375,8 +585,7 @@ export function makePlayer(outfit: Outfit = DEFAULT_OUTFIT): PlayerRig {
     legs.push(hip);
   }
   const capGroup = new THREE.Group();
-  capGroup.add(crown, brim);
-  body.add(torso, stripe, head, face, capGroup, pack);
+  body.add(torso, head, face, capGroup, pack);
   // A glossy crash helmet: a rounded shell in the cap's colour with a white racing stripe, goggles pushed up on
   // the front, and a chin strap. Smooth, so it catches the light.
   const helmet = new THREE.Group();
@@ -418,10 +627,8 @@ export function makePlayer(outfit: Outfit = DEFAULT_OUTFIT): PlayerRig {
   // Parachute, scaled from 0 when it opens.
   const chute = new THREE.Group();
   chute.position.set(0, 1.3, 0.3);
-  const canopy = new THREE.Mesh(
-    new THREE.SphereGeometry(2.4, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2),
-    flat(0xff4d6d, { side: THREE.DoubleSide }),
-  );
+  const canopyMat = flat(0xff4d6d, { side: THREE.DoubleSide });
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(2.4, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), canopyMat);
   canopy.scale.y = 0.55;
   canopy.position.y = 2.6;
   const linePoints: THREE.Vector3[] = [];
@@ -437,7 +644,43 @@ export function makePlayer(outfit: Outfit = DEFAULT_OUTFIT): PlayerRig {
   chute.visible = false;
   group.add(chute);
 
-  return { group, body, chute, arms, legs, cap: capGroup, helmet };
+  const rig: PlayerRig = {
+    group,
+    body,
+    chute,
+    arms,
+    legs,
+    cap: capGroup,
+    helmet,
+    spinner: null,
+    dress(o: Outfit) {
+      skin.color.setHex(o.skin);
+      pants.color.setHex(o.pants);
+      sleeveMat.color.setHex(o.shirt);
+      shirt.map = shirtTexture(o.pattern ?? 'stripe', o.shirt);
+      shirt.needsUpdate = true;
+      shellMat.color.setHex(o.cap);
+      canopyMat.color.setHex(o.chute ?? 0xff4d6d);
+      faceMat.map = faceTexture(o.face ?? 'smile');
+      faceMat.needsUpdate = true;
+      // Head shape: the face and the hat sit on its front and top.
+      const shape = o.head ?? 'block';
+      head.geometry = headGeos[shape];
+      const top = shape === 'block' ? 0.98 : shape === 'round' ? 1.03 : 1.05;
+      face.position.set(0, shape === 'tall' ? 0.7 : 0.66, shape === 'round' ? -0.375 : shape === 'tall' ? -0.29 : -0.306);
+      face.scale.setScalar(shape === 'round' ? 0.82 : 1);
+      capGroup.clear();
+      const hat = makeHat(o.hat ?? 'cap', o.cap);
+      hat.group.position.y = top;
+      hat.group.traverse((m) => {
+        if (m instanceof THREE.Mesh) m.castShadow = true;
+      });
+      capGroup.add(hat.group);
+      rig.spinner = hat.spinner;
+    },
+  };
+  rig.dress(outfit);
+  return rig;
 }
 
 export interface BirdRig {

@@ -58,6 +58,7 @@ export class Hud {
   readonly againBtn = byId<HTMLButtonElement>('againBtn');
   readonly soundBtn = byId<HTMLButtonElement>('soundBtn');
   readonly tuneBtn = byId<HTMLButtonElement>('tuneBtn');
+  readonly profileBtn = byId<HTMLButtonElement>('profileBtn');
   readonly upgradesBtn = byId<HTMLButtonElement>('upgradesBtn');
   readonly bookBtn = byId<HTMLButtonElement>('bookBtn');
   readonly backpackBtn = byId<HTMLButtonElement>('backpackBtn');

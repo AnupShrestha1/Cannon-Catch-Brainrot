@@ -766,7 +766,299 @@ const MODELS_CELESTIAL: Record<string, Model> = {
   },
 };
 
-Object.assign(MODELS, MODELS_STORM, MODELS_MYTHIC, MODELS_CELESTIAL);
+/** The third brainrot of each rarity. */
+const MODELS_EXTRA: Record<string, Model> = {
+  // Common: a dachshund made of a long biscuit, wagging its tail.
+  'Biscottino Bassotto': (f, accent) => {
+    const dough = mat(WAFFLE);
+    const dark = mat(0x8a5a2b);
+    const body = at(pill(0.24, 0.7, dough), 0, 0.42, 0);
+    body.rotation.y = Math.PI / 2;
+    const head = at(ball(0.24, dough), 0, 0.62, 0.52);
+    const snout = at(ball(0.12, mat(0xe8bb7a)), 0, 0.56, 0.74);
+    const nose = at(ball(0.05, mat(0x2b1a10)), 0, 0.6, 0.85);
+    f.add(body, head, snout, nose);
+    // Chocolate chips dotted along the back, and a collar.
+    for (const [x, z] of [[0.12, 0.2], [-0.1, -0.1], [0.08, -0.35], [-0.14, 0.32]]) f.add(at(ball(0.05, dark), x, 0.64, z));
+    const collar = at(ring(0.19, 0.04, accent), 0, 0.5, 0.42);
+    collar.rotation.x = Math.PI / 2 - 0.3;
+    f.add(collar);
+    const ears: THREE.Mesh[] = [];
+    for (const side of [-1, 1]) {
+      const ear = at(ball(0.11, dark), side * 0.22, 0.58, 0.5);
+      ear.scale.set(0.4, 1.3, 0.8);
+      ears.push(ear);
+      f.add(ear);
+      for (const z of [0.32, -0.32]) f.add(at(cyl(0.07, 0.08, 0.24, dough), side * 0.13, 0.12, z));
+    }
+    const tail = at(new THREE.Group(), 0, 0.5, -0.55);
+    const tip = at(cyl(0.04, 0.05, 0.3, dough), 0, 0.12, -0.04);
+    tip.rotation.x = -0.5;
+    tail.add(tip);
+    f.add(tail);
+    eyes(f, 0, 0.7, 0.72, 0.1);
+    return (t) => {
+      tail.rotation.z = Math.sin(t * 14) * 0.6;
+      ears.forEach((e, i) => (e.rotation.z = (i ? -1 : 1) * Math.sin(t * 7) * 0.15));
+      body.scale.set(1, 1, 1 + Math.sin(t * 3) * 0.03);
+    };
+  },
+
+  // Uncommon: a teddy bear twirling a polka-dot umbrella.
+  'Ombrellino Orsetto': (f, accent) => {
+    const fur = mat(0xb07a50);
+    const light = mat(0xe8c39a);
+    const body = at(ball(0.36, fur), 0, 0.42, 0);
+    body.scale.set(1, 1.05, 0.9);
+    const belly = at(ball(0.24, light), 0, 0.4, 0.17);
+    belly.scale.z = 0.6;
+    const head = at(ball(0.3, fur), 0, 0.92, 0.04);
+    const muzzle = at(ball(0.12, light), 0, 0.86, 0.3);
+    const nose = at(ball(0.045, mat(0x2b1a10)), 0, 0.9, 0.42);
+    f.add(body, belly, head, muzzle, nose);
+    for (const side of [-1, 1]) {
+      f.add(at(ball(0.1, fur), side * 0.22, 1.16, 0));
+      f.add(at(ball(0.06, light), side * 0.22, 1.16, 0.06));
+      f.add(at(ball(0.11, fur), side * 0.18, 0.1, 0.14));
+    }
+    const arm = at(ball(0.1, fur), 0.32, 0.62, 0.1);
+    const brolly = at(new THREE.Group(), 0.34, 0.66, 0.1);
+    const handle = at(cyl(0.025, 0.025, 0.9, mat(0x6b4226)), 0, 0.42, 0);
+    const canopy = new THREE.Mesh(
+      cached('brolly', () => new THREE.ConeGeometry(0.62, 0.3, 8, 1, true)),
+      mat(0xff5fa2),
+    );
+    canopy.material.side = THREE.DoubleSide;
+    canopy.position.y = 0.95;
+    const dots = new THREE.Group();
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.4;
+      dots.add(at(ball(0.06, accent), Math.cos(a) * 0.36, 0.95, Math.sin(a) * 0.36));
+    }
+    brolly.add(handle, canopy, dots, at(ball(0.05, mat(0x6b4226)), 0, 1.12, 0));
+    f.add(arm, brolly);
+    eyes(f, 0, 0.98, 0.28, 0.1);
+    smile(f, 0, 0.8, 0.36, 0.05);
+    return (t) => {
+      brolly.rotation.y = t * 2.5;
+      brolly.rotation.z = -0.15 + Math.sin(t * 1.6) * 0.08;
+      body.rotation.z = Math.sin(t * 1.6) * 0.05;
+    };
+  },
+
+  // Rare: a sloth curled round a kettle that whistles out puffs of steam.
+  'Bollitore Bradipo': (f, accent) => {
+    const kettle = at(ball(0.4, mat(CHROME)), 0, 0.42, 0);
+    kettle.scale.set(1, 0.85, 1);
+    const lid = at(cyl(0.2, 0.26, 0.1, mat(CHROME)), 0, 0.76, 0);
+    const knob = at(ball(0.07, accent), 0, 0.84, 0);
+    const spout = at(cyl(0.05, 0.1, 0.42, mat(CHROME)), 0.42, 0.56, 0);
+    spout.rotation.z = -0.9;
+    const handle = at(ring(0.2, 0.04, mat(0x2b2b33)), -0.4, 0.5, 0);
+    f.add(kettle, lid, knob, spout, handle);
+    // The sloth hugging it from the front: a furry face and two long arms.
+    const fur = mat(0x9a7d5e);
+    const face = at(ball(0.22, fur), 0, 0.56, 0.36);
+    const mask = at(ball(0.16, mat(0xe9d8bf)), 0, 0.55, 0.45);
+    mask.scale.set(1.2, 0.8, 0.5);
+    f.add(face, mask);
+    for (const side of [-1, 1]) {
+      const arm = at(pill(0.06, 0.4, fur), side * 0.2, 0.35, 0.32);
+      arm.rotation.z = side * 0.6;
+      arm.rotation.y = side * 0.5;
+      f.add(arm, at(ball(0.06, mat(0x4a3a2a)), side * 0.42, 0.22, 0.2));
+      const patch = at(ball(0.05, mat(0x6b4a30)), side * 0.07, 0.58, 0.54);
+      patch.scale.set(1.4, 0.8, 0.5);
+      f.add(patch);
+    }
+    eyes(f, 0, 0.6, 0.55, 0.07);
+    smile(f, 0, 0.5, 0.55, 0.04);
+    const puffs = [0, 1, 2].map(() => {
+      const p = new THREE.Mesh(cached('puff', () => new THREE.SphereGeometry(0.1, 14, 10)), smokeMat);
+      f.add(p);
+      return p;
+    });
+    return (t) => {
+      puffs.forEach((p, i) => {
+        const k = (t * 0.8 + i / 3) % 1;
+        p.position.set(0.6 + k * 0.3, 0.75 + k * 0.6, 0);
+        p.scale.setScalar(0.6 + k * 1.4);
+        p.visible = k < 0.9;
+      });
+      face.rotation.z = Math.sin(t * 0.8) * 0.1;
+      knob.position.y = 0.84 + Math.abs(Math.sin(t * 9)) * 0.03;
+    };
+  },
+
+  // Epic: a toucan whose beak is a golden trumpet; it bobs and toots.
+  'Trombetta Tucano': (f, accent) => {
+    const black = mat(0x22222c);
+    const body = at(ball(0.36, black), 0, 0.52, 0);
+    body.scale.set(0.9, 1.15, 0.9);
+    const chest = at(ball(0.24, mat(0xffe36a)), 0, 0.6, 0.18);
+    chest.scale.set(1, 1.1, 0.6);
+    const head = at(ball(0.24, black), 0, 1.0, 0.05);
+    const cheek = at(ball(0.16, mat(0xffffff)), 0, 0.98, 0.14);
+    cheek.scale.set(1.2, 1, 0.8);
+    f.add(body, chest, head, cheek);
+    const horn = at(new THREE.Group(), 0, 0.98, 0.25);
+    const brass = mat(0xffc84a);
+    const pipe = at(cyl(0.06, 0.08, 0.5, brass), 0, 0, 0.25);
+    pipe.rotation.x = Math.PI / 2;
+    const bell = new THREE.Mesh(cached('bell', () => new THREE.ConeGeometry(0.2, 0.22, 20, 1, true)), brass);
+    bell.material.side = THREE.DoubleSide;
+    bell.rotation.x = -Math.PI / 2;
+    bell.position.z = 0.56;
+    horn.add(pipe, bell, at(ball(0.04, accent), 0, 0.08, 0.15), at(ball(0.04, accent), 0, 0.08, 0.27));
+    f.add(horn);
+    for (const side of [-1, 1]) {
+      const wing = at(ball(0.2, black), side * 0.32, 0.52, -0.02);
+      wing.scale.set(0.35, 1, 0.8);
+      f.add(wing, at(cyl(0.03, 0.03, 0.2, mat(ORANGE)), side * 0.1, 0.1, 0));
+    }
+    const tail = at(box(0.2, 0.36, 0.08, black), 0, 0.3, -0.32);
+    tail.rotation.x = 0.4;
+    f.add(tail);
+    eyes(f, 0, 1.06, 0.24, 0.1);
+    const note = at(ball(0.07, bulbMat), 0, 1.1, 0.8);
+    f.add(note);
+    return (t) => {
+      const toot = Math.max(0, Math.sin(t * 3));
+      horn.rotation.x = -toot * 0.2;
+      bell.scale.setScalar(1 + toot * 0.15);
+      f.position.y = Math.abs(Math.sin(t * 3)) * 0.05;
+      const k = (t * 0.9) % 1;
+      note.position.set(Math.sin(k * 8) * 0.1, 1.1 + k * 0.6, 0.8 + k * 0.2);
+      note.visible = k < 0.8;
+    };
+  },
+
+  // Legendary: a lion that is a washing machine; its drum spins with bubbles and its mane shakes.
+  'Lavatrice Leone': (f, accent) => {
+    const machine = at(box(0.8, 0.84, 0.66, mat(0xf4f4f4)), 0, 0.46, 0);
+    const door = at(ring(0.24, 0.05, mat(CHROME)), 0, 0.42, 0.34);
+    const glass = at(cyl(0.22, 0.22, 0.04, mat(0x8fd3ff)), 0, 0.42, 0.33);
+    glass.rotation.x = Math.PI / 2;
+    const drum = at(new THREE.Group(), 0, 0.42, 0.36);
+    for (let i = 0; i < 3; i++) {
+      const sock = at(ball(0.06, i === 1 ? accent : mat(i ? 0xff5f7e : 0x3fb6ff)), Math.cos(i * 2.1) * 0.12, Math.sin(i * 2.1) * 0.12, 0);
+      drum.add(sock);
+    }
+    const panel = at(box(0.8, 0.14, 0.04, mat(0xdfe6f2)), 0, 0.8, 0.33);
+    const dial = at(cyl(0.05, 0.05, 0.05, accent), 0.25, 0.8, 0.36);
+    dial.rotation.x = Math.PI / 2;
+    f.add(machine, door, glass, drum, panel, dial);
+    // The lion's head on top, in a fluffy mane.
+    const mane = at(new THREE.Group(), 0, 1.1, 0.04);
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      mane.add(at(ball(0.14, mat(0xd9771f)), Math.cos(a) * 0.26, Math.sin(a) * 0.26, -0.04));
+    }
+    const face = at(ball(0.24, mat(0xffc35a)), 0, 1.1, 0.08);
+    const muzzle = at(ball(0.1, mat(0xfff1d6)), 0, 1.04, 0.28);
+    const nose = at(ball(0.04, mat(0x5a2b1a)), 0, 1.08, 0.36);
+    f.add(mane, face, muzzle, nose);
+    for (const side of [-1, 1]) f.add(at(ball(0.07, mat(0xffc35a)), side * 0.2, 1.32, 0.04));
+    eyes(f, 0, 1.15, 0.28, 0.09);
+    smile(f, 0, 0.98, 0.32, 0.05);
+    const tail = at(cyl(0.03, 0.03, 0.5, mat(0xffc35a)), -0.42, 0.6, -0.2);
+    tail.rotation.z = 0.8;
+    const tuft = at(ball(0.08, mat(0xd9771f)), -0.62, 0.78, -0.2);
+    f.add(tail, tuft);
+    return (t) => {
+      drum.rotation.z = t * 6;
+      // A spin cycle: the whole machine rattles now and then.
+      const spin = Math.sin(t * 0.9) > 0.3 ? 1 : 0;
+      machine.position.x = spin * Math.sin(t * 50) * 0.015;
+      mane.rotation.z = Math.sin(t * 2) * 0.1 + spin * Math.sin(t * 40) * 0.05;
+    };
+  },
+};
+
+const MODELS_EXTRA_TOP: Record<string, Model> = {
+  // Mythic: an axolotl astronaut in a bubble helmet, riding a little jetpack.
+  'Astronauta Assolotto': (f, accent) => {
+    const pink = mat(0xffa3c8);
+    const rig = new THREE.Group();
+    const suit = at(ball(0.34, mat(0xf4f4f4)), 0, 0.5, 0);
+    suit.scale.set(1, 1.1, 0.95);
+    const badge = at(ball(0.07, accent), 0.12, 0.62, 0.3);
+    const head = at(ball(0.26, pink), 0, 0.98, 0.02);
+    head.scale.set(1.2, 0.9, 1);
+    rig.add(suit, badge, head);
+    // Feathery gills either side of the head.
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 3; i++) {
+        const gill = at(cone(0.05, 0.22, mat(0xff5f9e)), side * (0.3 + i * 0.02), 0.98 + (i - 1) * 0.1, 0);
+        gill.rotation.z = -side * (1.1 + (i - 1) * 0.4);
+        rig.add(gill);
+      }
+      rig.add(at(ball(0.1, mat(0xf4f4f4)), side * 0.2, 0.1, 0.06));
+      const arm = at(pill(0.08, 0.2, mat(0xf4f4f4)), side * 0.36, 0.56, 0.04);
+      arm.rotation.z = side * 0.6;
+      rig.add(arm);
+    }
+    const helmetMat = new THREE.MeshPhongMaterial({ color: 0xbfe9ff, transparent: true, opacity: 0.3, shininess: 120, depthWrite: false });
+    NO_OUTLINE.add(helmetMat);
+    rig.add(at(ball(0.44, helmetMat), 0, 0.96, 0.02));
+    const pack = at(box(0.36, 0.42, 0.2, mat(0x8f939e)), 0, 0.55, -0.34);
+    const flames = [-1, 1].map((side) => {
+      const flame = at(cone(0.07, 0.3, bulbMat), side * 0.1, 0.22, -0.36);
+      flame.rotation.x = Math.PI;
+      rig.add(flame);
+      return flame;
+    });
+    rig.add(pack);
+    eyes(rig, 0, 1.0, 0.24, 0.12);
+    smile(rig, 0, 0.88, 0.26, 0.07);
+    f.add(rig);
+    return (t) => {
+      rig.position.y = 0.12 + Math.sin(t * 1.8) * 0.08;
+      rig.rotation.z = Math.sin(t * 1.2) * 0.08;
+      flames.forEach((fl, i) => fl.scale.set(1, 0.7 + Math.abs(Math.sin(t * 21 + i)) * 0.6, 1));
+    };
+  },
+
+  // Celestial: a jellyfish made of a nebula, its glowing tentacles drifting, stars twinkling inside its bell.
+  'Nebulosa Medusa': (f) => {
+    const bell = new THREE.Mesh(
+      cached('jellybell', () => new THREE.SphereGeometry(0.46, 28, 16, 0, Math.PI * 2, 0, Math.PI / 1.9)),
+      mat(0x6a4bd6),
+    );
+    bell.position.y = 0.95;
+    bell.scale.y = 0.85;
+    const rim = at(ring(0.44, 0.06, mat(0xb9a6ff)), 0, 0.92, 0);
+    rim.rotation.x = Math.PI / 2;
+    const swim = new THREE.Group();
+    swim.add(bell, rim);
+    const tentacles: THREE.Group[] = [];
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2;
+      const strand = at(new THREE.Group(), Math.cos(a) * 0.28, 0.9, Math.sin(a) * 0.28);
+      for (let j = 0; j < 4; j++) strand.add(at(ball(0.06 - j * 0.008, j % 2 ? mat(0xffc8f0) : mat(0x9fb8ff)), 0, -0.14 - j * 0.15, 0));
+      tentacles.push(strand);
+      swim.add(strand);
+    }
+    const stars = new THREE.Group();
+    for (let i = 0; i < 5; i++) stars.add(at(ball(0.035, bulbMat), Math.cos(i * 1.3) * 0.22, 1.05 + Math.sin(i * 2.1) * 0.08, Math.sin(i * 1.3) * 0.22));
+    swim.add(stars);
+    eyes(swim, 0, 1.02, 0.42, 0.13);
+    smile(swim, 0, 0.92, 0.44, 0.05);
+    f.add(swim);
+    return (t) => {
+      const pulse = Math.sin(t * 2.4);
+      bell.scale.set(1 + pulse * 0.06, 0.85 - pulse * 0.06, 1 + pulse * 0.06);
+      swim.position.y = Math.sin(t * 1.2) * 0.1;
+      tentacles.forEach((s, i) => {
+        s.rotation.x = Math.sin(t * 2 + i) * 0.25;
+        s.rotation.z = Math.cos(t * 1.7 + i) * 0.25;
+      });
+      stars.rotation.y = t * 0.6;
+    };
+  },
+};
+
+Object.assign(MODELS, MODELS_STORM, MODELS_MYTHIC, MODELS_CELESTIAL, MODELS_EXTRA, MODELS_EXTRA_TOP);
 
 /** Fallback for characters without a model yet: a cube in the rarity colour. */
 const cubeModel: Model = (f, accent) => {

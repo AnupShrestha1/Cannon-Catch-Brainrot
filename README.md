@@ -210,12 +210,13 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   pairs from the front), with the brainrots turned toward the lane and the aisle, and the owner's name
   board stands tall at the back. Walking down the aisle collects from both lines. 4 slots are open at the
   start; locked ones are roped off. Unlocking is done at the base: an Unlock button floats over the next
-  locked pair (or press E beside it), 2 slots at a time (600, 3,600, 21,600, then each pair about 1.9×
-  the last). Empty open slots pulse a ring of light.
-- **Floors**: the first two rebirths each add a floor to the base, a deck on pillars over the one below
+  locked pair (or press E beside it), 2 slots at a time (600, 3,600, 21,600 on the ground floor). Upper
+  floors are priced floor by floor, each pair 1.9× the last on that floor and each floor's first pair 4×
+  the floor below's: Floor 2 470K, 890K, 1.7M; Floor 3 1.9M, 3.6M, 6.8M; Floor 4 7.5M, 14M, 27M. Empty open slots pulse a ring of light.
+- **Floors**: the first three rebirths each add a floor to the base (up to 4 floors), a deck on pillars over the one below
   with a white railing, holding another 10 slots (4 open straight away, and every slot below it opens
   too). Stairs climb the outside of the base, one flight per floor, alternating sides (Floor 2's on the
-  right, Floor 3's on the left): chunky steps on wooden stringers with a handrail and a landing at each
+  right, Floor 3's on the left, Floor 4's on the right again): chunky steps on wooden stringers with a handrail and a landing at each
   end. Walk up them and step off the top landing through a gap in the deck's railing; walk down to go
   back. Up on a deck the railing holds you except at those gaps. Other players' bases grow floors and
   stairs too.
@@ -277,8 +278,20 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   owl made of the night sky with a crown of stars and a ringed planet in orbit, and Pianeta Pinguino, a
   penguin who is also a planet, circled by a tilted ring of moons. Celestials are shaded as a slow-moving
   nebula of deep blue, violet and cyan, flecked with twinkling gold stars. Each one is a trophy: merging it
-  sets off a "TROPHY!" banner with fireworks, a gold cup appears on top of your name board for each one you
-  own, and the book has a Celestial · Trophies page (5,000,000 coins when complete).
+  sets off a "TROPHY!" banner with fireworks, a gold cup appears for each one you own (on top of your name
+  board while the base has one floor, then on the top deck above the board, where no deck cuts through it), and the book has a Celestial · Trophies page (5,000,000 coins when complete).
+- **Third brainrot per rarity**: every rarity now has three characters. Common: Biscottino Bassotto, a
+  biscuit dachshund with chocolate chips, wagging. Uncommon: Ombrellino Orsetto, a teddy bear twirling a
+  polka-dot umbrella. Rare: Bollitore Bradipo, a sloth hugging a kettle that puffs steam. Epic: Trombetta
+  Tucano, a toucan with a golden trumpet for a beak. Legendary: Lavatrice Leone, a washing-machine lion
+  with socks spinning in its drum. Mythic: Astronauta Assolotto, an axolotl astronaut in a bubble helmet
+  on a jetpack. Celestial: Nebulosa Medusa, a nebula jellyfish with drifting tentacles and stars inside.
+- **Profile** (the Profile button, top right): your name and avatar, with a live 3D preview you can drag
+  to turn. Pick a head (block, round, tall), a face (smile, grin, cool, wink, wow, sleepy, cat), skin
+  colour, a hat (cap, none, beanie, top hat, cowboy, crown, a spinning propeller beanie, party hat) and
+  its colour, a shirt pattern (stripe, plain, stripes, dots, star, split, zigzag) and colour, pants colour
+  and parachute colour. Save dresses your player; your name goes on your base's board ("NAME'S BASE")
+  and the leaderboard. The board's text is printed flat on it now, so it never cuts into the board.
 - **Shields** (in the shop): each level adds one shield, and each shield blocks one hazard hit per flight
   (no gems lost, no stun). They're stingy: 300 coins for the first (a few minutes in), then ten times the
   last for each (3K, 30K, 300K, 3M), up to 5. In flight a faint cyan bubble surrounds you with a ring

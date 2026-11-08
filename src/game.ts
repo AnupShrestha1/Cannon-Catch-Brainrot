@@ -4,6 +4,7 @@
 // flight is scripted rather than simulated, so the apex hits launchHeight() exactly.
 import * as THREE from 'three';
 import { Sfx } from './audio';
+import { profileEditor } from './profile';
 import { Base, COLLECT_RADIUS_PAD, COLLECT_X, COLLECT_Z, UPGRADE_X, FLOOR_H, PLATFORM_RADIUS, STAIR, bumpSolids, floorWorld, stairHeight, stairSide } from './base';
 import { animateShared } from './characters';
 import { Hub } from './hub';
@@ -442,6 +443,7 @@ export class Game {
       if (o instanceof THREE.Mesh) o.castShadow = true;
     });
     this.scene.add(this.player.group);
+    this.applyProfile();
     this.player.group.add(this.bubble.sprite);
     this.shieldBubble = makeShieldBubble();
     this.player.group.add(this.shieldBubble);
@@ -579,6 +581,7 @@ export class Game {
     });
     onClick(hud.soundBtn, () => this.toggleMute());
     onClick(hud.tuneBtn, () => hud.tunePanel.classList.toggle('hidden'));
+    onClick(hud.profileBtn, () => this.openProfile());
     onClick(hud.upgradesBtn, () => this.goShop());
     onClick(hud.exitBtn, () => this.exitCannon());
     onClick(hud.launchBtn, () => {
@@ -2013,7 +2016,7 @@ export class Game {
   /** Runs the server, draws the other players, and passes on its events, standings and player count. */
   private updateServer(realDt: number): void {
     const fav = this.save.pads.reduce<PadSlot | null>((a, b) => (b && (!a || b.rarity > a.rarity) ? b : a), null);
-    this.server.setLocal({ name: 'You', income: incomePerSecond(this.save), best: this.save.best, favorite: fav?.name ?? '' });
+    this.server.setLocal({ name: this.save.profile.name || 'You', income: incomePerSecond(this.save), best: this.save.best, favorite: fav?.name ?? '' });
     this.server.update(realDt);
     this.remote.update(this.time, realDt, this.px, this.pz);
     for (const e of this.server.drain()) {
@@ -2727,6 +2730,33 @@ export class Game {
       this.fx.burst(this.padAt(i, this.tmp).setY(this.padAt(i, this.tmp2).y + 0.8), { count: 26, color: 0x9dfcff, speed: 7, life: 0.9, size: 0.5, up: 5 });
     }
     writeSave(s);
+  }
+
+  /** The profile editor: name and avatar. Saving dresses your player and renames your base. */
+  private openProfile(): void {
+    if (this.hud.modalOpen) return;
+    const editor = profileEditor(this.save.profile);
+    this.hud.showModal('Profile', editor.nodes, [
+      { label: 'Cancel' },
+      {
+        label: 'Save',
+        primary: true,
+        action: () => {
+          this.save.profile = editor.result();
+          this.applyProfile();
+          writeSave(this.save);
+          this.hud.toast('Looking good!', 'good small');
+        },
+      },
+    ]);
+  }
+
+  private applyProfile(): void {
+    this.player.dress(this.save.profile.outfit);
+    this.player.group.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.castShadow = true;
+    });
+    this.base.setOwnerName(this.save.profile.name);
   }
 
   /** Celestial characters collected: each is a trophy. */
@@ -3542,7 +3572,8 @@ export class Game {
 
   /** The helmet is on in the cannon and in flight; boarding drops it onto the player's head with a bounce. */
   private updateHelmet(realDt: number): void {
-    const { helmet, cap } = this.player;
+    const { helmet, cap, spinner } = this.player;
+    if (spinner) spinner.rotation.y = this.time * 12;
     const on = this.state === 'aim' || this.state === 'charging' || this.state === 'ascent' || this.state === 'fall' || this.state === 'landed' || this.state === 'reveal';
     helmet.visible = on;
     cap.visible = !on;

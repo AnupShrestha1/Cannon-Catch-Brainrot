@@ -1,6 +1,7 @@
 // Local save. Browser storage can be missing or blocked, so every access is guarded.
 import { ECONOMY, UPGRADES } from './config';
 import { maxPads } from './economy';
+import { defaultProfile, type Profile } from './profile';
 
 export type HazardMode = 'auto' | 'on' | 'off';
 
@@ -71,6 +72,8 @@ export interface Save {
   /** Active play time in game seconds (sped-up time counts as game time), and in real seconds. */
   playTime: number;
   playReal: number;
+  /** Your name and avatar. */
+  profile: Profile;
 }
 
 const KEY = 'ccb-slice-v1';
@@ -114,6 +117,7 @@ export function defaultSave(): Save {
     bookClaimed: [],
     playTime: 0,
     playReal: 0,
+    profile: defaultProfile(),
   };
 }
 

@@ -3224,3 +3224,118 @@ body.chute-alarm::after {
 #groundBar .dist {
   font-size: 13px;
 }
+
+/* ---------------------------------------------------------------- profile editor */
+
+.panel:has(.profile) {
+  width: min(860px, 100%);
+}
+
+#modalBody:has(.profile) {
+  max-height: 70vh;
+}
+
+.profile {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 16px;
+  text-align: left;
+}
+
+.profile-side {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  text-align: center;
+}
+
+.profile-preview {
+  width: 100%;
+  aspect-ratio: 360 / 440;
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  background: radial-gradient(circle at 50% 35%, #d8f1ff, #8fd3ff);
+  touch-action: none;
+  cursor: grab;
+}
+
+.profile-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.profile-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--display);
+  font-size: 18px;
+}
+
+.profile-name input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  font: 700 16px system-ui, sans-serif;
+  color: var(--ink);
+}
+
+.profile-row {
+  margin-top: 12px;
+}
+
+.profile-title {
+  margin-bottom: 6px;
+  font-family: var(--display);
+  font-size: 15px;
+}
+
+.profile-chips,
+.profile-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.profile .chip-btn {
+  padding: 4px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.profile .chip-btn.on {
+  --c: #ffd23f;
+  --hi: #fff1a8;
+  --lo: #e0a400;
+}
+
+.profile .swatch-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.profile .swatch-btn.on {
+  outline: 3px solid #ffd23f;
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .profile {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-side {
+    position: static;
+  }
+
+  .profile-preview {
+    width: 160px;
+  }
+}

@@ -24,15 +24,15 @@ export const RARE = 2;
 // Basic Launch roster: 10 of the design doc's 21 characters, up to Legendary. It skips the three
 // names the doc flags as too close to their originals.
 export const ROSTER: string[][] = [
-  ['Cannolini Cannonino', 'Tostino Tortorino'],
-  ['Lampadino Lumachino', 'Spazzolino Struzzo'],
-  ['Ginnasta Gelatina', 'Ventilatore Tartarughino'],
-  ['Pizzarotto Pellicano', 'Ninja Macchiatino'],
-  ['Elicottero Ippopotamo', 'Frigorifero Fenicottero'],
+  ['Cannolini Cannonino', 'Tostino Tortorino', 'Biscottino Bassotto'],
+  ['Lampadino Lumachino', 'Spazzolino Struzzo', 'Ombrellino Orsetto'],
+  ['Ginnasta Gelatina', 'Ventilatore Tartarughino', 'Bollitore Bradipo'],
+  ['Pizzarotto Pellicano', 'Ninja Macchiatino', 'Trombetta Tucano'],
+  ['Elicottero Ippopotamo', 'Frigorifero Fenicottero', 'Lavatrice Leone'],
   // Mythic: from the Ultra pull, or by merging three Legendaries.
-  ['Razzo Rinoceronte', 'Satellito Gattino'],
+  ['Razzo Rinoceronte', 'Satellito Gattino', 'Astronauta Assolotto'],
   // Celestial: only by merging five Mythics.
-  ['Galattico Gufo', 'Pianeta Pinguino'],
+  ['Galattico Gufo', 'Pianeta Pinguino', 'Nebulosa Medusa'],
 ];
 
 export interface Zone {
@@ -318,7 +318,7 @@ export const REBIRTH = {
   /** Each rebirth asks for this many more cannon levels than the last (capped at the top level): 21, 25, 29... */
   cannonStep: 4,
   /** The first this-many rebirths each add a floor to the base (on top of the bonus); later ones only the bonus. */
-  floors: 2,
+  floors: 3,
   /** A new floor comes with this many slots already open. */
   newFloorPads: 4,
 };
@@ -331,8 +331,10 @@ export const ECONOMY = {
   // Retuned with `npm run sim` from the doc's 400 × 3, which let income outrun every cost.
   firstExpansion: 600,
   expansionGrowth: 6,
-  /** Past the first floor's slots (3 expansions), each further pair costs this much more than the last. */
+  /** On the floors above, each pair costs this much more than the last on that floor... */
   lateExpansionGrowth: 1.9,
+  /** ...and each floor's first pair costs this much more than the floor below's first. */
+  floorExpansionGrowth: 4,
   /** A pad's cash pile stops growing at this many seconds of its income. */
   padCapSeconds: 600,
   /** Selling a character pays this many seconds of its income. */
