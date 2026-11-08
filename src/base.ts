@@ -235,6 +235,7 @@ export class Base {
   /** The lift pads' rising rings, one per floor once there's more than one. */
   private lifts: { ring: THREE.Mesh; arrow: THREE.Group; seed: number }[] = [];
   private own: boolean;
+  private marker: { group: THREE.Group; star: THREE.Mesh } | null = null;
 
   /** Builds a plot's showcase at its slot; `vacant` leaves it unclaimed, `owner` makes it another player's. */
   constructor(scene: THREE.Scene, slot: PlotSlot, options: BaseOptions = {}) {
@@ -251,6 +252,31 @@ export class Base {
     else if (options.owner) this.buildSign(`${options.owner.toUpperCase()}'S BASE`, '#9dfcff', 0x2f5fc4);
     else this.buildSign('YOUR BASE', '#ffd84a', 0xc8102e);
     this.ensureFloors(1);
+    if (own) this.buildMarker();
+  }
+
+  /** Your base's marker: a gold star turning gently high over the name board, with a soft glow. */
+  private buildMarker(): void {
+    const g = new THREE.Group();
+    g.position.set(0, 8.2, BOARD_Z);
+    const shape = new THREE.Shape();
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2 + Math.PI / 2;
+      const r = k % 2 ? 0.32 : 0.75;
+      if (k) shape.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      else shape.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    const star = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(shape, { depth: 0.22, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.08, bevelSegments: 3 }).center(),
+      new THREE.MeshPhongMaterial({ color: GOLD, emissive: 0x7a5200, shininess: 110, specular: 0xffffff }),
+    );
+    const glow = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: softTexture(), color: 0xffd36b, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    glow.scale.setScalar(3.2);
+    g.add(glow, star);
+    this.group.add(g);
+    this.marker = { group: g, star };
   }
 
   /** How many floors the base shows. */
@@ -430,6 +456,11 @@ export class Base {
     this.labelTimer -= realDt;
     const refreshLabels = this.labelTimer <= 0;
     if (refreshLabels) this.labelTimer = 0.2;
+    if (this.marker) {
+      // Up over the top floor, bobbing and turning slowly.
+      this.marker.group.position.y = 8.2 + (this.floors - 1) * FLOOR_H + Math.sin(time * 1.4) * 0.25;
+      this.marker.star.rotation.y = time * 0.9;
+    }
     for (const lift of this.lifts) {
       const t = (time * 0.8 + lift.seed) % 1;
       lift.ring.position.y = 0.2 + t * 2.2;
@@ -631,7 +662,8 @@ export class Base {
     kerb((ENTRANCE + front) / 2, 0, front, t);
     const path = new THREE.Mesh(
       new RoundedBoxGeometry(ENTRANCE - 0.4, 0.08, SETBACK + 0.6, 2, 0.03),
-      new THREE.MeshLambertMaterial({ map: tileTexture('#e2d2b2', ENTRANCE - 0.4, SETBACK + 0.6) }),
+      // Your own path is a warm gold, so your way in stands out from the lane.
+      new THREE.MeshLambertMaterial({ map: tileTexture(this.own ? '#f2d488' : '#e2d2b2', ENTRANCE - 0.4, SETBACK + 0.6) }),
     );
     path.position.set(0, 0.035, SETBACK / 2);
     path.receiveShadow = true;

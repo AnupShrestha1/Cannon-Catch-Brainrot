@@ -35,7 +35,8 @@ the Network URL it prints.
 | At the base: turn and tilt the camera (drag up to look up at people flying) | Drag with the mouse | Drag on the right half |
 | Pull a gacha machine | Stand on its ×1 or ×10 pad, press E | Stand on a pad, tap the action button |
 | Merge station, shop | Step on the cauldron's platform or the shop's rug, press E | Same, tap the action button |
-| Launch | Launch button or F (teleports you to the cannon from afar) | Launch button |
+| Launch | Launch button or F (walks over from nearby, teleports from afar) | Launch button |
+| Get in the cannon / climb out | E at the cannon's foot / Exit button or Q | Action button / Exit button |
 | Ride your base's lift between floors | Stand on the lift pad, press E | Stand on it, tap the action button |
 | Unlock 2 more slots | Unlock button over the next locked pair, or E beside it | Tap the Unlock button |
 | Rebirth | Stand on the rebirth station's gold pad, press E | Same, tap the action button |
@@ -111,11 +112,14 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   - To keep the frame rate up, other players' brainrots are only drawn within about 22 m of their plot,
     without shadows, and the sun's shadows follow the player (the town is too long for one shadow map).
     About 400 draw calls in the hub.
-- **Launching**: from more than 5 m away (or from behind the cannon), Launch teleports you to the cannon in
-  a puff, with a squash-and-stretch pop-in and a camera cut. Then a short comic dive (under a second): a
+- **Launching**: within about 14 m of the cannon, Launch walks you over (round its side if you're behind
+  it); from further away, or from an upper floor, it teleports you there in a puff, with a squash-and-stretch
+  pop-in and a camera cut. Standing at the cannon's foot, E gets you in too. Either way, a short comic dive
+  always follows (under a second): a
   crouch, a leap in an arc turning head first, stuck in the muzzle with legs kicking while the cannon
   gulps, then slurped in. You pop back up out of the muzzle and a crash helmet drops onto your head with
-  a bounce and a clonk. The helmet stays on through the flight and the landing.
+  a bounce and a clonk. The helmet stays on through the flight and the landing. A small Exit button (or
+  Q) climbs back out: you spring from the muzzle and land at the cannon's foot.
 - **Aiming**: in the cannon, the mouse (or A/D, or a drag) swings it up to 17° either way, chasing the aim
   on a spring so it eases in and settles with a little overshoot. The flight mechanics are unchanged; a
   swung shot just starts as if you'd been steering that way (up to three quarters of the way across) and
@@ -137,6 +141,8 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   - Mythics are very rare: about one per 7,700 gems from Ultra and one per 4,800 from Cosmic, pity
     included (a Mythic is guaranteed only after 60 Ultra or 25 Cosmic pulls without one), or 8 Legendaries
     merged.
+  - Every machine shows its odds on a little board beside it: each rarity it can give, in that rarity's
+    colour, with its chance. (The pity guarantees stay hidden.)
   - Each tier is worth more per gem than the one below (`npm run sim`, merged-up value in Legendaries per
     1,000 gems): Basic 2.32, Lucky 2.50, Super 2.81, Ultra 3.00, Cosmic 3.14. Lucky unlocks at about 2
     minutes without slowing the first pulls.
@@ -192,6 +198,8 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   to its counter and opens the shop (from the cannon too); standing on its rug and pressing E opens it. The
   shop sells flight upgrades only (cannon, gem finder, magnet, steering, parachute); slots are bought at the
   base and rebirth has its own station.
+- **Your base** is easy to spot without shouting: a gold star turns slowly high over its name board (over
+  the top floor, once it has more), and its path in from the lane is tiled in warm gold.
 - **Showcase**: each plot is a tiled area edged by a low, rounded kerb in its owner's colour (gold for
   yours), open at the front where its path comes in from the lane: a subtle edge, not a fence, that you
   can step over. Inside, two lines of 5 pedestals run back from the lane either side of an aisle (filled in

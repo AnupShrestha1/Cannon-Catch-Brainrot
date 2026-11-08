@@ -63,6 +63,7 @@ export class Hud {
   /** A portrait image for a brainrot, or '' to fall back to the plain rarity swatch. */
   iconFor: (name: string, rarity: number) => string = () => '';
   readonly launchBtn = byId<HTMLButtonElement>('launchBtn');
+  readonly exitBtn = byId<HTMLButtonElement>('exitBtn');
   readonly giftBtn = byId<HTMLButtonElement>('giftBtn');
   readonly tunePanel = byId('tune');
   onBuy: (item: ShopItem) => void = () => {};
@@ -291,6 +292,11 @@ export class Hud {
   showChute(on: boolean, pulse = false): void {
     this.chuteBtn.classList.toggle('on', on);
     this.chuteBtn.classList.toggle('pulse', on && pulse);
+  }
+
+  /** The small Exit button, shown while sitting in the cannon. */
+  showExit(on: boolean): void {
+    this.exitBtn.classList.toggle('on', on);
   }
 
   /** The parachute alarm: the screen's edges pulse red and the parachute button bounces and glows. */

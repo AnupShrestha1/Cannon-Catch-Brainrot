@@ -101,6 +101,47 @@ function makeSign(): Sign {
   };
 }
 
+/** A machine's odds: each rarity it can give and its chance, in that rarity's colour, on a dark board. */
+function makeOddsBoard(tier: GachaTier): THREE.Sprite {
+  const lines = tier.odds;
+  const canvas = document.createElement('canvas');
+  canvas.width = 320;
+  canvas.height = 56 + lines.length * 42;
+  const g = canvas.getContext('2d')!;
+  g.fillStyle = 'rgba(29, 22, 64, 0.9)';
+  g.strokeStyle = tier.color;
+  g.lineWidth = 6;
+  g.beginPath();
+  g.roundRect(4, 4, 312, canvas.height - 8, 22);
+  g.fill();
+  g.stroke();
+  g.textBaseline = 'middle';
+  g.font = '900 30px system-ui, sans-serif';
+  g.textAlign = 'center';
+  g.fillStyle = '#ffffff';
+  g.fillText('ODDS', 160, 32);
+  lines.forEach(([rarity, chance], i) => {
+    const y = 74 + i * 42;
+    const r = RARITIES[rarity];
+    g.fillStyle = r.css;
+    g.beginPath();
+    g.arc(30, y, 9, 0, Math.PI * 2);
+    g.fill();
+    g.font = '800 25px system-ui, sans-serif';
+    g.textAlign = 'left';
+    g.fillText(r.name, 48, y);
+    g.textAlign = 'right';
+    g.fillStyle = '#ffffff';
+    g.fillText(`${+(chance * 100).toFixed(1)}%`, 300, y);
+  });
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  const w = 2.5;
+  sprite.scale.set(w, (w * canvas.height) / 320, 1);
+  return sprite;
+}
+
 /** "×1" and "×10" painted on the pull pads, white with a dark outline, readable from the lane side. */
 const padText = new Map<string, THREE.Texture>();
 function padTextTexture(text: string): THREE.Texture {
@@ -890,6 +931,10 @@ export class Hub {
     sign.sprite.position.y = height + 1.2;
     sign.sprite.scale.multiplyScalar(0.82);
     group.add(sign.sprite);
+    // The odds, on a little board beside the machine.
+    const odds = makeOddsBoard(tier);
+    odds.position.set(-2.45, 2.3, 0.6);
+    group.add(odds);
     this.group.add(group);
     const color = new THREE.Color(tier.color).getHex();
     const pads: [PullPadView, PullPadView] = [this.buildPullPad(pullPad(i, false), false, color), this.buildPullPad(pullPad(i, true), true, color)];

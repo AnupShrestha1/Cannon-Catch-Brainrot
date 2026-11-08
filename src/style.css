@@ -2988,3 +2988,36 @@ body.chute-alarm::after {
 .merge-card.picked .count {
   background: #ffd23f;
 }
+
+/* ---------------------------------------------------------------- the cannon's Exit button */
+
+/* Small and out of the way, bottom right, only while sitting in the cannon. */
+#exitBtn {
+  --c: #ff7a59;
+  --hi: #ffc2b0;
+  --lo: #e04d2a;
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: none;
+  padding: 8px 16px 6px;
+  border-width: 3px;
+  border-radius: 16px;
+  box-shadow:
+    0 4px 0 var(--ink),
+    inset 0 2px 0 rgba(255, 255, 255, 0.6);
+  color: #fff;
+  font-size: 18px;
+  text-shadow: var(--stroke-thin);
+}
+
+#exitBtn.on {
+  display: block;
+}
+
+#exitBtn .key {
+  display: block;
+  font-family: var(--body);
+  font-size: 11px;
+  opacity: 0.9;
+}

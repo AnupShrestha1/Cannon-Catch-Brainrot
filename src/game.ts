@@ -164,7 +164,7 @@ const CANNON_FOOT = new THREE.Vector3(FOOT.x, 0, FOOT.z);
 const SHOP_SPOT = new THREE.Vector3(SHOP_FRONT.x, 0, SHOP_FRONT.z);
 const CAULDRON_SPOT = new THREE.Vector3(CAULDRON_FRONT.x, 0, CAULDRON_FRONT.z);
 /** Launching from further from the cannon than this teleports the player there. */
-const TELEPORT_RANGE = 5;
+const TELEPORT_RANGE = 14;
 /** Seconds of the comic dive into the cannon. */
 const DIVE_TIME = 0.95;
 /** How far the cannon swings either way while aiming (radians), and how long a swung shot keeps that line. */
@@ -486,6 +486,7 @@ export class Game {
     onClick(hud.soundBtn, () => this.toggleMute());
     onClick(hud.tuneBtn, () => hud.tunePanel.classList.toggle('hidden'));
     onClick(hud.upgradesBtn, () => this.goShop());
+    onClick(hud.exitBtn, () => this.exitCannon());
     onClick(hud.launchBtn, () => {
       if (this.state === 'home') this.startBoarding();
     });
@@ -595,6 +596,11 @@ export class Game {
     switch (this.state) {
       case 'aim':
         this.updateAim(dt);
+        // Q (or the Exit button) climbs back out.
+        if (!blocked && this.input.consumeKey('KeyQ')) {
+          this.exitCannon();
+          break;
+        }
         if (pressed) this.startCharge();
         break;
       case 'charging':
@@ -1988,6 +1994,7 @@ export class Game {
       const n = pull.ten ? 10 : 1;
       return `Pull ${tier.short} ×${n} · ${formatCoins(tier.cost * n)} gems`;
     }
+    if (this.atCannon()) return 'Get in the cannon';
     if (this.atLift()) {
       const to = this.liftTarget();
       return to > this.level ? `Lift ▲ Floor ${to + 1}` : 'Lift ▼ Ground floor';
@@ -2035,6 +2042,10 @@ export class Game {
     const pull = this.pullPadUnder();
     if (pull) {
       this.pullMachine(pull.index, pull.ten ? 10 : 1);
+      return;
+    }
+    if (this.atCannon()) {
+      this.startBoarding();
       return;
     }
     if (this.atLift()) {
@@ -2187,11 +2198,45 @@ export class Game {
     this.state = 'boarding';
     this.guideTarget = null;
     this.hud.prompt('');
+    this.jumpY = this.jumpV = 0;
     const d = Math.hypot(this.px - CANNON_FOOT.x, this.pz - CANNON_FOOT.z);
-    // Behind the cannon counts as far: walking round it would look silly.
-    if (d > TELEPORT_RANGE || this.pz < CANNON_FOOT.z - 1) this.teleport(CANNON_FOOT, 0, () => this.startDive());
-    else if (d > 0.3) this.walkTo(CANNON_FOOT, () => this.startDive());
-    else this.startDive();
+    // Close by (in the hub, on the ground floor), walk over; from further, teleport. Either way, dive in.
+    if (d > TELEPORT_RANGE || this.level > 0) {
+      this.teleport(CANNON_FOOT, 0, () => this.startDive());
+    } else if (this.pz < CANNON_FOOT.z - 1) {
+      // Behind the cannon: round its side first.
+      const side = new THREE.Vector3(this.px < 0 ? -3.6 : 3.6, 0, 1.2);
+      this.walkTo(side, () => this.walkTo(CANNON_FOOT, () => this.startDive()));
+    } else if (d > 0.3) {
+      this.walkTo(CANNON_FOOT, () => this.startDive());
+    } else {
+      this.startDive();
+    }
+  }
+
+  /** Out of the cannon: the player springs out of the muzzle and lands at its foot, helmet off. */
+  private exitCannon(): void {
+    if (this.state !== 'aim') return;
+    this.state = 'home';
+    this.hud.showCharge(null);
+    this.hud.prompt('');
+    this.aim = 0;
+    this.player.body.rotation.set(0, 0, 0);
+    this.px = CANNON_FOOT.x;
+    this.pz = CANNON_FOOT.z + 0.6;
+    this.py = this.floorHere();
+    // A hop out from muzzle height, down to the ground.
+    this.jumpY = MUZZLE_Y + 0.6 - this.py;
+    this.jumpV = 4;
+    this.facing = 0;
+    this.camYaw = 0;
+    this.sfx.hop();
+    this.fx.burst(this.tmp.set(0, MUZZLE_Y + 1.4, 0), { count: 10, color: 0xd9dde3, speed: 3, life: 0.5, size: 0.8, grow: 1.5 });
+  }
+
+  /** Whether the player stands at the cannon's foot, where E climbs in. */
+  private atCannon(): boolean {
+    return this.level === 0 && Math.hypot(CANNON_FOOT.x - this.px, CANNON_FOOT.z - this.pz) < 2.4;
   }
 
   /**
@@ -2941,6 +2986,7 @@ export class Game {
       this.hasHint('collect') &&
       !upgradeHint &&
       !this.save.pads.some((slot) => slot !== null && slot.cash >= 1);
+    this.hud.showExit(this.state === 'aim');
     this.hud.showBaseButtons(canShop, this.state === 'home', {
       upgrades: canShop && upgradeHint,
       launch: launchHint,
