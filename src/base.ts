@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { ECONOMY, GACHA, RARITIES } from './config';
 import { makeCharacter, type CharacterRig } from './characters';
-import { floorsOf, formatCoins } from './economy';
+import { floorsOf, formatCoins, levelCost, levelReady } from './economy';
 import {
   BOARDS,
   CAULDRON,
@@ -64,6 +64,8 @@ const FIRST_DEPTH = 3.6;
 const PAD_STEP = 4.2;
 /** The Collect all pad beside your base's path (after the second rebirth), in plot space, and its radius. */
 export const COLLECT_X = 3.6;
+/** The Upgrade all pad, on the other side of the path. */
+export const UPGRADE_X = -3.6;
 export const COLLECT_Z = SETBACK / 2;
 export const COLLECT_RADIUS_PAD = 1.15;
 /** Height between floors. */
@@ -259,6 +261,8 @@ export class Base {
   private marker: { group: THREE.Group; star: THREE.Mesh } | null = null;
   /** The Collect all pad, shown on your own base from the second rebirth. */
   private collectPad: { group: THREE.Group; ring: THREE.Mesh; total: Label; shown: number } | null = null;
+  /** The Upgrade all pad, beside it on the other side of the path. */
+  private upgradePad: { group: THREE.Group; ring: THREE.Mesh; total: Label; key: string } | null = null;
 
   /** Builds a plot's showcase at its slot; `vacant` leaves it unclaimed, `owner` makes it another player's. */
   constructor(scene: THREE.Scene, slot: PlotSlot, options: BaseOptions = {}) {
@@ -278,6 +282,7 @@ export class Base {
     if (own) {
       this.buildMarker();
       this.buildCollectPad();
+      this.buildUpgradePad();
     }
   }
 
@@ -314,6 +319,42 @@ export class Base {
     g.visible = false;
     this.group.add(g);
     this.collectPad = { group: g, ring, total, shown: -1 };
+  }
+
+  /**
+   * The Upgrade all pad: a green disc with an up arrow, beside the path opposite Collect all. Stepping on it
+   * levels up every slot that's ready and affordable. Its sign shows how many are ready and what they cost.
+   */
+  private buildUpgradePad(): void {
+    const g = new THREE.Group();
+    g.position.set(UPGRADE_X, 0, COLLECT_Z);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(COLLECT_RADIUS_PAD + 0.12, COLLECT_RADIUS_PAD + 0.22, 0.14, 40), stoneMat);
+    base.position.y = 0.07;
+    const disc = new THREE.Mesh(
+      new THREE.CylinderGeometry(COLLECT_RADIUS_PAD, COLLECT_RADIUS_PAD, 0.05, 40),
+      new THREE.MeshLambertMaterial({ color: 0x3ccf5a, emissive: 0x1fa33f, emissiveIntensity: 0.55 }),
+    );
+    disc.position.y = 0.16;
+    const arrowMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x9dffb0, emissiveIntensity: 0.4 });
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.4, 24), arrowMat);
+    head.position.y = 0.75;
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.45, 16), arrowMat);
+    shaft.position.y = 0.35;
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(COLLECT_RADIUS_PAD * 0.85, 0.05, 6, 40).rotateX(Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xc8ffd3, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    const sign = makeLabel();
+    sign.set('UPGRADE ALL', '#9dffb0');
+    sign.sprite.position.y = 2.4;
+    sign.sprite.scale.multiplyScalar(0.55);
+    const total = makeLabel();
+    total.sprite.position.y = 3.15;
+    total.sprite.scale.multiplyScalar(0.7);
+    g.add(base, disc, head, shaft, ring, sign.sprite, total.sprite);
+    g.visible = false;
+    this.group.add(g);
+    this.upgradePad = { group: g, ring, total, key: '' };
   }
 
   /** Your base's marker: a gold star turning gently high over the name board, with a soft glow. */
@@ -546,6 +587,7 @@ export class Base {
     if (this.vacant) return;
     this.ensureFloors(floorsOf({ rebirths: save.rebirths ?? 0 }));
     if (this.collectPad) this.collectPad.group.visible = (save.rebirths ?? 0) >= 2;
+    if (this.upgradePad) this.upgradePad.group.visible = (save.rebirths ?? 0) >= 2;
     this.views.forEach((view, i) => {
       const locked = i >= save.pads.length;
       const slot = locked ? null : save.pads[i];
@@ -580,6 +622,28 @@ export class Base {
     this.labelTimer -= realDt;
     const refreshLabels = this.labelTimer <= 0;
     if (refreshLabels) this.labelTimer = 0.2;
+    if (this.upgradePad?.group.visible) {
+      const pad = this.upgradePad;
+      if (refreshLabels) {
+        let ready = 0;
+        let cost = 0;
+        for (const p of save.pads) {
+          const c = p && levelReady(p) ? levelCost(p) : null;
+          if (c === null) continue;
+          ready++;
+          cost += c;
+        }
+        const key = `${ready}|${cost}`;
+        if (key !== pad.key) {
+          pad.key = key;
+          pad.total.set(ready ? `${ready} ready · ${formatCoins(cost)}` : 'None ready', ready ? '#9dffb0' : '#c9ced6');
+        }
+      }
+      const t = (time * 0.9 + 0.5) % 1;
+      pad.ring.position.y = 0.15 + t * 1.6;
+      pad.ring.scale.setScalar(1 - t * 0.3);
+      (pad.ring.material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - t);
+    }
     if (this.collectPad?.group.visible) {
       if (refreshLabels) {
         const sum = Math.floor(save.pads.reduce((n, p) => n + (p ? Math.floor(p.cash) : 0), 0));

@@ -223,6 +223,9 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   base (on the grass, leaving the way in clear), under a COLLECT ALL sign that shows the coins waiting
   across all your slots. Step on it and every slot on every floor pays out at once, with coins
   bursting from each and one total.
+- **Upgrade all**: from the second rebirth too, a green pad with an up arrow on the other side of the path.
+  Step on it and every slot that's ready (full XP) and affordable levels up, cheapest first; its sign
+  shows how many are ready and what they'd cost all together. It fires once each time you step on.
 - **Slots**: a brainrot on display earns coins once a second by rarity (Common 1/s up to Legendary 90/s),
   up to 10 minutes' worth. The coins waiting show as a big gold coin spinning slowly over its head, with
   the amount above it. Pedestals are solid: walk up to one to collect its coins. Right under each

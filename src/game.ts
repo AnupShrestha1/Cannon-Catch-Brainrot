@@ -4,7 +4,7 @@
 // flight is scripted rather than simulated, so the apex hits launchHeight() exactly.
 import * as THREE from 'three';
 import { Sfx } from './audio';
-import { Base, COLLECT_RADIUS_PAD, COLLECT_X, COLLECT_Z, FLOOR_H, PLATFORM_RADIUS, STAIR, bumpSolids, floorWorld, stairHeight, stairSide } from './base';
+import { Base, COLLECT_RADIUS_PAD, COLLECT_X, COLLECT_Z, UPGRADE_X, FLOOR_H, PLATFORM_RADIUS, STAIR, bumpSolids, floorWorld, stairHeight, stairSide } from './base';
 import { animateShared } from './characters';
 import { Hub } from './hub';
 import { brainrotIcon } from './icons';
@@ -402,6 +402,8 @@ export class Game {
   private shields = 0;
   private shieldFlash = 0;
   private shieldBubble!: THREE.Group;
+  /** Standing on the Upgrade all pad (so it fires once per visit). */
+  private onUpgradePad = false;
   /** Brainrots picked in the merge station. */
   private mergePick: Owned[] = [];
 
@@ -1817,6 +1819,11 @@ export class Game {
     if (this.save.rebirths >= 2 && this.level === 0) {
       const [cx, cz] = fromPlot(OWN, COLLECT_X, COLLECT_Z);
       if (Math.hypot(cx - this.px, cz - this.pz) < COLLECT_RADIUS_PAD) this.collectAll();
+      // Upgrade all, on the other side: once per visit, so walking on doesn't keep buying.
+      const [ux, uz] = fromPlot(OWN, UPGRADE_X, COLLECT_Z);
+      const onUpgrade = Math.hypot(ux - this.px, uz - this.pz) < COLLECT_RADIUS_PAD;
+      if (onUpgrade && !this.onUpgradePad) this.upgradeAll();
+      this.onUpgradePad = onUpgrade;
     }
     // F (or the Launch button) heads for the cannon.
     if (!blocked && this.input.consumeKey('KeyF')) {
@@ -2212,6 +2219,37 @@ export class Game {
     this.sfx.coin();
     this.completeHint('collect');
     writeSave(this.save);
+  }
+
+  /** Every slot that's ready and affordable levels up, cheapest first (the Upgrade all pad). */
+  private upgradeAll(): void {
+    const s = this.save;
+    const ready = s.pads
+      .map((slot, i) => ({ slot, i, cost: slot && levelReady(slot) ? levelCost(slot) : null }))
+      .filter((r): r is { slot: PadSlot; i: number; cost: number } => r.slot !== null && r.cost !== null)
+      .sort((a, b) => a.cost - b.cost);
+    if (!ready.length) {
+      this.hud.toast('No slot is ready to level up yet', 'small');
+      return;
+    }
+    let done = 0;
+    for (const r of ready) {
+      if (s.coins < r.cost) break;
+      s.coins -= r.cost;
+      r.slot.level = (r.slot.level ?? 1) + 1;
+      r.slot.xp = 0;
+      done++;
+      this.fx.burst(this.padAt(r.i, this.tmp2).setY(this.padAt(r.i, this.tmp2).y + 1.2), { count: 16, color: 0x9dffb0, speed: 6, life: 0.8, size: 0.5, up: 5 });
+    }
+    if (!done) {
+      this.hud.toast(`Need ${formatCoins(ready[0].cost - s.coins)} more coins`, 'bad small');
+      this.sfx.full();
+      return;
+    }
+    this.hud.toast(`Upgraded ${done} slot${done > 1 ? 's' : ''}!${done < ready.length ? ` (${ready.length - done} more need coins)` : ''}`, 'gold');
+    this.sfx.levelUp();
+    this.completeHint('level');
+    writeSave(s);
   }
 
   /** Every slot's coins at once (the Collect all pad): a shower of coins from each, and one total. */
