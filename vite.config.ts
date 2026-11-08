@@ -4,6 +4,7 @@ import { defineConfig } from 'vite';
 // Three.js alone is ~500 kB minified, so the default chunk warning would always fire.
 export default defineConfig({
   base: './',
-  server: { port: 5173 },
+  // host: listen on the local network too, so phones on the same Wi-Fi can open the dev server.
+  server: { port: 5173, host: true },
   build: { chunkSizeWarningLimit: 1000 },
 });
