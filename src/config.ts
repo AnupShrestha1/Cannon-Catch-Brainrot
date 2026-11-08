@@ -45,8 +45,8 @@ export interface Zone {
 
 export const ZONES: Zone[] = [
   { name: 'Low Sky', from: 0, sky: 0x8fd3ff, gems: 1, gemColor: 0x3fc8ff, hazard: 0x3b3b46 },
-  { name: 'Cloud Kingdom', from: 150, sky: 0xffc98a, gems: 3, gemColor: 0xff5fb4, hazard: 0x8a4b2a },
-  { name: 'Storm Layer', from: 400, sky: 0x5b3f8f, gems: 8, gemColor: 0xb57bff, hazard: 0x1e1e2c },
+  { name: 'Cloud Kingdom', from: 150, sky: 0xffc98a, gems: 6, gemColor: 0xff5fb4, hazard: 0x8a4b2a },
+  { name: 'Storm Layer', from: 400, sky: 0x5b3f8f, gems: 18, gemColor: 0xb57bff, hazard: 0x1e1e2c },
   { name: 'Edge of Space', from: 800, sky: 0x16224d, gems: 20, gemColor: 0x7dffd8, hazard: 0xb8c0cc },
   { name: 'Cosmic', from: 1500, sky: 0x2a0d45, gems: 50, gemColor: 0xffffff, hazard: 0xff7a3d },
 ];
@@ -71,7 +71,7 @@ export const GEMS = {
 };
 
 export interface GachaTier {
-  id: 'basic' | 'lucky' | 'super' | 'ultra' | 'cosmic';
+  id: 'basic' | 'lucky' | 'super' | 'ultra' | 'cosmic' | 'galaxy';
   name: string;
   /** The machine's sign, and its theme colour (sign border, pads). */
   short: string;
@@ -90,27 +90,28 @@ export interface GachaTier {
 
 /** The gacha machines in the hub, cheapest first: each tier is its own machine, unlocked by flight height. */
 export const GACHA: GachaTier[] = [
+  // Each machine only gives its own band of rarities (nothing above it, ever), so ×10 on a cheap machine can
+  // never farm what a better one gives: to aim higher, use a higher machine. Every machine is worth more per
+  // gem than the one below (`npm run sim` prints the merged-up value per 1,000 gems).
   {
     id: 'basic',
     name: 'Basic pull',
     short: 'BASIC',
     color: '#ff5f7e',
     cost: 10,
-    odds: [[0, 0.62], [1, 0.28], [2, 0.08], [3, 0.018], [4, 0.002]],
+    odds: [[0, 0.72], [1, 0.28]],
     unlockBest: 0,
-    pity: [[1, 15], [2, 30], [3, 60], [4, 90]],
+    pity: [[1, 6]],
   },
   {
     id: 'lucky',
     name: 'Lucky pull',
     short: 'LUCKY',
     color: '#3ccf8e',
-    cost: 30,
-    // Uncommon or better: the first step up, a couple of flights after the first pull. Worth a little more per
-    // gem than Basic and a little less than Super (`npm run sim`).
-    odds: [[1, 0.55], [2, 0.33], [3, 0.1], [4, 0.02]],
-    unlockBest: 125,
-    pity: [[2, 4], [3, 15], [4, 60]],
+    cost: 20,
+    odds: [[0, 0.4], [1, 0.42], [2, 0.18]],
+    unlockBest: 115,
+    pity: [[2, 8]],
   },
   {
     id: 'super',
@@ -118,39 +119,41 @@ export const GACHA: GachaTier[] = [
     short: 'SUPER',
     color: '#3f8cff',
     cost: 100,
-    // Always Rare or better, and worth more per gem than ten Basic pulls on every count: about 1.4× the
-    // Legendaries, 1.5× the Epics and 1.2× the merge value (`npm run sim` prints the comparison). Without
-    // that, Basic's generous pity (a Legendary every 90 pulls, 900 gems) would make Super the worse buy.
-    odds: [[2, 0.5], [3, 0.38], [4, 0.12]],
+    odds: [[1, 0.4], [2, 0.4], [3, 0.2]],
     unlockBest: 150,
-    // An Epic or better at least every 4 Super pulls, and a Legendary at least every 10.
-    pity: [[3, 4], [4, 10]],
+    pity: [[3, 9]],
   },
   {
     id: 'ultra',
     name: 'Ultra pull',
     short: 'ULTRA',
     color: '#b45cff',
-    cost: 400,
-    // Epic or better, mostly Legendary, and a slim chance at a Mythic. Worth more per gem than Super pulls
-    // (`npm run sim` prints the comparison). Unlocks once a flight reaches the Storm Layer.
-    odds: [[3, 0.22], [4, 0.73], [5, 0.05]],
-    unlockBest: 400,
-    // A Legendary or better at least every 3 Ultra pulls; a Mythic is guaranteed only after 60 without one.
-    pity: [[4, 3], [5, 60]],
+    cost: 300,
+    odds: [[2, 0.45], [3, 0.4], [4, 0.15]],
+    unlockBest: 230,
+    pity: [[4, 10]],
   },
   {
     id: 'cosmic',
     name: 'Cosmic pull',
     short: 'COSMIC',
     color: '#ffc21a',
-    cost: 600,
-    // Always Legendary or better, with the best odds of a Mythic: the late-game machine, for flights high in
-    // the Storm Layer. Mythics stay very rare even here.
-    odds: [[4, 0.88], [5, 0.12]],
+    cost: 800,
+    // The first chance at a Mythic, still very rare.
+    odds: [[3, 0.55], [4, 0.4], [5, 0.05]],
     unlockBest: 550,
-    // A Mythic at least every 25 Cosmic pulls.
-    pity: [[5, 25]],
+    pity: [[4, 4], [5, 60]],
+  },
+  {
+    id: 'galaxy',
+    name: 'Galaxy pull',
+    short: 'GALAXY',
+    color: '#ff6bd5',
+    cost: 1600,
+    // Legendary or Mythic: the top machine, for the highest flights.
+    odds: [[4, 0.85], [5, 0.15]],
+    unlockBest: 650,
+    pity: [[5, 20]],
   },
 ];
 

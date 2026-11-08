@@ -901,7 +901,14 @@ export class Hub {
     group.rotation.y = Math.PI / 2;
     const body = new THREE.Group();
     group.add(body);
-    const builders = [basicMachine, luckyMachine, superMachine, ultraMachine, cosmicMachine];
+    const builders = [
+      basicMachine,
+      luckyMachine,
+      superMachine,
+      ultraMachine,
+      (b: THREE.Group) => cosmicMachine(b, COSMIC),
+      (b: THREE.Group) => cosmicMachine(b, GALAXY),
+    ];
     const { model, height, exitY } = builders[Math.min(i, builders.length - 1)](body);
     body.traverse((o) => {
       if (o instanceof THREE.Mesh && !(o.material instanceof THREE.MeshBasicMaterial) && !(o.material as THREE.Material).transparent) {
@@ -1484,9 +1491,22 @@ function ultraMachine(body: THREE.Group): Built {
 }
 
 /** COSMIC: a black-and-gold pedestal under a glowing orb held in two turning gimbal rings, with stars in orbit. */
-function cosmicMachine(body: THREE.Group): Built {
-  const black = phong(0x1d1640, { specular: 0x8a7cff, shininess: 120 });
-  const gold = goldMat();
+/** Colours for the orb machines: Cosmic in black and gold, Galaxy in white and rose gold with a rainbow orb. */
+interface OrbPalette {
+  body: number;
+  trim: number;
+  orb: number;
+  glow: number;
+  halo: number;
+  /** The orb cycles through the rainbow. */
+  rainbow: boolean;
+}
+const COSMIC: OrbPalette = { body: 0x1d1640, trim: GOLD, orb: 0xff7af0, glow: 0x9a2bff, halo: 0xd17aff, rainbow: false };
+const GALAXY: OrbPalette = { body: 0xf6f2ff, trim: 0xffa3c8, orb: 0x9ff3ff, glow: 0x3a7bff, halo: 0x9fd8ff, rainbow: true };
+
+function cosmicMachine(body: THREE.Group, palette: OrbPalette): Built {
+  const black = phong(palette.body, { specular: 0x8a7cff, shininess: 120 });
+  const gold = phong(palette.trim, { emissive: 0x2a1a00, shininess: 110, specular: 0xffffff });
   const pedestal = new THREE.Mesh(
     new THREE.LatheGeometry(
       [[0.01, 0.2], [1.4, 0.2], [1.45, 0.45], [1.0, 0.7], [0.75, 1.4], [0.8, 2.0], [1.15, 2.3], [1.2, 2.45], [0.01, 2.45]].map(([r, y]) => new THREE.Vector2(r, y)),
@@ -1501,11 +1521,11 @@ function cosmicMachine(body: THREE.Group): Built {
   });
   const chute = new THREE.Mesh(new RoundedBoxGeometry(0.7, 0.5, 0.3, 2, 0.08), gold);
   chute.position.set(0, 1.0, 0.85);
-  const orbMat = new THREE.MeshPhongMaterial({ color: 0xff7af0, emissive: 0x9a2bff, emissiveIntensity: 0.9, shininess: 140, specular: 0xffffff });
+  const orbMat = new THREE.MeshPhongMaterial({ color: palette.orb, emissive: palette.glow, emissiveIntensity: 0.9, shininess: 140, specular: 0xffffff });
   const orb = new THREE.Mesh(new THREE.SphereGeometry(0.75, 40, 28), orbMat);
   orb.position.y = 3.6;
   const halo = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: softTexture(), color: 0xd17aff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+    new THREE.SpriteMaterial({ map: softTexture(), color: palette.halo, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
   );
   halo.scale.setScalar(3.6);
   halo.position.y = 3.6;
@@ -1545,6 +1565,7 @@ function cosmicMachine(body: THREE.Group): Built {
         ringB.rotation.set(0, spinB, Math.PI / 2);
         orb.position.y = 3.6 + Math.sin(time * 1.6) * 0.1;
         orbMat.emissiveIntensity = 0.8 + Math.sin(time * 2.2) * 0.15;
+        if (palette.rainbow) orbMat.emissive.setHSL((time * 0.15) % 1, 0.9, 0.45);
         halo.scale.setScalar(3.4 + Math.sin(time * 2.2) * 0.2);
         stars.forEach((s) => {
           const a = time * 0.8 + (s.userData.seed as number) * 1.05;
@@ -1561,6 +1582,7 @@ function cosmicMachine(body: THREE.Group): Built {
         const dip = p < 0.12 ? -Math.sin((p / 0.12) * Math.PI) * 0.35 : 0;
         orb.position.y = 3.6 + dip + k * 0.5;
         orbMat.emissiveIntensity = 0.9 + k * 2;
+        if (palette.rainbow) orbMat.emissive.setHSL((time * 0.6) % 1, 0.9, 0.45);
         halo.scale.setScalar(3.6 + k * 3);
         stars.forEach((s) => {
           const a = time * (0.8 + k * 8) + (s.userData.seed as number) * 1.05;

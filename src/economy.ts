@@ -154,6 +154,8 @@ export function pull(save: Save, tier: GachaTier): Owned | null {
   for (const [floor, every] of tier.pity) {
     if ((counters[floor] ?? 0) + 1 >= every) rarity = Math.max(rarity, floor);
   }
+  // A machine never gives anything above its own band, scripted start or not.
+  rarity = Math.min(rarity, tier.odds[tier.odds.length - 1][0]);
   for (const [floor] of tier.pity) counters[floor] = rarity >= floor ? 0 : (counters[floor] ?? 0) + 1;
   save.pulls += 1;
   const got = { name: pickName(rarity), rarity };

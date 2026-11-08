@@ -51,8 +51,8 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 
 ## Rules in this build
 
-- **Gems in the sky.** Each flight passes rows of gems along its path. A gem is worth 1 in Low Sky, 3 in
-  Cloud Kingdom and 8 in the Storm Layer. One in ten is a big gold gem worth 5 times as much, and now
+- **Gems in the sky.** Each flight passes rows of gems along its path. A gem is worth 1 in Low Sky, 6 in
+  Cloud Kingdom and 18 in the Storm Layer. One in ten is a big gold gem worth 5 times as much, and now
   and then gems come in pairs. A hazard hit knocks 15% of the run's gems loose. A crash loses 30% of
   them, or 50% without a parachute. There's no result window: on landing the gems go into the wallet
   with a toast, and the player stays where they landed, ready to walk.
@@ -125,27 +125,29 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   swung shot just starts as if you'd been steering that way (up to three quarters of the way across) and
   hands over to your own steering within a second. The barrel kicks and springs back when it fires, for
   you and for every bot.
-- **Gacha machines**: five, one per tier, in a row on the left of the hub, each a different machine and
+- **Gacha machines**: six, one per tier, in a row on the left of the hub, each a different machine and
   grander as the price goes up. Each has two glowing pads in front, ×1 and ×10: stand on one and press E
   (or tap the action button) and the machine spins, then the cards are dealt. No panels.
-  - BASIC (10 gems), the red capsule machine with a glass globe and a crank: Common 62%, Uncommon 28%,
-    Rare 8%, Epic 1.8%, Legendary 0.2%.
-  - LUCKY (30 gems, unlocks at 125 m), a mint machine with a tall dome of capsules that whirl like a
-    tornado, a gold horseshoe and a four-leaf clover: Uncommon 55%, Rare 33%, Epic 10%, Legendary 2%.
+  - Each machine gives only its own band of rarities, never anything above it, so ×10 on a cheap machine
+    can't farm what a better one gives; to aim higher, use a higher machine.
+  - BASIC (10 gems), the red capsule machine with a glass globe and a crank: Common 72%, Uncommon 28%.
+  - LUCKY (20 gems, unlocks at 115 m), a mint machine with a tall dome of capsules that whirl like a
+    tornado, a gold horseshoe and a four-leaf clover: Common 40%, Uncommon 42%, Rare 18%.
   - SUPER (100 gems, 150 m), a blue-and-gold slot machine with three reels, chasing bulbs and a lever:
-    Rare 50%, Epic 38%, Legendary 12%.
-  - ULTRA (400 gems, 400 m), a tall purple slot machine with an arched marquee and a crown: Epic 22%,
-    Legendary 73%, Mythic 5%.
-  - COSMIC (600 gems, 550 m), a black-and-gold pedestal under a glowing orb in two whirling gimbal rings,
-    with stars in orbit: Legendary 88%, Mythic 12%.
-  - Mythics are very rare: about one per 7,700 gems from Ultra and one per 4,800 from Cosmic, pity
-    included (a Mythic is guaranteed only after 60 Ultra or 25 Cosmic pulls without one), or 8 Legendaries
-    merged.
+    Uncommon 40%, Rare 40%, Epic 20%.
+  - ULTRA (300 gems, 230 m), a tall purple slot machine with an arched marquee and a crown: Rare 45%,
+    Epic 40%, Legendary 15%.
+  - COSMIC (800 gems, 550 m), a black-and-gold pedestal under a glowing orb in two whirling gimbal rings,
+    with stars in orbit: Epic 55%, Legendary 40%, Mythic 5%.
+  - GALAXY (1,600 gems, 650 m), the same orb machine in white and rose gold with a rainbow orb: Legendary
+    85%, Mythic 15%.
+  - Mythics are very rare: only Cosmic and Galaxy give them, or merging 8 Legendaries.
   - Every machine shows its odds on a little board beside it: each rarity it can give, in that rarity's
     colour, with its chance. (The pity guarantees stay hidden.)
   - Each tier is worth more per gem than the one below (`npm run sim`, merged-up value in Legendaries per
-    1,000 gems): Basic 2.32, Lucky 2.50, Super 2.81, Ultra 3.00, Cosmic 3.14. Lucky unlocks at about 2
-    minutes without slowing the first pulls.
+    1,000 gems): Basic 0.20, Lucky 0.59, Super 0.76, Ultra 0.98, Cosmic 1.25, Galaxy 1.34. To keep the pace
+    with the lower machines capped, gems are worth more higher up and Ultra unlocks at 230 m: the first
+    Legendary lands at about 18 minutes and rebirth unlocks at about 83 (it was about 65).
   - A locked machine is dimmed and grey, chained, with a gold padlock, and its sign says the height that
     unlocks it, your best so far and a progress bar. The first time you come back from a flight that
     reached it, the padlock shakes, bursts off spinning, and the machine lights up with a chime and
@@ -167,15 +169,12 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     better flash the screen in their colour, turn light rays behind the card, burst confetti and show a
     big rarity banner. Legendary and Mythic hold back first: the card shakes and blazes with a rising
     whoosh before it turns. A Mythic also quakes the whole screen and has a rainbow banner and edge.
-  - The first 10 pulls are scripted to include at least two Uncommons and one Rare: the 1st is at least
-    Uncommon, the 3rd at least Rare (a glowing card at about 100 s) and the 5th at least Uncommon. The
-    rest roll the normal odds and can come out better; from the 11th pull on, it's the normal odds and
-    pity only.
-  - Hidden pity, never shown to the player: on Basic pulls, every 15th pull without an Uncommon or better
-    is one, and likewise a Rare by 30, an Epic by 60 and a Legendary by 90. Lucky: a Rare or better by 4,
-    an Epic by 15, a Legendary by 60. Super: an Epic or better by 4 and a Legendary by 10. Ultra: a
-    Legendary or better by 3 and a Mythic by 60. Cosmic: a Mythic by 25. Each counter resets when that rarity or better comes up, by luck
-    or by pity, so an Uncommon on pull 2 means the next guaranteed one is pull 17, not pull 15.
+  - The first 10 pulls are scripted to include Uncommons and a Rare by pull number (the 1st and 5th at
+    least Uncommon, the 3rd at least Rare), but never above what that machine can give: on Basic the 3rd is
+    an Uncommon. From the 11th pull on, it's the normal odds and pity only.
+  - Hidden pity, never shown to the player: Basic gives an Uncommon at least every 6 pulls, Lucky a Rare
+    every 8, Super an Epic every 9, Ultra a Legendary every 10, Cosmic a Legendary every 4 and a Mythic
+    every 60, and Galaxy a Mythic every 20. Each counter resets when that rarity or better comes up.
   - Results go on display by themselves: empty slots fill best first, and a rarer pull swaps out a
     level-1 brainrot (which goes to the backpack with its coins collected). Levelled ones are never moved.
     Then the cards are revealed like trading cards (no pack to open): dealt face down, rarest last, each

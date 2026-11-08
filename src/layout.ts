@@ -15,7 +15,7 @@ export const LANE_X = -14;
 export const LANE_HALF = 4;
 /** Where the hub ends and the lane and plots begin (z), and the hub's back edge. */
 export const HUB_EDGE = 10;
-export const HUB_BACK = -24;
+export const HUB_BACK = -31;
 /** Plot centres are this far apart along the lane; a plot is this deep, and half this wide along the lane. */
 export const PLOT_PITCH = 24;
 export const PLOT_DEPTH = 25;
