@@ -1,5 +1,20 @@
 // Coins, gems, upgrades, pads, the gacha, merging and selling: pure rules over the save.
-import { ECONOMY, LEVELS, MERGE, RARITIES, REBIRTH, ROSTER, STARTER_PULLS, UPGRADES, rollTier, type GachaTier, type Track } from './config';
+import {
+  ECONOMY,
+  LEVELS,
+  MAX_ZONE,
+  MERGE,
+  RARITIES,
+  REBIRTH,
+  ROSTER,
+  STARTER_PULLS,
+  UPGRADES,
+  ZONES,
+  launchHeight,
+  rollTier,
+  type GachaTier,
+  type Track,
+} from './config';
 import type { Owned, PadSlot, Save } from './store';
 
 export function upgradesBought(save: Save, track: Track): number {
@@ -16,8 +31,33 @@ export function trackBoost(save: Save, track: 'finder' | 'magnet' | 'steering' |
   return 1 + save[track] * UPGRADES[track].effect;
 }
 
+/**
+ * The highest zone flights can reach: each rebirth opens the next one (Cloud Kingdom before the first, the
+ * Storm Layer after it), so a new area waits on the other side of every rebirth.
+ */
+export function zoneCap(save: Pick<Save, 'rebirths'>): number {
+  return Math.min(MAX_ZONE, 1 + save.rebirths);
+}
+
+/** How high a flight can go: just under the next zone until a rebirth opens it. */
+export function flightCeiling(save: Pick<Save, 'rebirths'>): number {
+  const z = zoneCap(save);
+  return z < MAX_ZONE ? ZONES[z + 1].from - 6 : Infinity;
+}
+
+/** A launch's apex: the cannon's height with the charge bonus, held under the ceiling. */
+export function flightApex(save: Pick<Save, 'rebirths' | 'cannon'>, bonus: number): number {
+  return Math.min(launchHeight(save.cannon) * (1 + bonus), flightCeiling(save));
+}
+
+/** The top cannon level for now: while a zone is still closed, the next rebirth's level (more would be wasted). */
+export function cannonCap(save: Pick<Save, 'rebirths'>): number {
+  return zoneCap(save) < MAX_ZONE ? rebirthCannonLevel(save) : UPGRADES.cannon.max + 1;
+}
+
 /** Price of the next purchase on a track, or null at max. */
 export function upgradeCost(save: Save, track: Track): number | null {
+  if (track === 'cannon' && save.cannon >= cannonCap(save)) return null;
   const bought = upgradesBought(save, track);
   const u = UPGRADES[track];
   return bought >= u.max ? null : Math.round(u.base * Math.pow(u.growth, bought));

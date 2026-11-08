@@ -17,7 +17,7 @@
 // new zones, chat, and actions on shared things: firing the cannon, spinning a machine, stirring the cauldron),
 // and a few messages from the local player (their stats, the plot they're visiting, likes, big moments, whether
 // they're in the cannon). Swapping in a real server means replacing this file, not the game.
-import { CHARGE, FLIGHT, GACHA, GEMS, MAX_ZONE, RARITIES, REBIRTH, TRACKS, ZONES, ECONOMY, launchHeight, zoneIndexAt } from './config';
+import { CHARGE, FLIGHT, GACHA, GEMS, MAX_ZONE, RARITIES, REBIRTH, TRACKS, ZONES, ECONOMY, zoneIndexAt } from './config';
 import { Base, bumpSolids, floorWorld } from './base';
 import {
   buyUpgrade,
@@ -29,6 +29,7 @@ import {
   merge,
   mergeNeed,
   padIncome,
+  flightApex,
   pull,
   putOnPad,
   rebirthCannonLevel,
@@ -352,7 +353,7 @@ function headStart(save: Save, minutes: number): void {
   while (t < minutes * 60) {
     const roll = Math.random();
     const bonus = roll < 0.25 ? CHARGE.perfectBonus : roll < 0.65 ? CHARGE.greenBonus : 0;
-    const apex = launchHeight(save.cannon) * (1 + bonus);
+    const apex = flightApex(save, bonus);
     const runTime = 2.2 * FLIGHT.ascentTime(apex) + 20;
     save.coins += incomePerSecond(save) * runTime;
     for (const slot of save.pads) if (slot) gainXp(slot, runTime);
@@ -1056,7 +1057,7 @@ export class FakeServer {
     bot.jump = bot.jumpV = 0;
     const roll = Math.random();
     const bonus = roll < 0.25 ? CHARGE.perfectBonus : roll < 0.65 ? CHARGE.greenBonus : 0;
-    const apex = launchHeight(bot.save.cannon) * (1 + bonus);
+    const apex = flightApex(bot.save, bonus);
     const tUp = FLIGHT.ascentTime(apex);
     bot.flight = {
       phase: 'dive',

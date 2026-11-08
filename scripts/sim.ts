@@ -25,6 +25,7 @@ import {
   type Track,
 } from '../src/config';
 import {
+  flightApex,
   maxPads,
   putOnPad,
   buyUpgrade,
@@ -199,7 +200,7 @@ function simulate(minutes: number): { m: Milestones; two: AtTwo } {
   while (t < minutes * 60) {
     const roll = Math.random();
     const bonus = roll < 0.25 ? CHARGE.perfectBonus : roll < 0.65 ? CHARGE.greenBonus : 0;
-    const apex = launchHeight(save.cannon) * (1 + bonus);
+    const apex = flightApex(save, bonus);
     const runTime = 2.2 * FLIGHT.ascentTime(apex) + 20;
     save.coins += incomePerSecond(save) * runTime;
     for (const slot of save.pads) if (slot) gainXp(slot, runTime);

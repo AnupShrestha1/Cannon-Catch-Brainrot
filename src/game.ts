@@ -63,8 +63,10 @@ import {
   levelReady,
   countInBackpack,
   emptyPad,
+  flightApex,
   floorsOf,
   maxPads,
+  zoneCap,
   putOnPad,
   rebirthCannonLevel,
   merge,
@@ -757,7 +759,7 @@ export class Game {
     this.save.flightNo += 1;
     writeSave(this.save);
 
-    const apex = launchHeight(this.save.cannon) * (1 + bonus);
+    const apex = flightApex(this.save, bonus);
     const tUp = FLIGHT.ascentTime(apex);
     const v0 = (2 * (apex - MUZZLE_Y)) / tUp;
     this.gUp = v0 / tUp;
@@ -1091,14 +1093,20 @@ export class Game {
     if (next > MAX_ZONE) return false;
     const zone = ZONES[next];
     const level = levelToReach(zone.from);
-    if (this.save.cannon >= level) return false;
+    // A zone that's still closed: the flight stops just under it, and only a rebirth opens it.
+    const closed = next > zoneCap(this.save);
+    if (!closed && this.save.cannon >= level) return false;
     this.goal.position.set(0, this.apex + 13, -2);
     this.goal.visible = true;
     this.goalGem.clear();
     const gem = makeGem(zone.gemColor, true);
     gem.group.scale.setScalar(3.2);
     this.goalGem.add(gem.group);
-    this.goalLabel.set(`${zone.name}: ${zone.gems}× gems · Cannon Lv ${level}`, '#ffe58a');
+    this.goalLabel.set(
+      closed ? `${zone.name}: rebirth to break through!` : `${zone.name}: ${zone.gems}× gems · Cannon Lv ${level}`,
+      '#ffe58a',
+    );
+    if (closed) this.hud.toast(`Rebirth to break through to the ${zone.name}!`, 'small');
     return true;
   }
 
@@ -2535,7 +2543,9 @@ export class Game {
           level = `Lv ${s.cannon}`;
           detail =
             cost === null
-              ? `Apex ${apex(s.cannon)} m, the top of this build`
+              ? s.cannon >= UPGRADES.cannon.max + 1
+                ? `Apex ${apex(s.cannon)} m, the top of this build`
+                : `Max before rebirth: rebirth at the station to keep upgrading`
               : `Apex ${apex(s.cannon)} m → ${apex(s.cannon + 1)} m`;
           break;
         case 'shield':

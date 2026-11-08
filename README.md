@@ -249,8 +249,12 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - **New zones**: entering a zone on the way up shows its name and gem value; the first time ever, it's a
   big NEW ZONE banner with a sparkle and a moment of slow motion. The cannon's first levels climb fast
   (90 m at level 1, 155 m at level 6), so a good launch reaches Cloud Kingdom within the first few
-  minutes; after that, each level adds less (the Storm Layer, 410 m, at level 25, just after the first
-  rebirth's level 22, so a reborn player soon has a new area to reach).
+  minutes; after that, each level adds less.
+- **Each rebirth opens the next area.** Before the first rebirth, flights top out just under the Storm
+  Layer (at 394 m): the apex shows "Storm Layer: rebirth to break through!" and the cannon can't be
+  upgraded past the rebirth's level (22), so no coins go into upgrades that couldn't help. After the
+  rebirth the ceiling lifts, and the Storm Layer (400 m) is reached at about cannon Lv 25 (a perfect launch
+  from about Lv 22).
 - **Shields** (in the shop): each level adds one shield, and each shield blocks one hazard hit per flight
   (no gems lost, no stun). They're stingy: 300 coins for the first (a few minutes in), then ten times the
   last for each (3K, 30K, 300K, 3M), up to 5. In flight a faint cyan bubble surrounds you with a ring
