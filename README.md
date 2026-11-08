@@ -257,6 +257,9 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   fireworks whistles up behind the station and bursts in colour with a crackle. Bots rebirth at the
   station too, with a smaller show.
 - Offline earnings: brainrots keep earning while you're away, at half rate for up to 2 hours.
+- The game keeps running when its window is behind another one or its tab is in the background: a timer
+  carries on where animation frames stop, and whatever time the browser held back is caught up on return
+  (up to 20 seconds played out in full, flights and bots included, and longer gaps as income).
 - Daily rewards: a 7-day login streak (coins, a Rare on day 3, an Epic on day 7, both to the backpack).
 - Collection book: every character as a silhouette until pulled, with a one-time reward per completed
   page (500, 5,000 and 50,000 coins). Drag it (or any panel) up and down to scroll, with a little glide.

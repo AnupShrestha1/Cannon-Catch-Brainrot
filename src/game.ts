@@ -273,6 +273,8 @@ export class Game {
   private state: State = 'aim';
   private time = 0;
   private lastFrame = 0;
+  /** When the game last advanced (frame or background tick), in performance.now() time. */
+  private lastUpdate = 0;
 
   private px = 0;
   private py = MUZZLE_Y;
@@ -471,6 +473,30 @@ export class Game {
 
   start(): void {
     requestAnimationFrame(this.frame);
+    // Browsers stop animation frames for a window that's hidden or behind another one, so a plain timer keeps
+    // the game running then (bots, income, flights); browsers slow timers too, so each tick catches up the
+    // time since the last update.
+    setInterval(() => {
+      const now = performance.now();
+      if (now - this.lastUpdate > 250) this.catchUp(now);
+    }, 250);
+  }
+
+  /**
+   * Runs the game forward to `now`: up to 20 seconds in normal small steps (so flights, bots and the economy
+   * play out as usual), and any longer gap as income only.
+   */
+  private catchUp(now: number): void {
+    const gap = this.lastUpdate ? (now - this.lastUpdate) / 1000 : 0;
+    this.lastUpdate = now;
+    if (this.debugPaused || gap <= 0) return;
+    let steps = Math.min(gap, 20);
+    while (steps > 0) {
+      const dt = Math.min(0.05, steps);
+      this.update(dt);
+      steps -= dt;
+    }
+    if (gap > 20) this.updateEconomy(gap - 20);
   }
 
   /** Dev-only: advance the game by fixed 60 fps steps and render once, for testing in throttled tabs. */
@@ -489,7 +515,12 @@ export class Game {
   private frame = (now: number) => {
     const dt = this.lastFrame ? Math.min(0.05, (now - this.lastFrame) / 1000) : 1 / 60;
     this.lastFrame = now;
-    if (!this.debugPaused) this.update(dt);
+    // Back from a pause (another window, a background tab): catch up first; otherwise one normal step.
+    if (this.lastUpdate && now - this.lastUpdate > 250) this.catchUp(now);
+    else {
+      this.lastUpdate = now;
+      if (!this.debugPaused) this.update(dt);
+    }
     this.renderer.render(this.scene, this.camera);
     requestAnimationFrame(this.frame);
   };
