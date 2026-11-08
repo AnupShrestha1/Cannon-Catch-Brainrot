@@ -61,8 +61,8 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   under it. A thick
   marker slides down it with your height in a bubble beside it, toward the gold PERFECT zone and the red
   CRASH zone at the bottom, each labelled at its side.
-- **Bullseye**: a thin striped gold band inside the PERFECT zone, about 80% of the way down (0.12 s wide,
-  roughly a sixth of the gold zone), labelled ×1.5. Open the parachute while the marker is on it (it lights
+- **Bullseye**: a thin striped gold band inside the PERFECT zone, about 80% of the way down (0.24 s wide,
+  about a third of the gold zone), labelled ×1.5. Open the parachute while the marker is on it (it lights
   up) for "BULLSEYE!" and ×1.5 gems from that flight. Tight enough to need care, wide enough to hit.
 - **Parachute alarm**: from 0.9 seconds before the gold zone (about 2.2 seconds before impact), on every
   flight: OPEN PARACHUTE! flashes, the screen's edges pulse red, the parachute button bounces and glows,
@@ -146,14 +146,14 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   - ULTRA (300 gems, 290 m), a tall purple slot machine with an arched marquee and a crown: Rare 45%,
     Epic 40%, Legendary 15%.
   - COSMIC (800 gems, 600 m), a black-and-gold pedestal under a glowing orb in two whirling gimbal rings,
-    with stars in orbit: Epic 55%, Legendary 40%, Mythic 5%.
-  - GALAXY (1,600 gems, 700 m), the same orb machine in white and rose gold with a rainbow orb: Legendary
-    85%, Mythic 15%.
+    with stars in orbit: Epic 52%, Legendary 40%, Mythic 8%.
+  - GALAXY (1,500 gems, 700 m), the same orb machine in white and rose gold with a rainbow orb: Legendary
+    80%, Mythic 20%.
   - Mythics are very rare: only Cosmic and Galaxy give them, or merging 8 Legendaries.
   - Every machine shows its odds on a little board beside it: each rarity it can give, in that rarity's
     colour, with its chance. (The pity guarantees stay hidden.)
   - Each tier is worth more per gem than the one below (`npm run sim`, merged-up value in Legendaries per
-    1,000 gems): Basic 0.20, Lucky 0.59, Super 0.76, Ultra 0.98, Cosmic 1.25, Galaxy 1.34. To keep the pace
+    1,000 gems): Basic 0.20, Lucky 0.59, Super 0.76, Ultra 0.98, Cosmic 1.50, Galaxy 1.59. To keep the pace
     with the lower machines capped, gems are worth more higher up and Ultra unlocks at 230 m: the first
     Legendary lands at about 18 minutes and rebirth unlocks at about 83 (it was about 65).
   - A locked machine is dimmed and grey, chained, with a gold padlock, and its sign says the height that
@@ -179,7 +179,7 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     whoosh before it turns. A Mythic also quakes the whole screen and has a rainbow banner and edge.
   - Hidden pity, never shown to the player: Basic gives an Uncommon at least every 6 pulls, Lucky a Rare
     every 8, Super an Epic every 9, Ultra a Legendary every 10, Cosmic a Legendary every 4 and a Mythic
-    every 60, and Galaxy a Mythic every 20. Each counter resets when that rarity or better comes up.
+    every 45, and Galaxy a Mythic every 15. Each counter resets when that rarity or better comes up.
   - Results go on display by themselves: empty slots fill best first, and a rarer pull swaps out a
     level-1 brainrot (which goes to the backpack with its coins collected). Levelled ones are never moved.
     Then the cards are revealed like trading cards (no pack to open): dealt face down, rarest last, each

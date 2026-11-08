@@ -140,20 +140,20 @@ export const GACHA: GachaTier[] = [
     color: '#ffc21a',
     cost: 800,
     // The first chance at a Mythic, still very rare.
-    odds: [[3, 0.55], [4, 0.4], [5, 0.05]],
+    odds: [[3, 0.52], [4, 0.4], [5, 0.08]],
     unlockBest: 600,
-    pity: [[4, 4], [5, 60]],
+    pity: [[4, 4], [5, 45]],
   },
   {
     id: 'galaxy',
     name: 'Galaxy pull',
     short: 'GALAXY',
     color: '#ff6bd5',
-    cost: 1600,
+    cost: 1500,
     // Legendary or Mythic: the top machine, for the highest flights.
-    odds: [[4, 0.85], [5, 0.15]],
+    odds: [[4, 0.8], [5, 0.2]],
     unlockBest: 700,
-    pity: [[5, 20]],
+    pity: [[5, 15]],
   },
 ];
 
@@ -249,7 +249,7 @@ export const CHUTE = {
    * wide) where opening pays the run's gems ×bullseyeBonus. About 80% of the way down the gold zone.
    */
   bullseyeAt: 0.14,
-  bullseyeWidth: 0.12,
+  bullseyeWidth: 0.24,
   bullseyeBonus: 1.5,
 };
 
