@@ -295,8 +295,9 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   its gold pad, press E and confirm. It resets coins, gems, upgrades, slot levels and the backpack, locks the gacha
   machines again (they unlock as this run's flights reach their heights; your all-time best stays on the
   leaderboard),
-  keeps the rarest brainrot and every open slot, multiplies income by ×1.5 again with every rebirth (compounding: ×1.5, ×2.25, ×3.4, ×5.1... and you can
-  rebirth as many times as you like), and recolours the cannon;
+  keeps the rarest brainrot and every open slot, adds +50% income for each of the first three rebirths (×1.5, ×2, ×2.5), then
+  every end-game rebirth after that (once Outer Space is open) multiplies income by ×1.3 again,
+  compounding (×3.25, ×4.2, ×5.5, ×7.1...), and you can rebirth as many times as you like, and recolours the cannon;
   the first two also add a floor to your base. It's grand and short (about three seconds): the crystal
   dips and blasts up in a pillar of light with a shockwave across the ground, the screen flashes gold, a
   huge REBIRTH! banner slams in over turning rays and confetti, the camera tilts up, and a volley of

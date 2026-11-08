@@ -153,9 +153,14 @@ export function mergeChosen(save: Save, chosen: Owned[]): Owned | null {
   return got;
 }
 
-/** Income multiplier from rebirths: compounding, ×(1 + incomeBonus) for every one. */
+/**
+ * Income multiplier from rebirths: +incomeBonus for each of the first endGameAfter (×1.5, ×2, ×2.5), then
+ * compounding ×(1 + endGameBonus) for every end-game rebirth after that.
+ */
 export function incomeMultiplier(save: Pick<Save, 'rebirths'>): number {
-  return Math.pow(1 + REBIRTH.incomeBonus, save.rebirths);
+  const early = Math.min(save.rebirths, REBIRTH.endGameAfter);
+  const late = Math.max(0, save.rebirths - REBIRTH.endGameAfter);
+  return (1 + early * REBIRTH.incomeBonus) * Math.pow(1 + REBIRTH.endGameBonus, late);
 }
 
 /** A multiplier for display: "1.5", "2.25", "3.38", "11", "57". */

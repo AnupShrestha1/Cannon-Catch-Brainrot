@@ -307,8 +307,14 @@ export const REBIRTH = {
   cannonLevel: 21,
   /** A run this high counts as reaching the Storm Layer. */
   unlockHeight: 400,
-  /** Each rebirth multiplies income by (1 + incomeBonus) again: ×1.5, ×2.25, ×3.4... Rebirth as often as you like. */
+  /** Each of the first rebirths adds this much to the income multiplier: ×1.5, ×2, ×2.5. */
   incomeBonus: 0.5,
+  /**
+   * The end game: from this many rebirths on (once Outer Space is open), every further rebirth multiplies income
+   * by (1 + endGameBonus) again, compounding: ×2.5, ×3.25, ×4.2, ×5.5... Rebirth as often as you like.
+   */
+  endGameAfter: 3,
+  endGameBonus: 0.3,
   /** Each rebirth asks for this many more cannon levels than the last (capped at the top level): 21, 25, 29... */
   cannonStep: 4,
   /** The first this-many rebirths each add a floor to the base (on top of the bonus); later ones only the bonus. */
