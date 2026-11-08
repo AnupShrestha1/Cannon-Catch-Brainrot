@@ -921,7 +921,8 @@ export class Hud {
     return !this.shop.classList.contains('hidden');
   }
 
-  openShop(): void {
+  openShop(note = ''): void {
+    byId('shopNote').textContent = note;
     this.shop.classList.remove('hidden');
   }
 

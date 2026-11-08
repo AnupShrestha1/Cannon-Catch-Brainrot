@@ -316,7 +316,11 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   huge REBIRTH! banner slams in over turning rays and confetti, the camera tilts up, and a volley of
   fireworks whistles up behind the station and bursts in colour with a crackle. Bots rebirth at the
   station too, with a smaller show.
-- Offline earnings: brainrots keep earning while you're away, at half rate for up to 2 hours.
+- Offline earnings: brainrots keep earning while you're away, at half rate, stored for up to 2 hours plus
+  an hour per rebirth (Rebirth Lv 1: 3 h, Lv 2: 4 h...). The limit shows in the Upgrades panel, the
+  Welcome back popup and the rebirth popup; the rebirth station's sign shows your Rebirth Lv.
+- Pull reveals shout once: flipping several Rare-or-better cards together (Flip all on a ×10) plays only
+  the rarest one's fanfare and sung name, and no new shout starts while one is still sounding.
 - The game keeps running when its window is behind another one or its tab is in the background: a timer
   carries on where animation frames stop, and whatever time the browser held back is caught up on return
   (up to 20 seconds played out in full, flights and bots included, and longer gaps as income).

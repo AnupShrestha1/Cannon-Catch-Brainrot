@@ -4,12 +4,20 @@ import { ROSTER } from './config';
 import { incomePerSecond } from './economy';
 import type { Save } from './store';
 
-/** Characters keep earning while the player is away, at half rate, for up to 2 hours. */
-export const OFFLINE = { rate: 0.5, capSeconds: 2 * 60 * 60, minSeconds: 60 };
+/**
+ * Characters keep earning while the player is away, at half rate, for up to 2 hours, plus an hour per
+ * rebirth (2 h, 3 h, 4 h...).
+ */
+export const OFFLINE = { rate: 0.5, baseHours: 2, hoursPerRebirth: 1, minSeconds: 60 };
+
+/** How long offline earnings pile up for, in hours. */
+export function offlineCapHours(save: Pick<Save, 'rebirths'>): number {
+  return OFFLINE.baseHours + OFFLINE.hoursPerRebirth * save.rebirths;
+}
 
 export function offlineEarnings(save: Save, now: number): { seconds: number; coins: number } {
   if (!save.lastSeen) return { seconds: 0, coins: 0 };
-  const seconds = Math.min(OFFLINE.capSeconds, Math.max(0, (now - save.lastSeen) / 1000));
+  const seconds = Math.min(offlineCapHours(save) * 3600, Math.max(0, (now - save.lastSeen) / 1000));
   if (seconds < OFFLINE.minSeconds) return { seconds: 0, coins: 0 };
   return { seconds, coins: Math.floor(incomePerSecond(save) * seconds * OFFLINE.rate) };
 }

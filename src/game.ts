@@ -89,7 +89,7 @@ import {
 import { Particles, Sparks, Streaks } from './fx';
 import { Hud, type PadButton, type RevealItem, type ShopItem, type ShopRow } from './hud';
 import { Input } from './input';
-import { BOOK_ZONES, DAILY, bookEntries, dailyCoins, dailyStatus, dayKey, offlineEarnings, zoneComplete } from './meta';
+import { BOOK_ZONES, DAILY, bookEntries, dailyCoins, dailyStatus, dayKey, offlineCapHours, offlineEarnings, zoneComplete } from './meta';
 import { platform } from './platform';
 import { clearSave, loadSave, writeSave, type Owned, type PadSlot, type Save } from './store';
 import {
@@ -756,6 +756,7 @@ export class Game {
         ready,
         ready ? `×${formatMult(mult)} income${floor ? ` + Floor ${floor}` : ''}` : `Cannon Lv ${s.cannon}/${need}`,
         s.cannon / need,
+        s.rebirths,
       );
     }
     this.updateServer(realDt);
@@ -1454,11 +1455,34 @@ export class Game {
     this.sfx.flip();
     this.sfx.pop(item.rarity);
     if (item.rarity >= RARE) {
-      this.sfx.fanfare(item.rarity);
-      this.after(item.rarity >= 4 ? 0.7 : 0.35, () => this.sfx.chant(item.name, item.rarity));
+      this.queueShout(item);
       this.hud.toast(`${RARITIES[item.rarity].name.toUpperCase()}!`, item.rarity >= 4 ? 'big grand' : 'big', RARITIES[item.rarity].css);
     }
     if (item.rarity >= 3) this.shake = Math.max(this.shake, item.rarity >= 5 ? 1.2 : item.rarity >= 4 ? 0.8 : 0.4);
+  }
+
+  /** A shout (fanfare + sung name) waiting to play, and until when the last one is still sounding. */
+  private shoutPending: RevealItem | null = null;
+  private shoutBusyUntil = 0;
+  private shoutTimer = 0;
+
+  /**
+   * Only one shout at a time: flips close together (a ×10 pull) pick their rarest to shout, and flips while a
+   * shout is still sounding stay quiet.
+   */
+  private queueShout(item: RevealItem): void {
+    if (performance.now() < this.shoutBusyUntil) return;
+    // Wait for a pause in the flips (Flip all turns one every 0.16 s, rarest last), then shout the rarest.
+    if (!this.shoutPending || item.rarity >= this.shoutPending.rarity) this.shoutPending = item;
+    clearTimeout(this.shoutTimer);
+    this.shoutTimer = window.setTimeout(() => {
+      const best = this.shoutPending;
+      this.shoutPending = null;
+      if (!best) return;
+      this.shoutBusyUntil = performance.now() + (best.rarity >= 4 ? 3000 : 1800);
+      this.sfx.fanfare(best.rarity);
+      this.after(best.rarity >= 4 ? 0.7 : 0.35, () => this.sfx.chant(best.name, best.rarity));
+    }, 230);
   }
 
   /** Runs something a little later (real time). */
@@ -2524,7 +2548,7 @@ export class Game {
   }
 
   private openShopPanel(): void {
-    this.hud.openShop();
+    this.hud.openShop(`Rebirth Lv ${this.save.rebirths} · Offline earnings stored up to ${offlineCapHours(this.save)} h`);
     this.refreshShop();
   }
 
@@ -2795,6 +2819,7 @@ export class Game {
       floor ? `Your base grows a new floor: Floor ${floor}, with ${REBIRTH.newFloorPads} open slots.` : 'Your base keeps all its floors.',
       'You keep your rarest brainrot and every open slot.',
       'Coins, gems, upgrades, slot levels and the backpack start over.',
+      `Rebirth Lv ${s.rebirths} → ${s.rebirths + 1}: offline earnings store up to ${offlineCapHours(s)} h → ${offlineCapHours({ rebirths: s.rebirths + 1 })} h.`,
       `The next rebirth will need Cannon Lv ${rebirthCannonLevel({ rebirths: s.rebirths + 1 })}.`,
     ].map((t) => Object.assign(document.createElement('p'), { textContent: t }));
     this.hud.showModal('Rebirth?', lines, [
@@ -3000,7 +3025,7 @@ export class Game {
     writeSave(this.save);
     const minutes = Math.round(away.seconds / 60);
     const text = document.createElement('p');
-    text.textContent = `Your characters kept earning for ${minutes} min while you were away, at half rate.`;
+    text.textContent = `Your characters kept earning for ${minutes} min while you were away, at half rate (stored up to ${offlineCapHours(this.save)} h; each rebirth adds an hour).`;
     const amount = document.createElement('div');
     amount.className = 'big';
     amount.textContent = `+${formatCoins(away.coins)} coins`;

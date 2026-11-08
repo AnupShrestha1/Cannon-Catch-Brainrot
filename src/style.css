@@ -840,6 +840,12 @@ button.primary,
   background: linear-gradient(180deg, #ffe98a, #ffc21a 55%, #e09000);
 }
 
+#shopNote {
+  font-family: var(--body, inherit);
+  font-size: 14px;
+  opacity: 0.95;
+}
+
 .shop-head h2 {
   margin: 0;
   font-size: 32px;

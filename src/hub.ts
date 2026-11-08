@@ -76,6 +76,7 @@ function makeSign(): Sign {
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       g.font = '900 66px system-ui, sans-serif';
+      g.font = `900 ${Math.floor(66 * Math.min(1, 460 / g.measureText(title).width))}px system-ui, sans-serif`;
       g.lineWidth = 9;
       g.strokeStyle = '#1d2340';
       g.strokeText(title, 256, 66);
@@ -339,12 +340,12 @@ export class Hub {
   }
 
   /** The rebirth station's sign: what it gives, or what it still needs (with a bar), and whether it's ready. */
-  setRebirth(ready: boolean, sub: string, progress: number): void {
-    const key = `${ready}|${sub}|${Math.round(progress * 40)}`;
+  setRebirth(ready: boolean, sub: string, progress: number, level = 0): void {
+    const key = `${ready}|${sub}|${Math.round(progress * 40)}|${level}`;
     if (key === this.rebirthKey) return;
     this.rebirthKey = key;
     this.rebirthReady = ready;
-    this.rebirthSign.draw(ready ? 'REBIRTH' : '🔒 REBIRTH', sub, '#ffd84a', !ready, ready ? undefined : progress);
+    this.rebirthSign.draw(`${ready ? '' : '🔒 '}REBIRTH Lv ${level}`, sub, '#ffd84a', !ready, ready ? undefined : progress);
   }
 
   /** The station's big moment: the crystal rises and blazes, the rings whirl, a shockwave rolls out. */
