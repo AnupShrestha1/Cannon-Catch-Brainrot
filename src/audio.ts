@@ -275,6 +275,52 @@ export class Sfx {
     this.tone('triangle', 1568, 2093, 0.3, 0.15, 0.08);
   }
 
+  /** Teleporting: a quick rising zip and a soft pop. */
+  teleport(): void {
+    this.tone('sine', 300, 1800, 0.18, 0.18);
+    this.noiseBurst(0.18, 'bandpass', 900, 0.15, 4000);
+    this.tone('triangle', 900, 1400, 0.1, 0.15, 0.16);
+  }
+
+  /** Diving into the cannon: a whoop as the player leaps. */
+  whoop(): void {
+    this.tone('triangle', 420, 900, 0.22, 0.16);
+    this.tone('triangle', 900, 620, 0.18, 0.12, 0.2);
+  }
+
+  /** The cannon swallowing the player: a rubbery gulp and a hollow boing. */
+  gulp(): void {
+    this.tone('sine', 260, 90, 0.18, 0.4);
+    this.tone('sine', 140, 420, 0.35, 0.22, 0.16);
+    this.tone('sine', 420, 300, 0.3, 0.12, 0.45);
+  }
+
+  /** The helmet landing on the player's head. */
+  clonk(): void {
+    this.tone('square', 900, 700, 0.06, 0.08);
+    this.tone('triangle', 1400, 1300, 0.18, 0.12, 0.02);
+  }
+
+  /** The parachute alarm: a short, urgent beep. */
+  alarm(): void {
+    this.tone('square', 1046, 1046, 0.07, 0.09);
+    this.tone('square', 1318, 1318, 0.07, 0.09, 0.09);
+  }
+
+  /** A machine unlocking: a chain rattle, a click, and a bright chord. */
+  unlockChime(): void {
+    for (let i = 0; i < 4; i++) this.noiseBurst(0.05, 'highpass', 3000 + i * 400, 0.12);
+    this.tone('square', 1800, 1200, 0.05, 0.1, 0.25);
+    [0, 4, 7, 12].forEach((n, i) => this.tone('triangle', 784 * Math.pow(2, n / 12), 784 * Math.pow(2, n / 12), 0.5, 0.16, 0.35 + i * 0.05));
+  }
+
+  /** Someone else's cannon shot, quieter with distance (0 to 1). */
+  distantBoom(level: number): void {
+    if (level < 0.03) return;
+    this.noiseBurst(0.6, 'lowpass', 700, 0.5 * level, 100);
+    this.tone('sine', 100, 35, 0.5, 0.5 * level);
+  }
+
   private tone(type: OscillatorType, f0: number, f1: number, dur: number, gain: number, delay = 0): void {
     const ctx = this.ctx;
     if (!ctx) return;

@@ -64,11 +64,13 @@ export interface Env {
   cannon: THREE.Group;
   barrel: THREE.Group;
   setBarrelColor(color: number): void;
+  /** Moves the sun (and its shadow area) to stay over a point: the town is too long for one shadow map. */
+  followSun(x: number, z: number): void;
   shadow: THREE.Mesh;
   updateDecor(cameraY: number): void;
   /** Animates the scenery and recolours the sky dome and fog for the current height. */
   updateScenery(t: number, sky: THREE.Color, fog: THREE.Fog, camera: THREE.Vector3): void;
-  /** Redraws a leaderboard in the street (0: left, 1: right). */
+  /** Redraws one of the hub's leaderboards (0: left, 1: right). */
   drawBoard(index: number, title: string, rows: BoardRow[]): void;
 }
 
@@ -80,7 +82,7 @@ export function buildEnv(scene: THREE.Scene): Env {
   sun.position.set(30, 80, -10 + 50);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 45, bottom: -45, near: 10, far: 200 });
+  Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 40, bottom: -40, near: 10, far: 200 });
   sun.shadow.bias = -0.0005;
   sun.shadow.normalBias = 0.04;
   scene.add(sun, sun.target);
@@ -207,6 +209,13 @@ export function buildEnv(scene: THREE.Scene): Env {
     setBarrelColor(color: number) {
       tubeMat.color.setHex(color);
     },
+    followSun(x: number, z: number) {
+      // Snapped to a 4 m grid so the shadows don't shimmer as the area moves.
+      const sx = Math.round(x / 4) * 4;
+      const sz = Math.round(z / 4) * 4;
+      sun.target.position.set(sx, 0, sz - 8);
+      sun.position.set(sx + 30, 80, sz + 42);
+    },
     shadow,
     updateDecor(cameraY: number) {
       for (const cloud of decor) {
@@ -231,6 +240,9 @@ export interface PlayerRig {
   group: THREE.Group;
   body: THREE.Group;
   chute: THREE.Group;
+  /** The everyday cap, and the crash helmet worn in the cannon and in flight (hidden at first). */
+  cap: THREE.Group;
+  helmet: THREE.Group;
   /** Shoulder and hip joints, left then right. Arms hang down at rotation 0 and raise outward with side × z. */
   arms: THREE.Group[];
   legs: THREE.Group[];
@@ -334,7 +346,46 @@ export function makePlayer(outfit: Outfit = DEFAULT_OUTFIT): PlayerRig {
     arms.push(shoulder);
     legs.push(hip);
   }
-  body.add(torso, stripe, head, face, crown, brim, pack);
+  const capGroup = new THREE.Group();
+  capGroup.add(crown, brim);
+  body.add(torso, stripe, head, face, capGroup, pack);
+  // A glossy crash helmet: a rounded shell in the cap's colour with a white racing stripe, goggles pushed up on
+  // the front, and a chin strap. Smooth, so it catches the light.
+  const helmet = new THREE.Group();
+  const shellMat = new THREE.MeshPhongMaterial({ color: outfit.cap, shininess: 110, specular: 0xffffff });
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(0.47, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.55), shellMat);
+  shell.scale.set(1, 0.95, 1.05);
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(0.43, 0.05, 10, 40).rotateX(Math.PI / 2),
+    new THREE.MeshPhongMaterial({ color: 0x24263a, shininess: 40 }),
+  );
+  rim.position.y = 0.06;
+  const racing = new THREE.Mesh(
+    new THREE.SphereGeometry(0.48, 32, 16, -0.12, 0.24, 0, Math.PI * 0.55),
+    new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 110 }),
+  );
+  racing.rotation.y = Math.PI / 2;
+  racing.scale.set(1, 0.95, 1.05);
+  const goggleMat = new THREE.MeshPhongMaterial({ color: 0x9de4ff, emissive: 0x1d5f88, shininess: 150, specular: 0xffffff });
+  const frameMat = new THREE.MeshPhongMaterial({ color: 0xffc84a, shininess: 90 });
+  for (const side of [-1, 1]) {
+    const lens = new THREE.Mesh(new THREE.SphereGeometry(0.11, 20, 12), goggleMat);
+    lens.scale.z = 0.5;
+    lens.position.set(side * 0.14, 0.2, -0.43);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.025, 8, 24), frameMat);
+    ring.position.set(side * 0.14, 0.2, -0.45);
+    helmet.add(lens, ring);
+  }
+  const strap = new THREE.Mesh(
+    new THREE.TorusGeometry(0.33, 0.03, 8, 24, Math.PI).rotateY(Math.PI / 2),
+    new THREE.MeshPhongMaterial({ color: 0x24263a }),
+  );
+  strap.rotation.z = Math.PI;
+  strap.position.y = 0.0;
+  helmet.add(shell, rim, racing, strap);
+  helmet.position.y = 0.8;
+  helmet.visible = false;
+  body.add(helmet);
 
   // Parachute, scaled from 0 when it opens.
   const chute = new THREE.Group();
@@ -358,7 +409,7 @@ export function makePlayer(outfit: Outfit = DEFAULT_OUTFIT): PlayerRig {
   chute.visible = false;
   group.add(chute);
 
-  return { group, body, chute, arms, legs };
+  return { group, body, chute, arms, legs, cap: capGroup, helmet };
 }
 
 export interface BirdRig {

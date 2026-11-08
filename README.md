@@ -26,12 +26,16 @@ the Network URL it prints.
 
 | Action | Desktop | Touch |
 | --- | --- | --- |
+| Aim the cannon (a slight swing) | Mouse position, or A/D or the arrow keys | Drag left and right |
 | Charge, then fire | Hold and release Space or the mouse | Hold and release anywhere |
 | Steer | Mouse position, or A/D or the arrow keys | Drag left and right |
 | Parachute | Space or click | PARACHUTE button |
 | At the base: walk (collects from slots you walk up to) | WASD or arrows, relative to the camera | Drag on the left half (joystick) |
 | At the base: turn the camera | Drag with the mouse | Drag on the right half |
-| Open the gacha machine or merge station | Step on its platform, press E | Step on its platform, tap the action button |
+| Pull a gacha machine | Stand on its ×1 or ×10 pad, press E | Stand on a pad, tap the action button |
+| Merge station, shop | Step on the cauldron's platform or the shop's rug, press E | Same, tap the action button |
+| Launch | Launch button or Space (teleports you to the cannon from afar) | Launch button |
+| Upgrades | Upgrades in the dock (teleports you to the shop) | Same |
 | At the base: level up a brainrot | Click Level up under it | Tap Level up under it |
 | At the base: store or sell the brainrot you're next to | E | The action button |
 | Backpack | Bag in the dock, or B | Bag in the dock |
@@ -45,15 +49,21 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   and then gems come in pairs. A hazard hit knocks 15% of the run's gems loose. A crash loses 30% of
   them, or 50% without a parachute. There's no result window: on landing the gems go into the wallet
   with a toast, and the player stays where they landed, ready to walk.
-- **Parachute warning**: if the parachute is still closed as the ground bar's marker gets within 0.6
-  seconds of the red crash zone (the last part of the gold zone), PARACHUTE NOW! flashes for 1.2 seconds.
-- **Town** (`src/layout.ts`): six plots in two rows of three, facing each other across a shared street.
-  Every plot is the same base, built in plot space (cannon at the origin, gate toward the street);
-  `toPlot` and `fromPlot` convert to and from the world. This client's plot is the middle of the near
-  row, at the world origin, so its gameplay, cameras and flights are unchanged. The street has a
-  fountain in the middle, lanterns along both kerbs and two live leaderboards (Top Earners, Top Flyers)
-  in the gaps between plots. Fences hold everywhere but the gates, for every plot, and the fountain is
-  solid; launching from someone else's plot or the street walks you back through your gate.
+- **Parachute alarm**: from 0.9 seconds before the gold zone (about 2.2 seconds before impact), on every
+  flight: OPEN PARACHUTE! flashes, the screen's edges pulse red, the parachute button bounces and glows,
+  the coach's hand taps it, a banner says to press Space (or tap), and it beeps until the parachute opens.
+- **Opening high**: a parachute opened high comes down fast (up to 85% of free-fall speed), slowing to a
+  gentle 6 m/s for the last stretch, so it never drifts for long: opened at 327 m it lands in 10.5 s, not
+  55. The canopy flutters harder the faster it falls.
+- **Town** (`src/layout.ts`), following the sketch: two columns of four plots facing each other across a
+  central lane, with no fences, so it feels like neighbours. At the lane's end is a shared hub: looking
+  down the lane toward it, the cannon, the merge cauldron and the upgrade shop are on the right, and the
+  row of gacha machines is on the left. Everyone uses the same cannon, cauldron, shop and machines; a plot
+  is only its owner's showcase. A smooth three-tier fountain with arcing water closes the far end of the
+  lane. Only things standing on the ground are solid (pedestals, machines, the cannon, the stall, the
+  cauldron, the fountain). The shared cannon is at the world origin, so flights and their cameras are
+  unchanged. With real multiplayer the server assigns each player a plot; this client is the first plot
+  on the cannon side.
 - **Fake multiplayer** (`src/net.ts`, `src/remote.ts`): a pretend server simulates a real lobby. The
   other plots are played by bots that use the real rules (the same pull, merge, upgrade and level code
   and costs as you).
@@ -61,48 +71,70 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     a little ahead along their route), turn at a limited rate and weave slightly on long runs. Each has
     its own running speed. They jump a lot while running, look around when they stop, spin now and then,
     give each other room, and sidestep or give up on a waypoint when they get stuck.
-  - **The lobby lives.** The server holds 6. You usually join with three to five others, and
+  - **They're busy.** They share the hub with you: they queue for the cannon (and wait while you're in
+    it), dive in and get fired off with a boom you hear across town, often heading straight back for
+    another go; they stand on the machines' pads and spin them, stir the cauldron, and walk to the shop
+    stall to buy upgrades. In 10 simulated minutes, seven bots fire about 75 shots and spin about 60
+    pulls.
+  - **The lobby lives.** The server holds 8, one per plot. You usually join with three to five others, and
     matchmaking fills a free slot within 10 to 45 seconds (now and then it stays open for a minute or
     two). Sessions last from a few minutes to an hour; about half of the leavers go AFK first (their tag
     reads "Name · AFK"), some say "gtg bye", then they vanish in a puff. Players also go AFK for a minute
-    or two mid-session. Newcomers appear in a puff by the fountain and walk to their plot through the
-    gate; most return to saved progress, some are brand new.
+    or two mid-session. Newcomers appear in a puff by the fountain and walk down the lane to their plot;
+    most return to saved progress, some are brand new.
   - **They talk.** Speech bubbles over their heads and lines in the feed: hellos for newcomers,
     questions that someone else answers a few seconds later ("how do u get gems" / "launch higher,
     cloud kingdom gems are x3"), passing remarks, "LETS GOOO" on their own Legendaries and "lucky" on
     other people's (yours included), and nobody repeats a line for a while.
-  - **They visit.** Bots stroll the street and visit each other's bases and yours, walking in through the
-    gate, looking around and sometimes commenting on the best brainrot there ("how did u get Frigorifero
-    Fenicottero").
+  - **They visit.** Bots stroll the lane, round the fountain and about the hub, and visit each other's
+    plots and yours, sometimes commenting on the best brainrot there ("how did u get Frigorifero
+    Fenicottero"). They route through the lane, so nobody walks through pedestals.
   - Each bot joins with progress played out offline by the same loop as the economy simulator, launches
-    from its own cannon (up, free fall, parachute), pulls, merges, buys upgrades, levels up and rebirths.
+    from the shared cannon (dive, up, free fall, parachute), pulls, merges, buys upgrades, levels up and
+    rebirths. Their helmets go on in the cannon, like yours.
   - The feed (bottom left) shows joins and leaves, Epic and Legendary pulls and merges, new zones,
     rebirths and chat. The online counter shows the server name and player count.
-  - You can visit too: walk into anyone's plot through their gate ("Visiting Mia's base"), and the owner
-    may say hi. Walk up to one of their brainrots and press E to see its level and income and give it a
-    👍 (they'll thank you). Their machines are theirs, though.
+  - You can visit too: walk into anyone's plot ("Visiting Mia's base"), and the owner may say hi. Walk up
+    to one of their brainrots and press E to see its level and income and give it a 👍 (they'll thank
+    you).
   - The game only reads what a real server would send (player snapshots and events) and sends what a
     real client would (its stats, visits, likes, big moments), so a real server can replace `net.ts`.
-  - To keep the frame rate up, other players' brainrots are only drawn when you're in their plot or at
-    its gate, without shadows, and every plot's fence posts, poles and lanterns are drawn in batches.
-- **Base layout**, following the sketch and lined up with the launch camera: the cannon stands on a round
-  paved plaza; the showcase hall is straight behind it, its red carpet running across the plaza to the
-  cannon; the gacha machine (left) and merge station (right) stand on the plaza's edge facing the cannon.
-  One rectangular fence with bunting encloses it all, with a gate and path at the front. Lanterns ring the
-  plaza and line the hall, with flower beds along the hall's sides. Outside the fence, the windmill and
-  cottage sit behind the base on either side and the pond is off to the right.
-- **Gacha machine**, on the left of the cannon. Step on the glowing pink platform in front of it and
-  press E (walking past doesn't open anything):
-  - Basic pull, 10 gems: Common 62%, Uncommon 28%, Rare 8%, Epic 1.8%, Legendary 0.2%.
-  - Super pull, 100 gems, unlocked once a flight reaches Cloud Kingdom: always Rare or better (Rare 50%,
-    Epic 38%, Legendary 12%). For the same gems it beats ten Basic pulls on every count, with pity
-    included: about 1.4× the Legendaries (one per ~600 gems against ~820), 1.5× the Epics or better, and
-    1.2× the value if everything were merged up. So once it's unlocked, saving for Super is the better
-    buy, and Basic stays the cheap way in.
-  - Ultra pull, 400 gems, unlocked once a flight reaches the Storm Layer: Epic 20%, Legendary 55%,
-    Mythic 25%, with a Legendary or better at least every 3 pulls and a Mythic every 6. Per gem it
-    beats Super too (0.76 Mythics, 2.05 Legendary-or-better and 3.7 Legendaries of merged value per
-    1,000 gems, against Super's 0, 1.65 and 2.8).
+  - To keep the frame rate up, other players' brainrots are only drawn within about 22 m of their plot,
+    without shadows, and the sun's shadows follow the player (the town is too long for one shadow map).
+    About 400 draw calls in the hub.
+- **Launching**: from more than 5 m away (or from behind the cannon), Launch teleports you to the cannon in
+  a puff, with a squash-and-stretch pop-in and a camera cut. Then a short comic dive (under a second): a
+  crouch, a leap in an arc turning head first, stuck in the muzzle with legs kicking while the cannon
+  gulps, then slurped in. You pop back up out of the muzzle and a crash helmet drops onto your head with
+  a bounce and a clonk. The helmet stays on through the flight and the landing.
+- **Aiming**: in the cannon, the mouse (or A/D, or a drag) swings it up to 17° either way, chasing the aim
+  on a spring so it eases in and settles with a little overshoot. The flight mechanics are unchanged; a
+  swung shot just starts as if you'd been steering that way (up to three quarters of the way across) and
+  hands over to your own steering within a second. The barrel kicks and springs back when it fires, for
+  you and for every bot.
+- **Gacha machines**: five, one per tier, in a row on the left of the hub, each a different machine and
+  grander as the price goes up. Each has two glowing pads in front, ×1 and ×10: stand on one and press E
+  (or tap the action button) and the machine spins, then the cards are dealt. No panels.
+  - BASIC (10 gems), the red capsule machine with a glass globe and a crank: Common 62%, Uncommon 28%,
+    Rare 8%, Epic 1.8%, Legendary 0.2%.
+  - LUCKY (30 gems, unlocks at 125 m), a mint machine with a tall dome of capsules that whirl like a
+    tornado, a gold horseshoe and a four-leaf clover: Uncommon 55%, Rare 33%, Epic 10%, Legendary 2%.
+  - SUPER (100 gems, 150 m), a blue-and-gold slot machine with three reels, chasing bulbs and a lever:
+    Rare 50%, Epic 38%, Legendary 12%.
+  - ULTRA (400 gems, 400 m), a tall purple slot machine with an arched marquee and a crown: Epic 20%,
+    Legendary 55%, Mythic 25%.
+  - COSMIC (600 gems, 550 m), a black-and-gold pedestal under a glowing orb in two whirling gimbal rings,
+    with stars in orbit: Legendary 30%, Mythic 70%, and a Mythic at least every 2 pulls.
+  - Each tier is worth more per gem than the one below (`npm run sim`, merged-up value in Legendaries per
+    1,000 gems): Basic 2.31, Lucky 2.53, Super 2.81, Ultra 3.71, Cosmic 4.21. Lucky unlocks at about 2
+    minutes without slowing the first pulls.
+  - A locked machine is dimmed and grey, chained, with a gold padlock, and its sign says the height that
+    unlocks it, your best so far and a progress bar. The first time you come back from a flight that
+    reached it, the padlock shakes, bursts off spinning, and the machine lights up with a chime and
+    confetti; the coach then points you at it once.
+  - Pulling: the machine squats (anticipation), spins (the crank turns; capsules rattle or whirl; slot
+    reels spin and stop left to right; the Cosmic orb dips, then blazes as its rings whirl), then pops up
+    and settles with an overshoot. Not enough gems or not unlocked: it shakes its head.
   - Mythic is the new top rarity (350 coins/s), with two characters from the design doc: Razzo
     Rinoceronte (a rhino strapped to a sputtering rocket) and Satellito Gattino (a kitten with satellite
     dish ears that sweep the sky). Mythics come from the Ultra pull, or from merging three Legendaries.
@@ -111,31 +143,34 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     better flash the screen in their colour, turn light rays behind the card, burst confetti and show a
     big rarity banner. Legendary and Mythic hold back first: the card shakes and blazes with a rising
     whoosh before it turns. A Mythic also quakes the whole screen and has a rainbow banner and edge.
-  - Each tier has a ×10 button once you can afford ten.
   - The first 10 pulls are scripted to include at least two Uncommons and one Rare: the 1st is at least
     Uncommon, the 3rd at least Rare (a glowing card at about 100 s) and the 5th at least Uncommon. The
     rest roll the normal odds and can come out better; from the 11th pull on, it's the normal odds and
     pity only.
   - Hidden pity, never shown to the player: on Basic pulls, every 15th pull without an Uncommon or better
-    is one, and likewise a Rare by 30, an Epic by 60 and a Legendary by 90. On Super pulls: an Epic or
-    better by 4 and a Legendary by 10. Each counter resets when that rarity or better comes up, by luck
+    is one, and likewise a Rare by 30, an Epic by 60 and a Legendary by 90. Lucky: a Rare or better by 4,
+    an Epic by 15, a Legendary by 60. Super: an Epic or better by 4 and a Legendary by 10. Ultra: a
+    Legendary or better by 3 and a Mythic by 6. Cosmic: a Mythic by 2. Each counter resets when that rarity or better comes up, by luck
     or by pity, so an Uncommon on pull 2 means the next guaranteed one is pull 17, not pull 15.
   - Results go on display by themselves: empty slots fill best first, and a rarer pull swaps out a
     level-1 brainrot (which goes to the backpack with its coins collected). Levelled ones are never moved.
     Then the cards are revealed like trading cards (no pack to open): dealt face down, rarest last, each
     flipped with a tap (or Flip all, or Space). Rare and better glow through their backs and wobble first;
     the front is a framed card with the brainrot's art, income, rarity stars and a NEW badge, and Epic and
-    better have holo foil. Continue goes back to the machine's panel, so pulling again is one click.
-    Merges reveal their results the same way.
-- **Merge station**, a bubbling cauldron on the right of the cannon. Step on the purple platform in front
-  of it and press E: 10 Common → 1 Uncommon, 8 Uncommon →
+    better have holo foil. Continue goes back to the world, still standing on the pad, so pulling again
+    is one more press. Merges reveal their results the same way.
+- **Merge station**, a bubbling cauldron behind the cannon. Step on the purple platform in front of it
+  and press E (the pot jumps and wobbles on each merge): 10 Common → 1 Uncommon, 8 Uncommon →
   1 Rare, 6 Rare → 1 Epic, 4 Epic → 1 Legendary, 3 Legendary → 1 Mythic, from the backpack. A merge gives a random character of
   the next rarity. Merge all runs every recipe from the bottom up in one click, and merged brainrots go
   on display if they beat what's there.
 - **Backpack**: brainrots not on display. Sell one or all of a rarity (60 seconds of its income each),
   put one on display, or merge a rarity.
-- **Showcase**: a stone hall with a red carpet down the middle and two rows of 5 slots either side,
-  laid out like the sketch. 4 slots are open at the start; locked ones are roped off, and each base
+- **Shop**: a market stall with a striped awning and goods on the counter, and a keeper with an apron and
+  a moustache who turns to watch customers and waves when you arrive. Upgrades in the dock teleports you
+  to its counter and opens the shop (from the cannon too); standing on its rug and pressing E opens it.
+- **Showcase**: each plot is a tiled floor edged in its owner's colour (gold for yours), two rows of 5
+  pedestals along the lane facing it, and a name board at the back. 4 slots are open at the start; locked ones are roped off, and each base
   expansion in Upgrades opens 2 more (600, then 3,600, then 21,600 coins). Empty open slots pulse a
   ring of light.
 - **Slots**: a brainrot on display earns coins once a second by rarity (Common 1/s up to Legendary 90/s),
@@ -144,8 +179,9 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   brainrot within about 11 m, a Level up button shows its XP (earned on display) and, once full, the
   price: click it to level up. Standing next to a slot and pressing E opens its panel to store it in
   the backpack (back to level 1) or sell it. Slots glow in their brainrot's rarity colour.
-- **Walking at the base**: the cannon, both stations, the pedestals and the showcase's low walls are
-  solid (you slide around them), and you step up onto the station platforms and the showcase floor.
+- **Walking**: the cannon, the cauldron, the machines, the stall, the pedestals and the fountain are
+  solid (you slide around them), and you step up onto the pads, the cauldron's platform and showcase
+  floors. Returning players start in the lane in front of their plot, looking at it.
 - **Tutorial**: flight 1 is a straight line of 12 gems, enough for the first pull. Hazards start on
   flight 3, and nothing is lost to hits or crashes during the first 3 flights. A coach guides new
   players: a big bouncing yellow banner says what to do, and a cartoon hand shows how. It presses and
@@ -176,7 +212,16 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   rarer ones sing lower and longer with an echo. Brainrots no longer call out from the base while idle.
 - **Sounds**, all synthesised: soft footsteps at the base, capsule pop, card flips, fanfares by rarity,
   suspense whoosh, cash register on upgrades, level-up scale, bubbling merge, new-zone call, panel
-  whoosh, coins, gems, launch boom, wind, parachute, hits and landings.
+  whoosh, coins, gems, launch boom, wind, parachute, hits and landings; and now a teleport zip, the dive's
+  whoop, the cannon's gulp, the helmet's clonk, the parachute alarm's beeps, a machine-unlock chime, a
+  ratchet while a machine spins, and other players' cannon shots, quieter with distance.
+- **Animation** follows the classic principles where it can: anticipation (the dive's crouch, a machine's
+  squat, the lever yanked down, the padlock shaking before it bursts), squash and stretch (pop-ins, the
+  dive, the cannon's charge, kick and gulp, the cauldron), slow in and out (springs and eased spins),
+  arcs (the dive), follow-through and overshoot (the cannon's swing settling, machines popping up and
+  settling, the helmet's bounce), secondary action (the keeper waving, bulbs chasing, capsules rattling,
+  water arcing, the canopy fluttering), and staging (a three-quarter camera for the dive, a camera cut
+  for teleports).
 
 Older saves carry over: catches that were being carried go to the backpack, and bases bigger than 10
 slots move their extra brainrots to the backpack.
@@ -189,14 +234,18 @@ Not in this build: fusion of named characters, sky events, the rival, the spin w
   (from Google Fonts, with system fallbacks), glossy 3D buttons with thick ink outlines that press down,
   currency pills, a dock of icon tiles (Upgrades, Bag, Book), a prompt banner, and panels
   that open with a coloured ribbon.
-- **Cannon, gacha machine and cauldron**: smooth and glossy. The cannon is a turned barrel with brass
-  bands, trunnions and a muzzle ring, on a carriage with spoked wheels over a round stone base; the gacha
-  machine has a rounded body and a shiny glass globe of capsules; the cauldron has a rounded belly on
-  three legs over a crackling fire, a gold rim and handles, and a bubbling, glowing brew.
+- **Cannon, machines, cauldron, stall and fountain**: smooth and glossy. The cannon is a turned barrel with
+  brass bands, trunnions and a muzzle ring, on a carriage with spoked wheels over a round stone base; the
+  cauldron has a rounded belly on three legs over a crackling fire, a gold rim and handles, and a bubbling,
+  glowing brew; the fountain is turned on a lathe, with gold bands and a turning gold gem on top.
+- **Less clutter**: the fences, bunting, lanterns, flower beds, street lamps and cottage are gone, and the
+  ground cover around the town is about half as dense. Paving marks the hub, the lane (with gold studs
+  down the middle) and the fountain's circle; the gacha corner has a pink carpet.
 - **Brainrot icons**: every card shows that character's own portrait, rendered once from its 3D model
   and cached. Characters not yet pulled show as a dark silhouette in the book.
 - The player is a blocky avatar with rounded edges: a square head with a drawn face, a cap, a T-shirt,
-  jeans and sneakers. It has a walk cycle at the base, reaches up on the way up, flails in free fall and
+  jeans and sneakers, and a glossy crash helmet with goggles in the cannon and in flight. It has a walk
+  cycle at the base, reaches up on the way up, flails in free fall and
   hangs from the straps under the parachute.
 - Brainrots are cel-shaded with a dark outline, round cartoon eyes with a shine, and a smile. On display
   they bounce gently, and land with a squash when placed.
@@ -281,13 +330,14 @@ All first-pass numbers live in `src/config.ts`.
 | `src/economy.ts` | Upgrade costs, income, slots, pulls with hidden pity, merging and selling |
 | `src/meta.ts` | Offline earnings, the daily streak, and collection book pages |
 | `src/platform.ts` | The CrazyGames SDK wrapper |
-| `src/base.ts` | The showcase hall, its pedestals, brainrots and coins, and the gacha machine and merge station by the cannon |
+| `src/base.ts` | A plot's showcase (floor, name board, pedestals, brainrots, coins), and what's solid and how high the floor is, town-wide |
+| `src/hub.ts` | The shared hub: paving, the cauldron, the shop stall and keeper, the five gacha machines with their pads and locks, the fountain |
 | `src/characters.ts` | The 10 character models and their idle animations |
 | `src/world.ts` | Sky pieces, cannon, player avatar, gems, hazards, guide arrows, labels |
-| `src/layout.ts` | The town: plot slots, the street, fences and walking limits, for multiplayer |
+| `src/layout.ts` | The town: the lane, the eight plot slots, where the hub's things stand, and walking limits |
 | `src/net.ts` | The fake multiplayer server: bot players on the real economy, events, chat, standings |
 | `src/remote.ts` | Draws other players (avatars, name tags, poses, parachutes) and their plots from server snapshots |
-| `src/scenery.ts` | Sky dome, ground, hills, mountains, path, lanterns, fence and bunting, swaying trees, cottage, windmill, pond, butterflies |
+| `src/scenery.ts` | Sky dome, ground, hills, mountains, swaying trees, ground cover, windmill, pond, butterflies, the leaderboards |
 | `src/fx.ts` | Particle bursts and wind streaks |
 | `src/hud.ts` | HTML overlay: wallet and gems, altitude, run gems, meters, dock, shop, modals, level-up buttons, tuning panel |
 | `src/icons.ts` | Brainrot portraits for cards, rendered from the 3D models |

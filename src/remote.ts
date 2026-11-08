@@ -3,12 +3,12 @@
 // reads RemotePlayer data, so it works the same for the fake server's bots and for real players later.
 import * as THREE from 'three';
 import { Base } from './base';
-import { OWN_SLOT, SLOTS, gatePoint, plotAt } from './layout';
+import { OWN_SLOT, SLOTS, fromPlot, plotAt } from './layout';
 import type { FakeServer, RemotePlayer } from './net';
 import { makeLabel, makePlayer, type Label, type PlayerRig } from './world';
 
-/** Other players' brainrots are only drawn when the local player is in their plot or this close to its gate. */
-const DETAIL_RANGE = 14;
+/** Other players' brainrots are only drawn when the local player is in their plot or this close to its middle. */
+const DETAIL_RANGE = 22;
 
 interface Avatar {
   rig: PlayerRig;
@@ -83,7 +83,7 @@ export class RemoteView {
         base: new Base(scene, slot, { vacant: true }),
         owner: null,
         padsKey: '',
-        center: gatePoint(slot, false),
+        center: fromPlot(slot, 0, -5),
       });
     }
   }
@@ -152,7 +152,11 @@ export class RemoteView {
     const { rig } = avatar;
     rig.group.visible = p.pose !== 'hidden';
     rig.group.position.set(p.x, p.y, p.z);
-    rig.group.rotation.y = p.pose === 'walk' || p.pose === 'idle' ? p.facing : 0;
+    rig.group.rotation.y = p.pose === 'walk' || p.pose === 'idle' || p.pose === 'dive' ? p.facing : 0;
+    // The helmet goes on for the cannon and the flight.
+    const flying = p.pose !== 'walk' && p.pose !== 'idle';
+    rig.helmet.visible = flying;
+    rig.cap.visible = !flying;
     // Name tag (with AFK when they're away) and speech bubble.
     const tagText = p.afk ? `${p.name} · AFK` : p.name;
     if (tagText !== avatar.tagText) {
@@ -183,7 +187,7 @@ export class RemoteView {
       armOut = 0.15;
       armSwing = Math.sin(avatar.phase) * 0.7 * amp;
       legSwing = Math.sin(avatar.phase) * 0.8 * amp;
-    } else if (p.pose === 'up') {
+    } else if (p.pose === 'up' || p.pose === 'dive') {
       armOut = 2.9;
     } else if (p.pose === 'fall') {
       armOut = 1.7 + Math.sin(time * 14) * 0.3;
@@ -195,7 +199,9 @@ export class RemoteView {
       armOut = 1.2;
       spread = 0.3;
     }
-    rig.body.rotation.x += ((p.pose === 'fall' ? -1.1 : 0) - rig.body.rotation.x) * k;
+    // Diving into the cannon head first; spread-eagle in free fall.
+    const pitch = p.pose === 'dive' ? -Math.PI * 0.85 : p.pose === 'fall' ? -1.1 : 0;
+    rig.body.rotation.x += (pitch - rig.body.rotation.x) * (p.pose === 'dive' ? 1 - Math.exp(-6 * dt) : k);
     rig.body.position.y = 0.9 + (p.pose === 'walk' && !airborne ? Math.abs(Math.sin(avatar.phase)) * 0.08 : 0);
     rig.arms.forEach((arm, i) => {
       const side = i === 0 ? -1 : 1;

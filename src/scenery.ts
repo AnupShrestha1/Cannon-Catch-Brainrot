@@ -1,9 +1,10 @@
-// Low-poly scenery around the cannon and base: a gradient sky with a sun, patchy grass with rolling hills
-// and snowy mountains further out, a sandy path with lanterns, a fence hung with bunting, mixed trees that
-// sway in the wind, flowers, mushrooms, rocks, a pond with lily pads and a dock, a cottage, a windmill and
-// butterflies. Seeded, so the world looks the same every load; repeated props are instanced to stay cheap.
+// Scenery around the town: a gradient sky with a sun, patchy grass with rolling hills and snowy mountains
+// further out, trees that sway in the wind, a little ground cover, a pond with lily pads and a dock, a windmill,
+// a few butterflies, and the two leaderboards in the hub. The town itself (paving, plots, hub) is drawn by
+// hub.ts and base.ts. Kept deliberately sparse so the town reads clearly. Seeded, so the world looks the same
+// every load; repeated props are instanced to stay cheap.
 import * as THREE from 'three';
-import { FENCE, SLOTS, STREET, STREET_MID, TOWN, type PlotSlot } from './layout';
+import { BOARDS, TOWN } from './layout';
 
 const lambert = (color: number, extra: THREE.MeshLambertMaterialParameters = {}) =>
   new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
@@ -30,18 +31,21 @@ function groundHeight(x: number, z: number): number {
   return ramp * (5 + Math.sin(x * 0.03) * Math.cos(z * 0.025) * 4 + Math.sin(x * 0.011 + z * 0.017) * 6);
 }
 
-// The town (see layout.ts) is six fenced plots across a street. The landmarks frame it from outside: the
-// windmill and the cottage behind this client's row, seen past the cannon from the launch camera, and the pond
-// off past the end of the street.
-const POND = { x: TOWN.maxX + 20, z: STREET_MID, r: 9 };
-const COTTAGE = { x: 24, z: TOWN.minZ - 14 };
-const WINDMILL = { x: -26, z: TOWN.minZ - 18 };
+// Two landmarks frame the town from outside: the windmill behind the hub, seen past the cannon from the launch
+// camera, and the pond off the cannon side of the lane.
+const POND = { x: TOWN.maxX + 18, z: 46, r: 9 };
+const WINDMILL = { x: -30, z: TOWN.minZ - 22 };
+/** The town's centre, which scattered props are placed around. */
+const CENTER = { x: (TOWN.minX + TOWN.maxX) / 2, z: (TOWN.minZ + TOWN.maxZ) / 2 };
+/** Distance from a point to the town's rectangle (0 inside it). */
+function fromTown(x: number, z: number): number {
+  return Math.hypot(Math.max(TOWN.minX - x, 0, x - TOWN.maxX), Math.max(TOWN.minZ - z, 0, z - TOWN.maxZ));
+}
 
 /** Where props may not go: the town (with a margin), the pond and the buildings. */
 function keepClear(x: number, z: number): boolean {
   if (x > TOWN.minX - 4 && x < TOWN.maxX + 4 && z > TOWN.minZ - 4 && z < TOWN.maxZ + 4) return true;
   if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 2) return true;
-  if (Math.hypot(x - COTTAGE.x, z - COTTAGE.z) < 9) return true;
   if (Math.hypot(x - WINDMILL.x, z - WINDMILL.z) < 8) return true;
   return false;
 }
@@ -107,7 +111,7 @@ export interface BoardRow {
 export interface Scenery {
   /** Moves the windmill, butterflies, wind and water. `t` is seconds since start. */
   update(t: number): void;
-  /** Redraws one of the street's leaderboards (0: left, 1: right). */
+  /** Redraws one of the hub's leaderboards (0: left, 1: right). */
   drawBoard(index: number, title: string, rows: BoardRow[]): void;
 }
 
@@ -155,173 +159,16 @@ export function addScenery(scene: THREE.Scene): Scenery {
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const up = new THREE.Vector3(0, 1, 0);
-  const sand = lambert(0xe2c98f);
   const wood = lambert(0x9a6a3c);
   const darkWood = lambert(0x6e4526);
-  const lampMat = new THREE.MeshLambertMaterial({ color: 0xffe9a8, emissive: 0xffc94d, emissiveIntensity: 0.9 });
-  const postGeo = new THREE.CylinderGeometry(0.09, 0.12, 2.2, 6).translate(0, 1.1, 0);
-  const lampGeo = new THREE.BoxGeometry(0.42, 0.5, 0.42).translate(0, 2.35, 0);
-  const capGeo = new THREE.ConeGeometry(0.4, 0.3, 4).rotateY(Math.PI / 4).translate(0, 2.75, 0);
-  /** Lanterns at these points, drawn as three batches (post, lamp, cap) rather than three meshes each. */
-  const lamps = (spots: [number, number][]) => {
-    const g = new THREE.Group();
-    for (const [geo, mat] of [
-      [postGeo, darkWood],
-      [lampGeo, lampMat],
-      [capGeo, darkWood],
-    ] as const) {
-      const mesh = new THREE.InstancedMesh(geo, mat, spots.length);
-      spots.forEach(([x, z], i) => mesh.setMatrixAt(i, m.makeTranslation(x, 0, z)));
-      mesh.castShadow = true;
-      g.add(mesh);
-    }
-    return g;
-  };
-  const fencePost = new THREE.BoxGeometry(0.25, 1.2, 0.25);
-  const flagGeo = new THREE.BufferGeometry();
-  flagGeo.setAttribute('position', new THREE.Float32BufferAttribute([-0.3, 0, 0, 0.3, 0, 0, 0, -0.55, 0], 3));
-  flagGeo.computeVertexNormals();
-  const flagMat = lambert(0xffffff, { side: THREE.DoubleSide });
-  const flagColors = [0xff5d73, 0xffd23f, 0x4dabff, 0x3ccf5a, 0xb57bff, 0xff9f43];
   const flowerColors = [0xff5d73, 0xffd23f, 0xffffff, 0xb57bff, 0xff9f43, 0x4dabff];
-  const flowerGeo = new THREE.IcosahedronGeometry(0.2, 0);
-  const soilMat = lambert(0x6b4a2e);
 
-  /** Everything one plot has outside its Base: path, lanterns, fence with bunting, flower beds. Plot space. */
-  const plotDecor = (slot: PlotSlot) => {
-    const g = new THREE.Group();
-    g.position.set(slot.x, 0, slot.z);
-    g.rotation.y = slot.rot;
-    // A sandy path from the plaza out through the gate to the street.
-    const path = new THREE.Mesh(new THREE.BoxGeometry(3, 0.05, FENCE.front - 10 + 2), sand);
-    path.position.set(0, 0.025, (FENCE.front + 10 + 1) / 2);
-    path.receiveShadow = true;
-    g.add(path);
-    // Lanterns around the plaza, leaving the hall entrance, the two stations and the line from the gate clear
-    // (the base camera sits on that line behind the player), and down both long sides of the showcase.
-    const spots: [number, number][] = [];
-    for (const deg of [35, 65, 115, 145, 225, 315]) {
-      const ang = (deg * Math.PI) / 180;
-      spots.push([Math.cos(ang) * 12, Math.sin(ang) * 12]);
-    }
-    for (let z = -13; z >= -31; z -= 6) spots.push([-8.3, z], [8.3, z]);
-    g.add(lamps(spots));
-    // The fence, with bunting sagging between tall poles every 7 m. Posts and poles are batched.
-    const flags: { x: number; y: number; z: number; turn: number }[] = [];
-    const postSpots: [number, number][] = [];
-    const poleSpots: [number, number][] = [];
-    const fence = (x0: number, z0: number, x1: number, z1: number) => {
-      const length = Math.hypot(x1 - x0, z1 - z0);
-      const posts = Math.max(2, Math.round(length / 2.5) + 1);
-      const turn = -Math.atan2(z1 - z0, x1 - x0);
-      for (let i = 0; i < posts; i++) {
-        const t = i / (posts - 1);
-        postSpots.push([x0 + (x1 - x0) * t, z0 + (z1 - z0) * t]);
-      }
-      for (const y of [0.45, 0.95]) {
-        const rail = new THREE.Mesh(new THREE.BoxGeometry(length, 0.12, 0.1), wood);
-        rail.position.set((x0 + x1) / 2, y, (z0 + z1) / 2);
-        rail.rotation.y = turn;
-        rail.castShadow = true;
-        g.add(rail);
-      }
-      const spans = Math.max(1, Math.round(length / 7));
-      for (let sp = 0; sp < spans; sp++) {
-        for (let k = 0; k < 7; k++) {
-          const t = (sp + (k + 0.5) / 7) / spans;
-          const sag = Math.sin(((k + 0.5) / 7) * Math.PI) * 0.45;
-          flags.push({ x: x0 + (x1 - x0) * t, y: 2.3 - sag, z: z0 + (z1 - z0) * t, turn });
-        }
-      }
-      for (let sp = 0; sp <= spans; sp++) {
-        const t = sp / spans;
-        poleSpots.push([x0 + (x1 - x0) * t, z0 + (z1 - z0) * t]);
-      }
-    };
-    const f = FENCE;
-    fence(-f.x, f.front, -f.x, f.back);
-    fence(-f.x, f.back, f.x, f.back);
-    fence(f.x, f.back, f.x, f.front);
-    fence(f.x, f.front, f.gate, f.front);
-    fence(-f.gate, f.front, -f.x, f.front);
-    const postMesh = new THREE.InstancedMesh(fencePost, wood, postSpots.length);
-    postSpots.forEach(([x, z], i) => postMesh.setMatrixAt(i, m.makeTranslation(x, 0.6, z)));
-    const poleMesh = new THREE.InstancedMesh(postGeo, wood, poleSpots.length);
-    poleSpots.forEach(([x, z], i) => poleMesh.setMatrixAt(i, m.makeScale(1, 1.15, 1).setPosition(x, 0, z)));
-    postMesh.castShadow = poleMesh.castShadow = true;
-    g.add(postMesh, poleMesh);
-    const bunting = new THREE.InstancedMesh(flagGeo, flagMat, flags.length);
-    flags.forEach((fl, i) => {
-      q.setFromAxisAngle(up, fl.turn);
-      m.compose(new THREE.Vector3(fl.x, fl.y, fl.z), q, new THREE.Vector3(1, 1, 1));
-      bunting.setMatrixAt(i, m);
-      bunting.setColorAt(i, c.setHex(flagColors[i % flagColors.length]));
-    });
-    g.add(bunting);
-    // Flower beds down both long sides of the showcase.
-    const bed = new THREE.InstancedMesh(flowerGeo, lambert(0xffffff), 200);
-    for (let i = 0; i < 200; i++) {
-      const side = i % 2 ? 1 : -1;
-      m.compose(new THREE.Vector3(side * range(6.6, 7.4), 0.3, range(-31.5, -10.5)), q.identity(), new THREE.Vector3(1, 1, 1));
-      bed.setMatrixAt(i, m);
-      bed.setColorAt(i, c.setHex(pick(flowerColors)));
-    }
-    g.add(bed);
-    for (const side of [-1, 1]) {
-      const soil = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.35, 21.5), soilMat);
-      soil.position.set(side * 7, 0.12, -21);
-      g.add(soil);
-    }
-    scene.add(g);
-  };
-  for (const slot of SLOTS) plotDecor(slot);
-
-  // The shared street: paving between the two rows, a fountain in the middle, lanterns down both kerbs, and a
-  // leaderboard board in each gap between plots (placeholders until multiplayer fills them).
-  const street = new THREE.Mesh(
-    new THREE.BoxGeometry(STREET.halfLength * 2, 0.06, STREET.far - STREET.near),
-    lambert(0xd9cdb4),
-  );
-  street.position.set(0, 0.03, STREET_MID);
-  street.receiveShadow = true;
-  scene.add(street);
-  const kerbMat = lambert(0xbfae8c);
-  for (const z of [STREET.near + 0.3, STREET.far - 0.3]) {
-    const kerb = new THREE.Mesh(new THREE.BoxGeometry(STREET.halfLength * 2, 0.16, 0.5), kerbMat);
-    kerb.position.set(0, 0.08, z);
-    scene.add(kerb);
-  }
-  const streetLamps: [number, number][] = [];
-  for (let x = -STREET.halfLength + 6; x <= STREET.halfLength - 6; x += 12) {
-    if (Math.abs(x) < 7 || [-40, 0, 40].some((px) => Math.abs(x - px) < 6)) continue;
-    streetLamps.push([x, STREET.near + 1.6], [x, STREET.far - 1.6]);
-  }
-  scene.add(lamps(streetLamps));
-  const fountain = new THREE.Group();
-  fountain.position.set(0, 0, STREET_MID);
-  const basin = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.7, 0.7, 24), lambert(0xe9dcc3));
-  basin.position.y = 0.35;
-  const fountainWater = new THREE.Mesh(
-    new THREE.CylinderGeometry(3, 3, 0.1, 24),
-    new THREE.MeshLambertMaterial({ color: 0x5ab3e8, emissive: 0x0b3a66, transparent: true, opacity: 0.9 }),
-  );
-  fountainWater.position.y = 0.68;
-  const column = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.5, 2, 10), lambert(0xe9dcc3));
-  column.position.y = 1.5;
-  const bowl = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 0.6, 0.45, 18), lambert(0xe9dcc3));
-  bowl.position.y = 2.6;
-  const spout = new THREE.Mesh(
-    new THREE.SphereGeometry(0.5, 12, 8),
-    new THREE.MeshLambertMaterial({ color: 0xbfe9ff, emissive: 0x3a7ab0, transparent: true, opacity: 0.85 }),
-  );
-  spout.position.y = 3.1;
-  fountain.add(basin, fountainWater, column, bowl, spout);
-  scene.add(casts(fountain));
+  // The two leaderboards at the back of the hub, facing the cannon (placeholders until multiplayer fills them).
   const boardMat = lambert(0x3d2a6b);
   const boards: ((title: string, rows: BoardRow[]) => void)[] = [];
-  for (const x of [-20, 20]) {
+  for (const [bx, bz] of BOARDS) {
     const board = new THREE.Group();
-    board.position.set(x, 0, FENCE.front - 4);
+    board.position.set(bx, 0, bz);
     for (const side of [-1, 1]) {
       const leg = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.2, 0.3), wood);
       leg.position.set(side * 1.9, 1.6, 0);
@@ -412,29 +259,6 @@ export function addScenery(scene: THREE.Scene): Scenery {
   dock.position.set(POND.x - 1, 0, POND.z + POND.r - 1.2);
   scene.add(casts(dock));
 
-  // Cottage: walls, a red roof, a door, windows and a chimney.
-  const cottage = new THREE.Group();
-  const walls = new THREE.Mesh(new THREE.BoxGeometry(7, 4, 5.5), lambert(0xf3e6c8));
-  walls.position.y = 2;
-  const roof = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 4.4, 3, 4, 1).rotateY(Math.PI / 4), lambert(0xd9534f));
-  roof.scale.set(1.25, 1, 1);
-  roof.position.y = 5.5;
-  const door = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.1, 0.1), darkWood);
-  door.position.set(0, 1.05, 2.78);
-  const windowMat = new THREE.MeshLambertMaterial({ color: 0xbfe6ff, emissive: 0x335577 });
-  for (const wx of [-2.2, 2.2]) {
-    const win = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.1, 0.1), windowMat);
-    win.position.set(wx, 2.4, 2.78);
-    cottage.add(win);
-  }
-  const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.8, 2, 0.8), lambert(0x9a8f88));
-  chimney.position.set(1.8, 6, -0.8);
-  cottage.add(walls, roof, door, chimney);
-  cottage.position.set(COTTAGE.x, 0, COTTAGE.z);
-  cottage.rotation.y = -0.35;
-  scene.add(casts(cottage));
-  walls.receiveShadow = true;
-
   // Windmill with turning sails.
   const windmill = new THREE.Group();
   const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.8, 11, 8).translate(0, 5.5, 0), lambert(0xeee3d0));
@@ -457,13 +281,15 @@ export function addScenery(scene: THREE.Scene): Scenery {
   scene.add(casts(windmill));
 
   // Scattered props, instanced. `spot` finds a clear place, or null after a few tries.
+  // `minR` and `maxR` are distances out from the town's edge.
   const spot = (minR: number, maxR: number): [number, number] | null => {
-    for (let tries = 0; tries < 12; tries++) {
-      const a = rand() * Math.PI * 2;
-      const r = minR + Math.sqrt(rand()) * (maxR - minR);
-      const x = Math.cos(a) * r;
-      const z = Math.sin(a) * r - 10;
-      if (!keepClear(x, z)) return [x, z];
+    const hx = (TOWN.maxX - TOWN.minX) / 2 + maxR;
+    const hz = (TOWN.maxZ - TOWN.minZ) / 2 + maxR;
+    for (let tries = 0; tries < 20; tries++) {
+      const x = CENTER.x + range(-hx, hx);
+      const z = CENTER.z + range(-hz, hz);
+      const d = fromTown(x, z);
+      if (d >= minR && d <= maxR && !keepClear(x, z)) return [x, z];
     }
     return null;
   };
@@ -509,21 +335,19 @@ export function addScenery(scene: THREE.Scene): Scenery {
   })();
   const pines: [number, number, number][] = [];
   const rounds: [number, number, number][] = [];
-  for (let i = 0; i < 190; i++) {
-    const at = spot(20, 200);
+  for (let i = 0; i < 170; i++) {
+    const at = spot(10, 170);
     if (!at) continue;
     (rand() < 0.5 ? pines : rounds).push([at[0], at[1], range(0.8, 1.9)]);
   }
-  // A few clusters close to the base so the play area has some shade.
-  // Clusters just outside the fence, at its corners and along its sides, to frame the base.
   // Clusters around the town's edges, framing it.
   for (const [cx, cz] of [
-    [TOWN.minX - 8, TOWN.minZ + 4],
-    [TOWN.maxX + 8, TOWN.minZ + 4],
-    [TOWN.minX - 8, STREET_MID - 12],
-    [TOWN.minX - 8, TOWN.maxZ - 4],
-    [TOWN.maxX + 8, TOWN.maxZ - 4],
-    [-4, TOWN.minZ - 10],
+    [TOWN.minX - 7, TOWN.minZ + 4],
+    [TOWN.maxX + 7, TOWN.minZ + 4],
+    [TOWN.minX - 7, 40],
+    [TOWN.minX - 7, TOWN.maxZ - 4],
+    [TOWN.maxX + 7, TOWN.maxZ - 4],
+    [8, TOWN.minZ - 9],
   ] as const) {
     for (let k = 0; k < 4; k++) {
       const x = cx + range(-4, 4);
@@ -553,20 +377,20 @@ export function addScenery(scene: THREE.Scene): Scenery {
   leaves(roundGeo, rounds, [0x4caf50, 0x5cbf4a, 0x43a047, 0x7cc943, 0xffa3c4, 0xf6a04d, 0x4caf50, 0x5cbf4a]);
 
   // Ground cover: flowers, grass tufts, mushrooms, rocks and bushes.
-  scatter(new THREE.IcosahedronGeometry(0.17, 0), lambert(0xffffff), 1100, 6, 100, () => ({
+  scatter(new THREE.IcosahedronGeometry(0.17, 0), lambert(0xffffff), 450, 4, 80, () => ({
     y: 0.24,
     scale: new THREE.Vector3(1, 1, 1),
     color: pick(flowerColors),
   }));
-  scatter(new THREE.ConeGeometry(0.14, 0.6, 4).translate(0, 0.3, 0), sway(lambert(0xffffff), 0.12), 1600, 6, 120, () => {
+  scatter(new THREE.ConeGeometry(0.14, 0.6, 4).translate(0, 0.3, 0), sway(lambert(0xffffff), 0.12), 800, 4, 100, () => {
     const s = range(0.7, 1.5);
     return { y: 0, scale: new THREE.Vector3(s, s, s), color: pick([0x3f8f45, 0x4f9e3c, 0x5aa83e, 0x37804a]) };
   });
   const capGeo2 = new THREE.SphereGeometry(0.32, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 0.32, 0);
   const stemGeo = new THREE.CylinderGeometry(0.09, 0.12, 0.34, 6).translate(0, 0.17, 0);
   const mushrooms: [number, number, number][] = [];
-  for (let i = 0; i < 50; i++) {
-    const at = spot(8, 70);
+  for (let i = 0; i < 18; i++) {
+    const at = spot(6, 60);
     if (at) mushrooms.push([at[0], at[1], range(0.7, 1.6)]);
   }
   for (const [geo, color] of [
@@ -580,11 +404,11 @@ export function addScenery(scene: THREE.Scene): Scenery {
     });
     scene.add(mesh);
   }
-  scatter(new THREE.IcosahedronGeometry(1, 0), lambert(0xffffff), 80, 8, 150, () => {
+  scatter(new THREE.IcosahedronGeometry(1, 0), lambert(0xffffff), 45, 8, 130, () => {
     const s = range(0.3, 1.6);
     return { y: 0.15 * s, scale: new THREE.Vector3(s, s * 0.6, s * range(0.8, 1.2)), color: pick([0x9aa0a8, 0xa9a39a, 0x8c949e]) };
   }, true);
-  scatter(new THREE.IcosahedronGeometry(1, 1), sway(lambert(0xffffff), 0.03), 80, 10, 130, () => {
+  scatter(new THREE.IcosahedronGeometry(1, 1), sway(lambert(0xffffff), 0.03), 45, 6, 110, () => {
     const s = range(0.8, 1.6);
     return { y: 0.5 * s, scale: new THREE.Vector3(s * 1.2, s, s), color: pick([0x3e9a4e, 0x47a84f, 0x358a49]) };
   }, true);
@@ -621,7 +445,7 @@ export function addScenery(scene: THREE.Scene): Scenery {
   const wingGeo = new THREE.BufferGeometry();
   wingGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0.32, 0, 0.18, 0.28, 0, -0.2], 3));
   wingGeo.computeVertexNormals();
-  const butterflies = Array.from({ length: 14 }, (_, i) => {
+  const butterflies = Array.from({ length: 8 }, (_, i) => {
     const mat = new THREE.MeshBasicMaterial({ color: pick([0xffd23f, 0xff7ab8, 0xffffff, 0x7fc8ff, 0xff9f43]), side: THREE.DoubleSide });
     const group = new THREE.Group();
     const left = new THREE.Mesh(wingGeo, mat);
@@ -633,8 +457,9 @@ export function addScenery(scene: THREE.Scene): Scenery {
       group,
       left,
       right,
-      cx: range(-13, 13),
-      cz: range(-32, 13),
+      // Over the lane and the hub.
+      cx: range(-20, 8),
+      cz: range(-15, 95),
       r: range(1.5, 4),
       speed: range(0.3, 0.6) * (i % 2 ? 1 : -1),
       phase: rand() * Math.PI * 2,

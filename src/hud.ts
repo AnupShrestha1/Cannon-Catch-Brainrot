@@ -286,6 +286,12 @@ export class Hud {
     this.chuteBtn.classList.toggle('pulse', on && pulse);
   }
 
+  /** The parachute alarm: the screen's edges pulse red and the parachute button bounces and glows. */
+  chuteAlarm(on: boolean): void {
+    document.body.classList.toggle('chute-alarm', on);
+    this.chuteBtn.classList.toggle('alarm', on);
+  }
+
   /** The dock (Upgrades, Bag, Book) and the Launch button, each pulsing when it's the next step. */
   showBaseButtons(
     dock: boolean,
@@ -467,11 +473,11 @@ export class Hud {
   }
 
   /** How many players are on the server, and its name. */
-  setOnline(count: number, server: string): void {
+  setOnline(count: number, server: string, capacity: number): void {
     const key = `${count}|${server}`;
     if (key === this.onlineKey) return;
     this.onlineKey = key;
-    this.onlineEl.textContent = `${server} · ${count}/6 online`;
+    this.onlineEl.textContent = `${server} · ${count}/${capacity} online`;
   }
 
   /** Places one level-up button per item, reusing them frame to frame, and hides the rest. */

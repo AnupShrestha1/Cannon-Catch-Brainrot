@@ -1,21 +1,24 @@
-// A fake multiplayer server, simulating a real lobby of this kind of game. The other five plots are played by
+// A fake multiplayer server, simulating a real lobby of this kind of game. The other seven plots are played by
 // bots that use the real game rules (the same pull, merge, upgrade and level code and the same costs as the
 // player) and behave like people:
 //
 // - They move like players: they run with momentum, curve through corners, turn at a limited rate, jump a lot
 //   while running, look around when they stop, step around each other and get themselves unstuck.
 // - The lobby lives: you usually join with three to five others; people leave after realistic sessions (often
-//   going AFK first), and matchmaking fills a free slot within seconds to a minute. Newcomers spawn in the
-//   street and walk to their plot; some are brand new, most are returning with saved progress.
+//   going AFK first), and matchmaking fills a free slot within seconds to a minute. Newcomers spawn by the
+//   fountain at the end of the lane and walk to their plot; some are brand new, most return with saved progress.
+// - They're busy: they share the hub with you, so you see them queue for the cannon, dive in and get fired into
+//   the sky, crank the gacha machines, stir the cauldron and buy upgrades at the stall.
 // - They talk: speech bubbles over heads, short question-and-answer threads, hellos and goodbyes, reactions to
 //   big pulls, and comments when they visit someone's base (yours included).
 //
 // The game only talks to this through the shape a real server would have: snapshots of the other players (who,
 // which slot, where, doing what, what's on display, their stats), a stream of events (joins, leaves, big pulls,
-// new zones, chat), and a few messages from the local player (their stats, the plot they're visiting, likes, big
-// moments). Swapping in a real server means replacing this file, not the game.
+// new zones, chat, and actions on shared things: firing the cannon, spinning a machine, stirring the cauldron),
+// and a few messages from the local player (their stats, the plot they're visiting, likes, big moments, whether
+// they're in the cannon). Swapping in a real server means replacing this file, not the game.
 import { CHARGE, FLIGHT, GACHA, GEMS, MAX_ZONE, RARITIES, REBIRTH, TRACKS, ZONES, ECONOMY, launchHeight, zoneIndexAt } from './config';
-import { Base, MACHINE_FRONT, MERGER_FRONT, bumpSolids, floorWorld } from './base';
+import { Base, bumpSolids, floorWorld } from './base';
 import {
   buyUpgrade,
   expansionCost,
@@ -32,11 +35,28 @@ import {
   trackBoost,
   upgradeCost,
 } from './economy';
-import { FOUNTAIN, OWN_SLOT, SLOTS, STREET, fromPlot, gatePoint, plotAt, toPlot, type PlotSlot } from './layout';
+import {
+  CANNON_FOOT,
+  CAULDRON,
+  CAULDRON_FRONT,
+  FOUNTAIN,
+  HUB_EDGE,
+  LANE_END,
+  LANE_X,
+  OWN_SLOT,
+  SHOP_FRONT,
+  SLOTS,
+  fromPlot,
+  laneFront,
+  plotAt,
+  pullPad,
+  toPlot,
+  type PlotSlot,
+} from './layout';
 import { defaultSave, type Owned, type PadSlot, type Save } from './store';
 import type { Outfit } from './world';
 
-export type Pose = 'idle' | 'walk' | 'hidden' | 'up' | 'fall' | 'chute' | 'land';
+export type Pose = 'idle' | 'walk' | 'hidden' | 'dive' | 'up' | 'fall' | 'chute' | 'land';
 
 /** What a real server would send about another player, many times a second. */
 export interface RemotePlayer {
@@ -68,7 +88,11 @@ export interface RemotePlayer {
 }
 
 export interface ServerEvent {
-  kind: 'join' | 'leave' | 'pull' | 'merge' | 'zone' | 'rebirth' | 'chat';
+  kind: 'join' | 'leave' | 'pull' | 'merge' | 'zone' | 'rebirth' | 'chat' | 'act';
+  /** For 'act': someone used a shared thing (fired the cannon, spun gacha machine `tier`, stirred the cauldron). */
+  act?: 'fire' | 'spin' | 'stir';
+  tier?: number;
+  count?: number;
   name: string;
   text: string;
   /** CSS colour for the highlight, e.g. a rarity colour. */
@@ -86,8 +110,8 @@ export interface LocalPlayer {
   favorite: string;
 }
 
-/** Players in one server, the local player included. */
-export const CAPACITY = 6;
+/** Players in one server, the local player included: one per plot. */
+export const CAPACITY = SLOTS.length;
 
 const NAMES = [
   'Mia', 'Leo_77', 'PastaKing', 'Zoe', 'BrainrotBob', 'Luca', 'NinaNoodle', 'Kai', 'SkyDiver99', 'Ari',
@@ -110,7 +134,8 @@ const OUTFITS: Outfit[] = [
 const IDLE_CHAT = [
   'gg', 'this cannon is so op', 'storm layer is scary', 'super pulls are worth it fr', 'merging 10 commons rn',
   'perfect launch!!', 'lol', 'my hippo is lvl 5', 'the fountain is pretty', 'bruh i crashed', 'so close to legendary',
-  'who wants to see my base', 'brb', 'im so rich lol', 'just got cloud kingdom',
+  'who wants to see my base', 'brb', 'im so rich lol', 'just got cloud kingdom', 'wait for the cannon pls',
+  'the cosmic machine looks insane', 'shop guy waved at me lol', 'lucky machine is lucky fr',
 ];
 /** Questions, and answers another player gives a few seconds later. */
 const THREADS: [string, string[]][] = [
@@ -119,7 +144,8 @@ const THREADS: [string, string[]][] = [
   ['anyone wanna trade', ['no trading yet lol', 'trade what']],
   ['whats the best brainrot', ['frigorifero fenicottero 100%', 'the hippo with the helicopter']],
   ['how do u level up brainrots', ['click level up under them', 'wait for the xp bar then click']],
-  ['wheres the merge thing', ['purple pot next to ur cannon', 'right of the cannon']],
+  ['wheres the merge thing', ['purple pot behind the cannon', 'by the cannon, the bubbling pot']],
+  ['how do u unlock the other machines', ['fly higher, it says the height on top', 'reach the height on the sign']],
   ['how high can u go', ['storm layer at like 400m', 'idk 400 something']],
   ['what does rebirth do', ['more money forever', 'x1.5 income but u restart']],
 ];
@@ -140,8 +166,13 @@ const JUMP_SPEED = 9;
 const GRAVITY = 30;
 
 interface Flight {
-  phase: 'charge' | 'up' | 'down' | 'land';
+  phase: 'dive' | 'charge' | 'up' | 'down' | 'land';
   t: number;
+  /** Where the dive started, and where the run will land. */
+  fromX: number;
+  fromZ: number;
+  landX: number;
+  landZ: number;
   apex: number;
   tUp: number;
   vy: number;
@@ -175,6 +206,8 @@ interface Bot extends RemotePlayer {
   nextAfkIn: number;
   leaving: boolean;
   greetCooldown: number;
+  /** When it last went to the shop stall, so it doesn't run there for every coin. */
+  shopAt: number;
 }
 
 /** A pull lands on display if there's room or it beats a level-1 brainrot there; otherwise it stays in the backpack. */
@@ -212,20 +245,40 @@ function gemsFrom(apex: number, grab: number): number {
   return total;
 }
 
-/** Spends gems on the best tier it can, up to ten pulls; returns what it got. */
-function pullAll(save: Save): Owned[] {
+/**
+ * The machine to use now and how many pulls (10 when it can afford ten): the best unlocked tier it can afford,
+ * though mostly it saves up when a better machine is open but not yet affordable.
+ */
+function pickTier(save: Save): { index: number; count: number } | null {
+  for (let i = GACHA.length - 1; i >= 0; i--) {
+    const tier = GACHA[i];
+    if (!tierUnlocked(save, tier) || save.gems < tier.cost) continue;
+    const next = GACHA[i + 1];
+    if (next && tierUnlocked(save, next) && Math.random() < 0.8) return null;
+    return { index: i, count: save.gems >= tier.cost * 10 ? 10 : 1 };
+  }
+  return null;
+}
+
+/** Pulls a machine `count` times (as far as the gems go); returns what it got. */
+function pullTier(save: Save, index: number, count: number): Owned[] {
   const got: Owned[] = [];
-  for (let n = 0; n < 10; n++) {
-    const tier = [...GACHA].reverse().find((t) => tierUnlocked(save, t) && save.gems >= t.cost);
-    if (!tier) break;
-    // Once the Super pull is open, save up for it rather than spending on Basic.
-    if (tier.id === 'basic' && tierUnlocked(save, GACHA[1]) && Math.random() < 0.8) break;
-    const one = pull(save, tier);
+  for (let n = 0; n < count; n++) {
+    const one = pull(save, GACHA[index]);
     if (!one) break;
     got.push(one);
     display(save, one);
   }
   return got;
+}
+
+/** Spends gems the way a bot would, for a head start. */
+function pullAll(save: Save): void {
+  for (let n = 0; n < 20; n++) {
+    const choice = pickTier(save);
+    if (!choice) return;
+    pullTier(save, choice.index, 1);
+  }
 }
 
 /** Merges everything it can, bottom up; returns what it made that's still around. */
@@ -250,8 +303,8 @@ function mergeAll(save: Save): Owned[] {
   return made.filter((o) => save.pads.some((p) => p?.name === o.name) || save.inventory.includes(o));
 }
 
-/** Buys the cheapest things it can afford, up to `max` of them: upgrades, levels and slots. */
-function shop(save: Save, max: number): void {
+/** Buys the cheapest things it can afford, up to `max` of them: upgrades, levels and slots. Returns how many. */
+function shop(save: Save, max: number): number {
   for (let n = 0; n < max; n++) {
     const options: { cost: number; buy: () => void }[] = [];
     for (const track of TRACKS) {
@@ -275,10 +328,17 @@ function shop(save: Save, max: number): void {
       options.push({ cost: pads, buy: () => save.pads.push(...Array.from({ length: ECONOMY.padStep }, () => null)) });
     }
     const choice = options.filter((o) => o.cost <= save.coins).sort((a, b) => a.cost - b.cost)[0];
-    if (!choice) return;
+    if (!choice) return n;
     save.coins -= choice.cost;
     choice.buy();
   }
+  return max;
+}
+
+/** Whether a bot could buy anything right now. */
+function canShop(save: Save): boolean {
+  const copy = JSON.parse(JSON.stringify(save)) as Save;
+  return shop(copy, 1) > 0;
 }
 
 /** Plays `minutes` of the game offline, the way the economy simulator does, so a bot joins mid-progress. */
@@ -337,6 +397,8 @@ export class FakeServer {
   private later: { at: number; run: () => void }[] = [];
   private time = 0;
   private local: LocalPlayer = { name: 'You', income: 0, best: 0, favorite: '' };
+  /** The local player is in the cannon (or diving in): bots wait their turn. */
+  private cannonBusy = false;
   /** Lines said lately, so nobody repeats them for a while. */
   private recent: string[] = [];
 
@@ -364,6 +426,11 @@ export class FakeServer {
 
   get online(): number {
     return this.bots.length + 1;
+  }
+
+  /** The local player climbed into the cannon (or left it): bots queue while it's taken. */
+  setCannonBusy(busy: boolean): void {
+    this.cannonBusy = busy;
   }
 
   /** The local player's stats, for the leaderboards and for visitors to talk about. */
@@ -432,11 +499,12 @@ export class FakeServer {
     // Most players come back to saved progress; some are brand new. People already here have been playing.
     const returning = !joining || Math.random() < 0.65;
     if (returning) headStart(save, pick([3, 8, 15, 25, 40, 60, 90]));
-    // Newcomers appear in the street by the fountain and walk to their plot; people already here are home.
-    const a = rand(0, Math.PI * 2);
+    // Newcomers appear by the fountain at the end of the lane and walk to their plot; people already here are
+    // around their plot.
+    const a = rand(Math.PI * 1.1, Math.PI * 1.9);
     const [x, z] = joining
-      ? [FOUNTAIN.x + Math.cos(a) * (FOUNTAIN.r + rand(1, 2.5)), FOUNTAIN.z + Math.sin(a) * (FOUNTAIN.r + rand(1, 2.5))]
-      : fromPlot(slot, rand(-6, 6), rand(3, 8));
+      ? [FOUNTAIN.x + Math.cos(a) * (FOUNTAIN.r + rand(1.5, 3)), FOUNTAIN.z + Math.sin(a) * (FOUNTAIN.r + rand(1.5, 3))]
+      : fromPlot(slot, rand(-8, 8), rand(0.6, 3));
     const bot: Bot = {
       id: this.nextId++,
       name,
@@ -478,14 +546,13 @@ export class FakeServer {
       nextAfkIn: rand(240, 900),
       leaving: false,
       greetCooldown: 0,
+      shopAt: -999,
     };
     this.bots.push(bot);
     if (!joining) return;
     this.events.push({ kind: 'join', name, text: 'joined the game', at: [x, 1, z] });
-    // Walk home through the gate.
-    const [ox, oz] = gatePoint(slot, false);
-    const [ix, iz] = gatePoint(slot, true);
-    this.go(bot, [[ox, oz], [ix, iz], this.at(bot, rand(-5, 5), rand(4, 9))], () => (bot.wait = rand(0.5, 2)));
+    // Walk home up the lane.
+    this.goHome(bot);
     // A couple of people say hi.
     const others = this.bots.filter((b) => b !== bot && !b.afk).sort(() => Math.random() - 0.5);
     others.slice(0, Math.random() < 0.5 ? 1 : 2).forEach((other, i) => {
@@ -714,14 +781,23 @@ export class FakeServer {
     return fromPlot(bot.slotRef, lx, lz);
   }
 
-  /** Waypoints to a point in a plot, through the showcase entrance when that's needed. */
-  private route(bot: Bot, lx: number, lz: number, slot: PlotSlot = bot.slotRef): [number, number][] {
-    const here = plotAt(bot.x, bot.z);
-    const inHall = here === slot && toPlot(slot, bot.x, bot.z)[1] < -9;
-    const toHall = lz < -9;
+  /**
+   * Waypoints to a world point: out of the plot it's in to the lane, through the lane's mouth when crossing
+   * between the lane and the hub, and into the target's plot from the lane, so nobody walks through pedestals.
+   */
+  private route(bot: Bot, tx: number, tz: number): [number, number][] {
     const path: [number, number][] = [];
-    if (inHall !== toHall) path.push(fromPlot(slot, 0, -8), fromPlot(slot, 0, -10.5));
-    path.push(fromPlot(slot, lx, lz));
+    let cz = bot.z;
+    const add = (p: [number, number]) => {
+      if (cz < HUB_EDGE !== p[1] < HUB_EDGE) path.push([LANE_X + rand(-1.5, 1.5), HUB_EDGE - 1.5]);
+      path.push(p);
+      cz = p[1];
+    };
+    const from = plotAt(bot.x, bot.z);
+    const to = plotAt(tx, tz);
+    if (from && from !== to) add(laneFront(from, toPlot(from, bot.x, bot.z)[0]));
+    if (to && from !== to) add(laneFront(to, toPlot(to, tx, tz)[0]));
+    add([tx, tz]);
     return path;
   }
 
@@ -742,19 +818,81 @@ export class FakeServer {
     bot.arrive = then;
   }
 
-  /** What to do next: pull if it can afford one, merge if it can, otherwise launch, potter about, or visit. */
+  /**
+   * What to do next. Bots are busy: they pull when they can afford it, merge when they can, shop at the stall
+   * when there's something to buy, and otherwise mostly head for the cannon; now and then they admire their
+   * showcase, wander, or visit someone.
+   */
   private decide(bot: Bot): void {
     const s = bot.save;
-    shop(s, 3);
     if (s.cannon >= REBIRTH.cannonLevel && Math.random() < 0.25) {
       this.rebirth(bot);
       return;
     }
-    const tier = [...GACHA].reverse().find((t) => tierUnlocked(s, t) && s.gems >= t.cost);
-    if (tier) {
-      this.go(bot, this.route(bot, MACHINE_FRONT.x, MACHINE_FRONT.z), () => {
-        bot.wait = rand(1.4, 2.4);
-        const got = pullAll(s);
+    const choice = pickTier(s);
+    if (choice) {
+      this.usePullPad(bot, choice.index, choice.count);
+      return;
+    }
+    const mergeable = [0, 1, 2, 3, 4].some((r) => s.inventory.filter((o) => o.rarity === r).length >= (mergeNeed(r) ?? Infinity));
+    if (mergeable) {
+      this.go(bot, this.route(bot, CAULDRON_FRONT.x + rand(-0.4, 0.4), CAULDRON_FRONT.z + rand(-0.4, 0.4)), () => {
+        bot.wait = rand(1.2, 2);
+        bot.facing = Math.atan2(-(CAULDRON.x - bot.x), -(CAULDRON.z - bot.z));
+        this.events.push({ kind: 'act', name: bot.name, text: '', act: 'stir' });
+        const made = mergeAll(s);
+        const best = made.reduce<Owned | null>((a, b) => (!a || b.rarity > a.rarity ? b : a), null);
+        if (best && best.rarity >= 3) {
+          const r = RARITIES[best.rarity];
+          this.events.push({ kind: 'merge', name: bot.name, text: `merged ${withArticle(best.rarity)} ${best.name}!`, color: r.css });
+        }
+      });
+      return;
+    }
+    if (canShop(s)) {
+      // Off to the stall when it hasn't been for a while; otherwise it buys on the way (like the shop button).
+      if (this.time - bot.shopAt > 50) {
+        bot.shopAt = this.time;
+        this.go(bot, this.route(bot, SHOP_FRONT.x + rand(-0.3, 0.3), SHOP_FRONT.z + rand(-0.8, 0.8)), () => {
+          bot.wait = rand(1.5, 3);
+          bot.facing = -Math.PI / 2;
+          shop(s, 4);
+          if (Math.random() < 0.25) this.after(rand(0.5, 1.5), () => this.say(bot, pick(['ka-ching', 'cannon go brrr', 'upgrade time', 'ty shop guy'])));
+        });
+        return;
+      }
+      shop(s, 2);
+    }
+    const roll = Math.random();
+    if (roll < 0.62) {
+      this.goLaunch(bot);
+    } else if (roll < 0.74) {
+      // Admire something on display, from the side it faces.
+      const filled = s.pads.map((p, i) => (p ? i : -1)).filter((i) => i >= 0);
+      const pad = Base.padPosition(filled.length ? pick(filled) : 0);
+      const [x, z] = this.at(bot, pad.x + rand(-0.6, 0.6), pad.z < -5 ? -5.4 : -0.4);
+      this.go(bot, this.route(bot, x, z), () => (bot.wait = rand(2, 5)));
+    } else if (roll < 0.84) {
+      const [x, z] = this.at(bot, rand(-8, 8), rand(0.6, 3));
+      this.go(bot, this.route(bot, x, z), () => (bot.wait = rand(1.5, 4)));
+    } else if (roll < 0.92) {
+      this.stroll(bot);
+    } else {
+      this.visitSomeone(bot);
+    }
+  }
+
+  /** Over to a gacha machine's ×1 or ×10 pad, a spin, and the results. */
+  private usePullPad(bot: Bot, index: number, count: number): void {
+    const pad = pullPad(index, count === 10);
+    this.go(bot, this.route(bot, pad.x + rand(-0.3, 0.3), pad.z + rand(-0.3, 0.3)), () => {
+      // Face the machine and spin it; the results come when it stops.
+      bot.facing = Math.PI / 2;
+      bot.wait = count > 1 ? rand(2.6, 3.4) : rand(2, 2.8);
+      this.events.push({ kind: 'act', name: bot.name, text: '', act: 'spin', tier: index, count });
+      this.after(count > 1 ? 1.9 : 1.5, () => {
+        if (!this.bots.includes(bot)) return;
+        const got = pullTier(bot.save, index, count);
         const best = got.reduce<Owned | null>((a, b) => (!a || b.rarity > a.rarity ? b : a), null);
         if (best && best.rarity >= 3) {
           const r = RARITIES[best.rarity];
@@ -765,66 +903,58 @@ export class FakeServer {
           }
         }
       });
-      return;
-    }
-    const mergeable = [0, 1, 2, 3, 4].some((r) => s.inventory.filter((o) => o.rarity === r).length >= (mergeNeed(r) ?? Infinity));
-    if (mergeable) {
-      this.go(bot, this.route(bot, MERGER_FRONT.x, MERGER_FRONT.z), () => {
-        bot.wait = rand(1.2, 2);
-        const made = mergeAll(s);
-        const best = made.reduce<Owned | null>((a, b) => (!a || b.rarity > a.rarity ? b : a), null);
-        if (best && best.rarity >= 3) {
-          const r = RARITIES[best.rarity];
-          this.events.push({ kind: 'merge', name: bot.name, text: `merged ${withArticle(best.rarity)} ${best.name}!`, color: r.css });
-        }
-      });
-      return;
-    }
-    const roll = Math.random();
-    if (roll < 0.45) {
-      // To the cannon and up.
-      this.go(bot, this.route(bot, 0, 2.6), () => this.launch(bot));
-    } else if (roll < 0.6) {
-      // Admire something on display.
-      const filled = s.pads.map((p, i) => (p ? i : -1)).filter((i) => i >= 0);
-      const pad = Base.padPosition(filled.length ? pick(filled) : 0);
-      this.go(bot, this.route(bot, pad.x > 0 ? pad.x - 2.4 : pad.x + 2.4, pad.z), () => (bot.wait = rand(2, 5)));
-    } else if (roll < 0.74) {
-      // Potter about the plaza.
-      const a = rand(0, Math.PI * 2);
-      const r = rand(3.5, 8.5);
-      this.go(bot, this.route(bot, Math.cos(a) * r, Math.abs(Math.sin(a)) * r + 1), () => (bot.wait = rand(1.5, 4)));
-    } else if (roll < 0.84) {
-      this.stroll(bot);
-    } else {
-      this.visitSomeone(bot);
-    }
+    });
   }
 
-  /** Out into the street for a look around, and back. */
+  /** Down the lane to the cannon; if it's taken, wait nearby and try again. */
+  private goLaunch(bot: Bot): void {
+    const x = CANNON_FOOT.x + rand(-0.5, 0.5);
+    const z = CANNON_FOOT.z + rand(0, 0.6);
+    this.go(bot, this.route(bot, x, z), () => this.tryCannon(bot, 0));
+  }
+
+  private tryCannon(bot: Bot, tries: number): void {
+    const taken = this.cannonBusy || this.bots.some((b) => b !== bot && b.flight && (b.flight.phase === 'dive' || b.flight.phase === 'charge'));
+    if (!taken) {
+      this.launch(bot);
+      return;
+    }
+    if (tries > 6) {
+      this.goHome(bot);
+      return;
+    }
+    // Queue just behind the cannon, shuffling about.
+    if (tries === 0) {
+      const a = rand(-0.9, 0.9);
+      this.go(bot, [[Math.sin(a) * rand(3.5, 5), CANNON_FOOT.z + Math.cos(a) * rand(1.5, 3)]], () => this.tryCannon(bot, 1));
+      return;
+    }
+    bot.wait = rand(0.6, 1.4);
+    bot.arrive = () => this.tryCannon(bot, tries + 1);
+  }
+
+  /** A wander down the lane, round the fountain or about the hub, and back. */
   private stroll(bot: Bot): void {
-    const [ix, iz] = gatePoint(bot.slotRef, true);
-    const [ox, oz] = gatePoint(bot.slotRef, false);
-    let sx = rand(-STREET.halfLength + 6, STREET.halfLength - 6);
-    const sz = rand(STREET.near + 3, STREET.far - 3);
-    if (Math.hypot(sx - FOUNTAIN.x, sz - FOUNTAIN.z) < FOUNTAIN.r + 1) sx += FOUNTAIN.r * 2;
-    this.go(bot, [...this.route(bot, 0, 10), [ix, iz], [ox, oz], [sx, sz]], () => {
+    const r = Math.random();
+    const a = rand(0, Math.PI * 2);
+    const [x, z]: [number, number] =
+      r < 0.35
+        ? [FOUNTAIN.x + Math.cos(a) * (FOUNTAIN.r + rand(1.5, 4)), FOUNTAIN.z + Math.sin(a) * (FOUNTAIN.r + rand(1.5, 4))]
+        : r < 0.7
+          ? [LANE_X + rand(-3, 3), rand(HUB_EDGE + 2, LANE_END - 2)]
+          : [rand(-20, 6), rand(-14, 6)];
+    this.go(bot, this.route(bot, x, z), () => {
       bot.wait = rand(2, 5);
       bot.arrive = () => this.goHome(bot);
     });
   }
 
-  /** Over to someone else's base (often the local player's), a look around and maybe a comment, then home. */
+  /** Over to someone else's plot (often the local player's), a look round and maybe a comment, then home. */
   private visitSomeone(bot: Bot): void {
     const hosts = [...this.bots.filter((b) => b !== bot).map((b) => b.slotRef), SLOTS[OWN_SLOT], SLOTS[OWN_SLOT]];
     const host = pick(hosts);
-    const [ix, iz] = gatePoint(bot.slotRef, true);
-    const [ox, oz] = gatePoint(bot.slotRef, false);
-    const [hox, hoz] = gatePoint(host, false);
-    const [hix, hiz] = gatePoint(host, true);
-    const inside = Math.random() < 0.6 ? fromPlot(host, rand(-6, 6), rand(4, 9)) : fromPlot(host, rand(-1, 1), rand(-12, -20));
-    const viaHall = toPlot(host, inside[0], inside[1])[1] < -9 ? [fromPlot(host, 0, -8)] : [];
-    this.go(bot, [...this.route(bot, 0, 10), [ix, iz], [ox, oz], [hox, hoz], [hix, hiz], ...viaHall, inside], () => {
+    const [x, z] = fromPlot(host, rand(-8, 8), Math.random() < 0.6 ? rand(-0.8, 1.5) : -5.4);
+    this.go(bot, this.route(bot, x, z), () => {
       bot.wait = rand(3, 7);
       if (Math.random() < 0.6) {
         // Talk about the host's best brainrot, or just the base if there's nothing on show.
@@ -834,46 +964,67 @@ export class FakeServer {
         const lines = fav ? VISIT_COMMENTS : VISIT_COMMENTS.filter((l) => !l.includes('{fav}'));
         this.after(rand(0.5, 2), () => this.say(bot, pick(lines).replace('{fav}', fav)));
       }
-      bot.arrive = () => {
-        const out: [number, number][] = [...viaHall.reverse(), [hix, hiz], [hox, hoz]];
-        this.go(bot, out, () => this.goHome(bot));
-      };
+      bot.arrive = () => this.goHome(bot);
     });
   }
 
-  /** From the street back in through the gate to the plaza. */
+  /** Back to the front of its own plot. */
   private goHome(bot: Bot): void {
-    const [ox, oz] = gatePoint(bot.slotRef, false);
-    const [ix, iz] = gatePoint(bot.slotRef, true);
-    this.go(bot, [[ox, oz], [ix, iz], this.at(bot, rand(-5, 5), rand(4, 9))], () => (bot.wait = rand(1, 3)));
+    const [x, z] = this.at(bot, rand(-8, 8), rand(0.6, 2.5));
+    this.go(bot, this.route(bot, x, z), () => (bot.wait = rand(0.5, 2)));
   }
 
   // ---------------------------------------------------------------- flights
 
-  /** Into the cannon, a short charge, then the flight. */
+  /** A dive into the shared cannon, a short wait inside, then the shot. */
   private launch(bot: Bot): void {
-    const [x, z] = this.at(bot, 0, 0);
-    bot.x = x;
-    bot.z = z;
-    bot.y = MUZZLE_Y;
     bot.vx = bot.vz = 0;
     bot.jump = bot.jumpV = 0;
-    bot.pose = 'hidden';
     const roll = Math.random();
     const bonus = roll < 0.25 ? CHARGE.perfectBonus : roll < 0.65 ? CHARGE.greenBonus : 0;
     const apex = launchHeight(bot.save.cannon) * (1 + bonus);
     const tUp = FLIGHT.ascentTime(apex);
-    bot.flight = { phase: 'charge', t: rand(0.8, 1.8), apex, tUp, vy: 0, terminal: Math.max(FLIGHT.minTerminal, apex / (tUp * 0.9)), seed: rand(0, 10) };
+    bot.flight = {
+      phase: 'dive',
+      t: 0,
+      fromX: bot.x,
+      fromZ: bot.z,
+      landX: rand(-9, 9),
+      landZ: rand(3, 6),
+      apex,
+      tUp,
+      vy: 0,
+      terminal: Math.max(FLIGHT.minTerminal, apex / (tUp * 0.9)),
+      seed: rand(0, 10),
+    };
   }
 
   private fly(bot: Bot, dt: number): void {
     const f = bot.flight!;
     bot.speed = 0;
+    if (f.phase === 'dive') {
+      // A leap in an arc from the cannon's foot into the muzzle, head first.
+      f.t += dt;
+      const k = Math.min(1, f.t / 0.7);
+      bot.x = f.fromX * (1 - k);
+      bot.z = f.fromZ * (1 - k);
+      bot.y = (1 - k) * 0.1 + k * 3.6 + Math.sin(k * Math.PI) * 3;
+      bot.facing = 0;
+      bot.pose = 'dive';
+      if (k >= 1) {
+        f.phase = 'charge';
+        f.t = rand(0.5, 1.3);
+        bot.pose = 'hidden';
+        bot.y = MUZZLE_Y;
+      }
+      return;
+    }
     if (f.phase === 'charge' || f.phase === 'land') f.t -= dt;
     if (f.phase === 'charge') {
       if (f.t <= 0) {
         f.phase = 'up';
         f.t = 0;
+        this.events.push({ kind: 'act', name: bot.name, text: '', act: 'fire' });
       }
       return;
     }
@@ -882,17 +1033,19 @@ export class FakeServer {
       bot.chute = Math.max(0, bot.chute - dt * 2);
       if (f.t <= 0) {
         bot.flight = null;
-        bot.wait = 0.4;
+        bot.wait = rand(0.3, 1);
         this.landed(bot, f.apex);
+        // Often straight back to the cannon for another go.
+        bot.arrive = Math.random() < 0.45 && !pickTier(bot.save) ? () => this.goLaunch(bot) : () => this.goHome(bot);
       }
       return;
     }
-    let [lx, lz] = toPlot(bot.slotRef, bot.x, bot.z);
     if (f.phase === 'up') {
       f.t += dt;
       const k = Math.min(1, f.t / f.tUp);
       bot.y = MUZZLE_Y + (f.apex - MUZZLE_Y) * (1 - (1 - k) * (1 - k));
-      lx = Math.sin(f.t * 0.8 + f.seed) * 6;
+      bot.x = Math.sin(f.t * 0.8 + f.seed) * 6 * Math.min(1, f.t);
+      bot.z = -2;
       bot.pose = 'up';
       if (k >= 1) {
         f.phase = 'down';
@@ -900,20 +1053,20 @@ export class FakeServer {
       }
     } else {
       const chuteOpen = bot.y < Math.max(28, f.apex * 0.25);
-      const target = chuteOpen ? FLIGHT.chuteSpeed : f.terminal;
+      // Like the player's: a parachute opened high comes down faster.
+      const target = chuteOpen ? FLIGHT.chuteSpeed + Math.max(0, bot.y - 14) * 0.8 : f.terminal;
       f.vy += (target - f.vy) * Math.min(1, dt * (chuteOpen ? 3 : 1.2));
       bot.y -= f.vy * dt;
       bot.pose = chuteOpen ? 'chute' : 'fall';
       bot.chute = chuteOpen ? Math.min(1, bot.chute + dt * 3) : 0;
-      lz += (3.5 - lz) * Math.min(1, dt * 0.8);
-      lx += (lx * 0.6 - lx) * Math.min(1, dt * 0.5);
+      bot.z += (f.landZ - bot.z) * Math.min(1, dt * 0.8);
+      bot.x += (f.landX - bot.x) * Math.min(1, dt * 0.5);
       if (bot.y <= 0.05) {
-        bot.y = 0.04;
+        bot.y = 0.06;
         f.phase = 'land';
         f.t = 0.6;
       }
     }
-    [bot.x, bot.z] = fromPlot(bot.slotRef, lx, lz);
     bot.facing = 0;
   }
 

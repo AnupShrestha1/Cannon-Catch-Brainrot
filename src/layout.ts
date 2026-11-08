@@ -1,65 +1,103 @@
-// The town: plots for up to six players in two rows of three, facing each other across a shared street.
+// The town, as in the sketch: two columns of four plots facing each other across a central lane, with no
+// fences between neighbours, and a shared hub at the lane's end. Looking down the lane toward the hub, the
+// cannon, the merge cauldron and the upgrade shop are on the right, and the row of gacha machines is on the
+// left. Everyone uses the same cannon, cauldron, shop and machines; a plot is only its owner's showcase.
 //
-// Every plot is the same base (fence and gate, plaza, cannon, gacha machine, merge station, showcase), built
-// in plot space: cannon at the origin, gate at +z (FENCE.front), showcase down -z. This client always puts its
-// own plot at the world origin, so all of its gameplay, cameras and flights stay in plot space. The other
-// five plots belong to other players: today bots from the fake server (net.ts); with real multiplayer, the
-// server assigns each player a slot and every client renders the town turned so its own slot sits at the
-// origin (toPlot and fromPlot convert between a plot's space and the world).
+// World frame: the shared cannon sits at the origin and fires straight up (flights run in the plane z = 0,
+// seen from +z), so flights and their cameras never move. The lane runs along +z from the hub. A plot is
+// built in its own space: origin at the middle of its lane edge, +z toward the lane, the showcase down -z.
+// toPlot and fromPlot convert between a plot's space and the world.
 
-/** The fence around one plot, in plot space; the gate is a gap in the front fence. */
-export const FENCE = { x: 17, front: 17, back: -38, gate: 4 };
-
-/** Plots sit this far apart along a row (fence width 34 plus a 6 m gap for the leaderboard boards). */
-export const PLOT_SPACING = 40;
-
-/** The street between the two rows, as world z from the near row's gate to the far row's gate. */
-export const STREET = { near: FENCE.front, far: FENCE.front + 20, halfLength: PLOT_SPACING * 1.5 + 2 };
-export const STREET_MID = (STREET.near + STREET.far) / 2;
-/** The fountain at the street's centre, and how close the player can get to it. */
-export const FOUNTAIN = { x: 0, z: STREET_MID, r: 4.3 };
+/** The lane's centre line (x) and half its width. */
+export const LANE_X = -14;
+export const LANE_HALF = 4;
+/** Where the hub ends and the lane and plots begin (z), and the hub's back edge. */
+export const HUB_EDGE = 10;
+export const HUB_BACK = -24;
+/** Plots sit this far apart along the lane, and reach this far back from it. */
+export const PLOT_PITCH = 22;
+export const PLOT_DEPTH = 11;
+/** Half a plot's length along the lane. */
+export const PLOT_HALF = 10.5;
+export const PLOTS_PER_SIDE = 4;
+/** Where the lane ends, and the fountain that closes it. */
+export const LANE_END = HUB_EDGE + PLOT_PITCH * PLOTS_PER_SIDE;
+export const FOUNTAIN = { x: LANE_X, z: LANE_END + 6, r: 4.4 };
 
 export interface PlotSlot {
   index: number;
-  /** World position of the plot's cannon, and the plot's turn about y (0 faces the street at +z). */
+  /** World position of the middle of the plot's lane edge, and the plot's turn about y (+z faces the lane). */
   x: number;
   z: number;
   rot: number;
 }
 
 /**
- * Six slots: the near row (0-2) faces +z, the far row (3-5) faces back across the street. In this client's
- * frame its own slot is OWN_SLOT, at the origin.
+ * Eight slots: 0-3 up the left of the lane (looking toward the hub, the gacha side), 4-7 up the right (the
+ * cannon side), nearest the hub first.
  */
-export const SLOTS: PlotSlot[] = [
-  { index: 0, x: -PLOT_SPACING, z: 0, rot: 0 },
-  { index: 1, x: 0, z: 0, rot: 0 },
-  { index: 2, x: PLOT_SPACING, z: 0, rot: 0 },
-  { index: 3, x: -PLOT_SPACING, z: STREET.far + FENCE.front, rot: Math.PI },
-  { index: 4, x: 0, z: STREET.far + FENCE.front, rot: Math.PI },
-  { index: 5, x: PLOT_SPACING, z: STREET.far + FENCE.front, rot: Math.PI },
+export const SLOTS: PlotSlot[] = [];
+for (let k = 0; k < PLOTS_PER_SIDE; k++) {
+  SLOTS.push({ index: k, x: LANE_X - LANE_HALF, z: HUB_EDGE + PLOT_PITCH * (k + 0.5), rot: Math.PI / 2 });
+}
+for (let k = 0; k < PLOTS_PER_SIDE; k++) {
+  SLOTS.push({ index: PLOTS_PER_SIDE + k, x: LANE_X + LANE_HALF, z: HUB_EDGE + PLOT_PITCH * (k + 0.5), rot: -Math.PI / 2 });
+}
+
+/** The slot this client owns. A server will assign this; until then it's the first plot on the cannon side. */
+export const OWN_SLOT = PLOTS_PER_SIDE;
+
+// ---------------------------------------------------------------- the hub
+
+/** The cannon stands at the origin; this is where players step up to it. */
+export const CANNON_FOOT = { x: 0, z: 2.6 };
+/** The merge cauldron, and the platform in front of it where players stand to use it. */
+export const CAULDRON = { x: 11, z: -8, r: 1.8 };
+export const CAULDRON_FRONT = { x: 8.2, z: -5.6 };
+/** The upgrade shop's stall (centre, half width and half depth; it faces -x) and the mat in front of its counter. */
+export const SHOP = { x: 14, z: 6, halfW: 3.2, halfD: 2.2 };
+export const SHOP_FRONT = { x: 9.6, z: 6 };
+/** The gacha machines stand in a row along the left of the hub, facing the lane's mouth (+x). */
+export const MACHINE_X = LANE_X - 13;
+export const MACHINE_STEP = 6.5;
+/** Radius of each pull pad in front of a machine. */
+export const PAD_RADIUS = 1.05;
+/** The two leaderboards, at the back of the hub behind the cannon. */
+export const BOARDS: [number, number][] = [
+  [-6, HUB_BACK + 4],
+  [6, HUB_BACK + 4],
 ];
 
-/** The slot this client owns. A server will assign this; until then it's the middle of the near row. */
-export const OWN_SLOT = 1;
+/** Machine i (0 = Basic, nearest the lane): where it stands. */
+export function machineAt(i: number): { x: number; z: number } {
+  return { x: MACHINE_X, z: HUB_EDGE - 5 - i * MACHINE_STEP };
+}
 
-/** The world area the town covers (all six plots and the street), for keeping scenery out. */
+/** The two pull pads in front of machine i: ×1 nearer the lane, ×10 further along. */
+export function pullPad(i: number, ten: boolean): { x: number; z: number } {
+  const m = machineAt(i);
+  return { x: m.x + 3.6, z: m.z + (ten ? -1.35 : 1.35) };
+}
+
+// ---------------------------------------------------------------- the town's extent
+
+/** The world area the town covers (hub, plots, lane and fountain), for keeping scenery out. */
 export const TOWN = {
-  minX: -PLOT_SPACING - FENCE.x,
-  maxX: PLOT_SPACING + FENCE.x,
-  minZ: FENCE.back,
-  maxZ: STREET.far + FENCE.front - FENCE.back,
+  minX: MACHINE_X - 6,
+  maxX: SHOP.x + SHOP.halfD + 6,
+  minZ: HUB_BACK - 2,
+  maxZ: FOUNTAIN.z + FOUNTAIN.r + 4,
 };
 
-/** Where anyone can walk: the whole town. Fences only open at the gates. */
+/** Where anyone can walk. There are no fences: only things that stand on the ground are solid. */
 export const WALK = {
-  minX: -STREET.halfLength,
-  maxX: STREET.halfLength,
+  minX: TOWN.minX + 1,
+  maxX: TOWN.maxX - 1,
   minZ: TOWN.minZ + 1,
   maxZ: TOWN.maxZ - 1,
 };
 
-/** World → plot space for a slot (cannon at the origin, gate at +z). */
+/** World → plot space for a slot. */
 export function toPlot(slot: PlotSlot, x: number, z: number): [number, number] {
   const dx = x - slot.x;
   const dz = z - slot.z;
@@ -75,58 +113,21 @@ export function fromPlot(slot: PlotSlot, lx: number, lz: number): [number, numbe
   return [slot.x + lx * c + lz * s, slot.z - lx * s + lz * c];
 }
 
-/** The slot whose fenced plot contains a world point, or null in the street and the gaps between plots. */
+/** The slot whose showcase contains a world point, or null in the lane and the hub. */
 export function plotAt(x: number, z: number): PlotSlot | null {
   for (const slot of SLOTS) {
     const [lx, lz] = toPlot(slot, x, z);
-    if (Math.abs(lx) < FENCE.x && lz < FENCE.front && lz > FENCE.back) return slot;
+    if (Math.abs(lx) < PLOT_HALF && lz < 0.3 && lz > -PLOT_DEPTH) return slot;
   }
   return null;
 }
 
-/** A plot's gate, just inside (in = true) or just outside it, in world space. */
-export function gatePoint(slot: PlotSlot, inside: boolean): [number, number] {
-  return fromPlot(slot, 0, FENCE.front + (inside ? -1.2 : 2));
+/** A point in the lane just in front of a plot, level with a spot along it. */
+export function laneFront(slot: PlotSlot, lx = 0): [number, number] {
+  return fromPlot(slot, Math.max(-PLOT_HALF + 1, Math.min(PLOT_HALF - 1, lx)), 2);
 }
 
-/**
- * Keeps a step inside the town and stops it crossing any plot's fence except through its gate, from the
- * street. Each plot's fence is checked in that plot's own space, so the far row (turned to face back across
- * the street) works the same as the near one.
- */
-export function fenceStep(fromX: number, fromZ: number, x: number, z: number): [number, number] {
-  x = Math.min(WALK.maxX, Math.max(WALK.minX, x));
-  z = Math.min(WALK.maxZ, Math.max(WALK.minZ, z));
-  const margin = 0.6;
-  for (const slot of SLOTS) {
-    const [fx, fz] = toPlot(slot, fromX, fromZ);
-    let [lx, lz] = toPlot(slot, x, z);
-    const wasInside = Math.abs(fx) < FENCE.x && fz < FENCE.front && fz > FENCE.back;
-    const near = Math.abs(lx) < FENCE.x + margin && lz < FENCE.front + margin && lz > FENCE.back - margin;
-    if (!wasInside && !near) continue;
-    if (wasInside) {
-      // Inside a plot: the side and back fences hold, and the front one does except at the gate.
-      lx = Math.min(FENCE.x - margin, Math.max(-FENCE.x + margin, lx));
-      lz = Math.max(FENCE.back + margin, lz);
-      if (lz > FENCE.front - margin && Math.abs(lx) > FENCE.gate - margin) lz = FENCE.front - margin;
-    } else {
-      // Outside: a plot can only be entered through its gate, from the street.
-      const throughGate = Math.abs(lx) < FENCE.gate - margin && Math.abs(fx) < FENCE.gate && fz > lz - 1;
-      if (!throughGate) {
-        if (fz >= FENCE.front + margin) lz = FENCE.front + margin;
-        else if (fz <= FENCE.back - margin) lz = FENCE.back - margin;
-        else lx = fx < 0 ? Math.min(lx, -FENCE.x - margin) : Math.max(lx, FENCE.x + margin);
-      }
-    }
-    [x, z] = fromPlot(slot, lx, lz);
-  }
-  // The fountain in the middle of the street is solid.
-  const dx = x - FOUNTAIN.x;
-  const dz = z - FOUNTAIN.z;
-  const d = Math.hypot(dx, dz);
-  if (d < FOUNTAIN.r) {
-    const k = d > 0.001 ? FOUNTAIN.r / d : 1;
-    return [FOUNTAIN.x + (d > 0.001 ? dx : FOUNTAIN.r) * k, FOUNTAIN.z + dz * k];
-  }
-  return [x, z];
+/** Keeps a step inside the town; everything solid is handled by bumpSolids. */
+export function walkStep(x: number, z: number): [number, number] {
+  return [Math.min(WALK.maxX, Math.max(WALK.minX, x)), Math.min(WALK.maxZ, Math.max(WALK.minZ, z))];
 }

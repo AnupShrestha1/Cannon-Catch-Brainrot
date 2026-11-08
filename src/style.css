@@ -2653,3 +2653,51 @@ button.primary,
     transform: translate(-3px, 2px);
   }
 }
+
+/* ---------------------------------------------------------------- parachute alarm */
+
+/* The screen's edges pulse red until the parachute opens. */
+body.chute-alarm::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  box-shadow: inset 0 0 90px 24px rgba(255, 40, 70, 0.75);
+  animation: alarm-edge 0.32s ease-in-out infinite alternate;
+}
+
+/* The button squashes down and springs up big, again and again, with a glow ring rippling out. */
+#chuteBtn.alarm {
+  animation: alarm-bounce 0.32s cubic-bezier(0.3, 1.6, 0.5, 1) infinite alternate;
+  /* Grows toward the middle of the screen, not off its corner. */
+  transform-origin: 75% 75%;
+  box-shadow:
+    0 6px 0 var(--ink),
+    0 0 0 6px #fff,
+    0 0 36px 14px rgba(255, 60, 90, 0.9);
+  z-index: 5;
+}
+
+/* The coach's hand taps on top of the bouncing button. */
+#hand {
+  z-index: 7;
+}
+
+@keyframes alarm-edge {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes alarm-bounce {
+  from {
+    transform: scale(1.05, 0.95) rotate(-4deg);
+  }
+  to {
+    transform: scale(1.24, 1.28) rotate(4deg);
+  }
+}

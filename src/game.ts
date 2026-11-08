@@ -1,13 +1,28 @@
-// The game loop. A run goes charge → launch → ascent → apex → fall → parachute → landing → result, then
-// home to the showcase, where gems from the sky buy gacha pulls, brainrots on display earn coins, and coins
-// buy upgrades. The flight is scripted rather than simulated, so the apex hits launchHeight() exactly.
+// The game loop. A run goes dive into the shared cannon → aim → charge → launch → ascent → apex → fall →
+// parachute → landing, then the player is free in town: gems from the sky buy pulls at the hub's gacha
+// machines, brainrots on display in their plot earn coins, and coins buy upgrades at the shop stall. The
+// flight is scripted rather than simulated, so the apex hits launchHeight() exactly.
 import * as THREE from 'three';
 import { Sfx } from './audio';
-import { Base, CARPET_Z, MACHINE_FRONT, MERGER_FRONT, PLATFORM_RADIUS, bumpSolids, floorWorld } from './base';
+import { Base, PLATFORM_RADIUS, bumpSolids, floorWorld } from './base';
 import { animateShared } from './characters';
+import { Hub } from './hub';
 import { brainrotIcon } from './icons';
-import { OWN_SLOT, SLOTS, fenceStep, fromPlot, gatePoint, plotAt } from './layout';
-import { FakeServer, describePad } from './net';
+import {
+  CANNON_FOOT as FOOT,
+  CAULDRON_FRONT,
+  OWN_SLOT,
+  PAD_RADIUS,
+  SHOP_FRONT,
+  SLOTS,
+  fromPlot,
+  laneFront,
+  machineAt,
+  plotAt,
+  pullPad,
+  walkStep,
+} from './layout';
+import { CAPACITY, FakeServer, describePad } from './net';
 import { RemoteView } from './remote';
 import {
   CHARGE,
@@ -32,7 +47,6 @@ import {
   launchHeight,
   levelToReach,
   zoneIndexAt,
-  type GachaTier,
 } from './config';
 import {
   buyUpgrade,
@@ -124,11 +138,31 @@ const MUZZLE_Y = 3.2;
 const BODY_MID = 0.95;
 /** Depth the player drifts to while landing, clear of the cannon at z = 0. */
 const LANDING_Z = 3.5;
-/** Where the player waits in the showcase, just inside the entrance, and where they climb into the cannon. */
-const HOME_SPOT = new THREE.Vector3(CARPET_Z, 0, -12);
-const CANNON_FOOT = new THREE.Vector3(0, 0, 2.3);
-/** The base camera looks down the carpet, into the showcase. */
-const HOME_YAW = 0;
+/** This client's plot. */
+const OWN = SLOTS[OWN_SLOT];
+/** Where returning players start: in the lane in front of their plot, looking at it. */
+const HOME_SPOT = (() => {
+  const [x, z] = laneFront(OWN, 0);
+  return new THREE.Vector3(x, 0, z);
+})();
+const HOME_YAW = (() => {
+  const [x0, z0] = fromPlot(OWN, 0, 0);
+  const [x1, z1] = fromPlot(OWN, 0, -1);
+  return Math.atan2(-(x1 - x0), -(z1 - z0));
+})();
+/** Where players step up to the shared cannon, stand at the shop's counter, and use the cauldron. */
+const CANNON_FOOT = new THREE.Vector3(FOOT.x, 0, FOOT.z);
+const SHOP_SPOT = new THREE.Vector3(SHOP_FRONT.x, 0, SHOP_FRONT.z);
+const CAULDRON_SPOT = new THREE.Vector3(CAULDRON_FRONT.x, 0, CAULDRON_FRONT.z);
+/** Launching from further from the cannon than this teleports the player there. */
+const TELEPORT_RANGE = 5;
+/** Seconds of the comic dive into the cannon. */
+const DIVE_TIME = 0.95;
+/** How far the cannon swings either way while aiming (radians), and how long a swung shot keeps that line. */
+const AIM_TILT = 0.3;
+const AIM_HOLD = 0.9;
+/** Distance from the barrel's pivot to where the player sits in it. */
+const BARREL_REACH = 3;
 const WALK_SPEED = 9;
 /** Walking up within this distance of a slot's centre collects its coins (the pedestal itself is solid). */
 const COLLECT_RADIUS = 2.9;
@@ -138,8 +172,6 @@ const PLAYER_RADIUS = 0.45;
 const BUTTON_RANGE = 11;
 /** Radians the base camera turns per pixel dragged. */
 const ORBIT_SPEED = 0.006;
-/** Seconds the machine shakes before a pull's result shows. */
-const PULL_TIME = 1.1;
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
@@ -148,6 +180,16 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const damp = (rate: number, dt: number) => 1 - Math.exp(-rate * dt);
 /** Eases angle a toward b the short way round. */
 const lerpAngle = (a: number, b: number, t: number) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t;
+const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
+/** A ball dropped on the floor: falls, then two smaller bounces. */
+const bounceOut = (t: number) => {
+  const n = 7.5625;
+  const d = 2.75;
+  if (t < 1 / d) return n * t * t;
+  if (t < 2 / d) return n * (t -= 1.5 / d) * t + 0.75;
+  if (t < 2.5 / d) return n * (t -= 2.25 / d) * t + 0.9375;
+  return n * (t -= 2.625 / d) * t + 0.984375;
+};
 
 /** Distance from (cx, cy) to the segment a→b, so fast frames can't skip past a pickup. */
 function segmentDistance(ax: number, ay: number, bx: number, by: number, cx: number, cy: number): number {
@@ -164,6 +206,10 @@ export class Game {
   private camera = new THREE.PerspectiveCamera(60, 1, 0.1, 900);
   private env: Env;
   private base: Base;
+  /** The shared hub: cauldron, shop, gacha machines, fountain. */
+  private hub: Hub;
+  /** The best height the hub shows (machine locks): only catches up at the base, so unlocks play out there. */
+  private shownBest = 0;
   /** The (fake) multiplayer server, and the other players and plots drawn from it. */
   private server = new FakeServer();
   private remote: RemoteView;
@@ -245,9 +291,32 @@ export class Game {
   private guide: GuideRig;
   private guideTarget: THREE.Vector3 | null = null;
   private objTarget = new THREE.Vector3();
-  /** Seconds left of the machine's shake before the pending pull's result shows. */
+  /** Seconds left of the machine's spin before the pending pull's result shows. */
   private pulling = 0;
-  private pendingPull: { got: Owned[]; tier: GachaTier; isNew: boolean[] } | null = null;
+  private pendingPull: { got: Owned[]; index: number; isNew: boolean[] } | null = null;
+  /** Cannon aim while in it (-1 left to 1 right), the barrel's swing chasing it on a spring, and its speed. */
+  private aim = 0;
+  private aimShown = 0;
+  private aimVel = 0;
+  /** After a swung shot: seconds the flight keeps leaning the swung way, and where it leans to. */
+  private aimHold = 0;
+  private aimTarget = 0;
+  /** 1 as the cannon fires, easing to 0: the barrel kicks down and springs back. */
+  private recoil = 0;
+  /** Seconds into the dive into the cannon, or -1. */
+  private dive = -1;
+  /** 1 as the cannon swallows the player, easing to 0: the barrel bulges. */
+  private gulp = 0;
+  /** Pop-in after a teleport, and the pop out of the muzzle, easing from their start to 0. */
+  private appear = 0;
+  private popOut = 0;
+  /** The helmet dropping onto the player's head (seconds left), and whether it has clonked yet. */
+  private helmetDrop = 0;
+  private clonked = false;
+  /** The camera jumps straight to its place for one frame (after a teleport). */
+  private camSnap = false;
+  /** When the parachute alarm last beeped. */
+  private beepAt = 0;
   private screen = new THREE.Vector3();
   /** What to do when the current walk arrives. */
   private arrive: (() => void) | null = null;
@@ -281,15 +350,11 @@ export class Game {
     this.scene.background = this.sky;
     this.scene.fog = new THREE.Fog(0x8fd3ff, 90, 420);
     this.env = buildEnv(this.scene);
-    this.base = new Base(this.scene);
+    this.base = new Base(this.scene, OWN);
+    this.hub = new Hub(this.scene);
+    this.hub.onUnlock = (i) => this.onMachineUnlock(i);
+    this.shownBest = this.save.best;
     this.remote = new RemoteView(this.scene, this.server);
-    for (const slot of SLOTS) {
-      if (slot.index === OWN_SLOT) continue;
-      const cannon = this.env.cannon.clone();
-      cannon.position.set(slot.x, 0, slot.z);
-      cannon.rotation.y = slot.rot;
-      this.scene.add(cannon);
-    }
     this.player = makePlayer();
     this.player.group.traverse((o) => {
       if (o instanceof THREE.Mesh) o.castShadow = true;
@@ -384,11 +449,7 @@ export class Game {
     });
     onClick(hud.soundBtn, () => this.toggleMute());
     onClick(hud.tuneBtn, () => hud.tunePanel.classList.toggle('hidden'));
-    onClick(hud.upgradesBtn, () => {
-      this.rebirthArmed = false;
-      hud.openShop();
-      this.refreshShop();
-    });
+    onClick(hud.upgradesBtn, () => this.goShop());
     onClick(hud.launchBtn, () => {
       if (this.state === 'home') this.startBoarding();
     });
@@ -482,9 +543,11 @@ export class Game {
 
     switch (this.state) {
       case 'aim':
+        this.updateAim(dt);
         if (pressed) this.startCharge();
         break;
       case 'charging':
+        this.updateAim(dt);
         this.updateCharge(dt);
         if (!this.input.actionDown) this.launch();
         break;
@@ -503,10 +566,17 @@ export class Game {
         this.updateHome(dt, space, blocked);
         break;
       case 'boarding':
-        this.updateWalk(dt);
-        if (this.state === 'boarding') this.py = lerp(this.py, this.floorHere(), damp(20, dt));
+        if (this.dive >= 0) {
+          this.updateDive(dt);
+        } else {
+          this.updateWalk(dt);
+          if (this.state === 'boarding') this.py = lerp(this.py, this.floorHere(), damp(20, dt));
+        }
         break;
     }
+    // Machine locks catch up with the player's best only at the base, so an unlock plays out in front of them.
+    if (this.state === 'home' || this.state === 'aim' || this.state === 'boarding') this.shownBest = this.save.best;
+    this.server.setCannonBusy(this.state === 'aim' || this.state === 'charging' || this.dive >= 0);
 
     // Camera drags only mean something at the base; drop any made during a run.
     if (this.state !== 'home') this.input.consumeOrbitDx();
@@ -515,6 +585,7 @@ export class Game {
     this.updateGems(dt);
     this.updateBirds(dt);
     this.base.update(this.save, this.time, realDt);
+    this.hub.update(this.time, realDt, this.shownBest, this.save.gems, this.px, this.pz);
     this.updateServer(realDt);
     this.fx.update(dt);
     this.updateVisuals(realDt, dt);
@@ -563,10 +634,17 @@ export class Game {
     this.zoneShown = 0;
     this.runGems = 0;
     this.gemsLost = 0;
-    this.vx = 0;
-    this.targetX = this.px;
     this.input.consumeTouchDx();
     this.lane = FLIGHT.lane * clamp(this.camera.aspect, 0.55, 1);
+    // The flight sets off the way the cannon was swung, as if steered there, then the player's own steering
+    // takes over: a cannon aimed left feels like the mouse started on the left.
+    const swing = this.aimShown;
+    this.vx = swing * FLIGHT.steerSpeed * 0.8;
+    this.aimTarget = swing * this.lane * 0.75;
+    this.aimHold = Math.abs(swing) > 0.05 ? AIM_HOLD : 0;
+    this.targetX = this.aimHold > 0 ? this.aimTarget : this.px;
+    this.aim = 0;
+    this.recoil = 1;
     this.recordLabel.sprite.position.x = this.lane - 1;
     this.spawnRun(apex, v0, tUp);
     this.state = 'ascent';
@@ -578,7 +656,7 @@ export class Game {
     this.recordLine.position.y = this.save.best;
     this.recordLabel.set(`BEST ${Math.round(this.save.best)} m`);
 
-    const muzzle = this.tmp.set(0, MUZZLE_Y + 1.2, 0);
+    const muzzle = this.tmp.set(this.px, MUZZLE_Y + 1.2, 0);
     this.fx.burst(muzzle, { count: 26, color: 0xd9dde3, speed: 7, life: 1.1, size: 1.6, grow: 2.5, up: 2, drag: 2.5 });
     this.fx.burst(muzzle, { count: 10, color: 0xffb347, speed: 9, life: 0.35, size: 1.1 });
     if (bonus > 0) {
@@ -692,7 +770,10 @@ export class Game {
     } else if (this.chute === 'closed') {
       this.vy = Math.max(this.vy - this.gFall * dt, -this.vTerminal);
     } else {
-      const target = this.chute === 'open' ? -FLIGHT.chuteSpeed : -this.vTerminal * 0.55;
+      // A parachute opened high comes down fast (it would take ages otherwise), slowing to a gentle drift
+      // for the last stretch.
+      const drift = FLIGHT.chuteSpeed + Math.max(0, this.py - 14) * 0.8;
+      const target = this.chute === 'open' ? -Math.min(drift, Math.max(FLIGHT.chuteSpeed, this.vTerminal * 0.85)) : -this.vTerminal * 0.55;
       this.vy += (target - this.vy) * damp(FLIGHT.chuteDecel, dt);
     }
     this.py += this.vy * dt;
@@ -756,6 +837,12 @@ export class Game {
           break;
       }
       this.targetX = clamp(this.targetX, -lane, lane);
+      if (this.aimHold > 0) {
+        // Leaning the way the cannon was swung, fading into the player's own steering.
+        const k = this.aimHold / AIM_HOLD;
+        this.targetX = lerp(this.targetX, this.aimTarget, k * k);
+        this.aimHold = Math.max(0, this.aimHold - dt);
+      }
       const want = clamp((this.targetX - this.px) * 6, -maxSpeed, maxSpeed);
       this.vx += (want - this.vx) * damp(14, dt);
     }
@@ -881,21 +968,34 @@ export class Game {
     );
     const urgent = tau < 3.2;
     this.hud.showChute(true, urgent);
-    // A quick flash as the marker nears the end of the gold zone, just before the red crash zone.
-    if (!this.chuteWarned && tau < late + 0.6) {
-      this.chuteWarned = true;
-      this.hud.toast('PARACHUTE NOW!', 'bad big flash', undefined, 1200);
-      this.sfx.full();
+    // From a little before the gold zone: the alarm. The screen's edges pulse red, the button bounces, a hand
+    // taps it, and it beeps until the parachute opens.
+    if (tau < this.chuteWarnAt()) {
+      if (!this.chuteWarned) {
+        this.chuteWarned = true;
+        this.hud.toast('OPEN PARACHUTE!', 'bad big flash', undefined, 1500);
+        this.hud.chuteAlarm(true);
+      }
+      if (this.time - this.beepAt > 0.32) {
+        this.beepAt = this.time;
+        this.sfx.alarm();
+      }
     }
     if (urgent && this.save.flightNo <= TUTORIAL.wideChuteFlights) {
       this.hud.prompt(this.input.isTouch ? 'Tap PARACHUTE!' : 'Press Space or click to open your parachute!', true);
     }
   }
 
+  /** Seconds to impact when the parachute alarm starts: comfortably before the gold zone. */
+  private chuteWarnAt(): number {
+    return this.chuteLate() + CHUTE.perfectSpan + 0.9;
+  }
+
   private openChute(): void {
     const tau = this.secondsToImpact();
     const late = this.chuteLate();
     this.sfx.chute();
+    this.hud.chuteAlarm(false);
     this.hud.showChute(false);
     this.hud.showGround(null);
     this.hud.prompt('');
@@ -915,6 +1015,7 @@ export class Game {
   private land(): void {
     this.vx = 0;
     this.vy = 0;
+    this.hud.chuteAlarm(false);
     this.hud.showChute(false);
     this.hud.showGround(null);
     this.hud.prompt('');
@@ -1006,6 +1107,7 @@ export class Game {
   private goHome(): void {
     this.clearRun();
     this.hud.hideReveal();
+    this.hud.chuteAlarm(false);
     writeSave(this.save);
     this.state = 'home';
     this.walking = false;
@@ -1014,53 +1116,26 @@ export class Game {
     this.facing = 0;
   }
 
-  /** The gacha panel: each tier with its price and odds, and the last pull's results on top. */
-  private openGacha(last: { got: Owned[]; isNew: boolean[] } | null = null): void {
-    const s = this.save;
-    this.sfx.open();
-    const body: HTMLElement[] = [];
-    if (last) body.push(this.resultCards(last.got, last.isNew));
-    const have = document.createElement('p');
-    have.className = 'gem-line';
-    have.textContent = `You have ${formatCoins(s.gems)} gems`;
-    body.push(have);
-    for (const tier of GACHA) {
-      const el = document.createElement('div');
-      el.className = 'gacha-tier';
-      if (!tierUnlocked(s, tier)) el.classList.add('locked');
-      const head = document.createElement('h3');
-      const name = document.createElement('span');
-      name.textContent = tier.name;
-      const cost = document.createElement('span');
-      cost.className = 'cost';
-      cost.textContent = `${tier.cost} gems`;
-      head.append(name, cost);
-      const odds = document.createElement('div');
-      odds.className = 'odds';
-      for (const [rarity, chance] of tier.odds) {
-        const chip = document.createElement('span');
-        chip.style.setProperty('--c', RARITIES[rarity].css);
-        chip.textContent = `${RARITIES[rarity].name} ${+(chance * 100).toFixed(1)}%`;
-        odds.append(chip);
-      }
-      el.append(head, odds);
-      if (!tierUnlocked(s, tier)) {
-        const note = document.createElement('p');
-        note.textContent = `Unlocks once a flight reaches ${ZONES[zoneIndexAt(tier.unlockBest)].name}.`;
-        el.append(note);
-      }
-      body.push(el);
-    }
-    const buttons: { label: string; primary?: boolean; action?: () => void }[] = [];
-    for (const tier of GACHA) {
-      if (!tierUnlocked(s, tier)) continue;
-      buttons.push({ label: `${tier.name} · ${tier.cost}`, primary: s.gems >= tier.cost, action: () => this.startPull(tier, 1) });
-      if (s.gems >= tier.cost * 10) {
-        buttons.push({ label: `×10 · ${tier.cost * 10}`, primary: true, action: () => this.startPull(tier, 10) });
+  /** A machine the player is standing on a pull pad of, and which pad (×1 or ×10), or null. */
+  private pullPadUnder(): { index: number; ten: boolean } | null {
+    for (let i = 0; i < GACHA.length; i++) {
+      for (const ten of [false, true]) {
+        const p = pullPad(i, ten);
+        if (Math.hypot(p.x - this.px, p.z - this.pz) < PAD_RADIUS + 0.15) return { index: i, ten };
       }
     }
-    buttons.push({ label: 'Close' });
-    this.hud.showModal('Gacha machine', body, buttons);
+    return null;
+  }
+
+  /** A machine unlocking in front of the player: the padlock bursts off, with a chime and confetti. */
+  private onMachineUnlock(i: number): void {
+    const tier = GACHA[i];
+    const at = machineAt(i);
+    this.sfx.unlockChime();
+    this.hud.toast(`${tier.short} MACHINE UNLOCKED!`, 'gold big');
+    this.after(0.45, () =>
+      this.fx.burst(new THREE.Vector3(at.x + 1.6, 3.2, at.z), { count: 60, color: 0xffd84a, speed: 12, life: 1.2, size: 0.6, up: 6 }),
+    );
   }
 
   /** A row of brainrot cards, each marked as on display or in the backpack, and NEW when first pulled. */
@@ -1097,15 +1172,24 @@ export class Game {
     return row;
   }
 
-  /** Spends the gems, shakes the machine, and shows the results once the capsules pop out. */
-  private startPull(tier: GachaTier, count: number): void {
+  /**
+   * Pulls machine `index` `count` times, from its ×1 or ×10 pad: spends the gems, spins the machine, and shows
+   * the cards once it stops. No panel: the machine itself is the interface.
+   */
+  private pullMachine(index: number, count: number): void {
     const s = this.save;
+    const tier = GACHA[index];
     if (!tierUnlocked(s, tier)) {
-      this.hud.toast(`Reach Cloud Kingdom to unlock the ${tier.name}`, 'small');
+      this.hud.toast(`Fly to ${tier.unlockBest} m to unlock ${tier.short}`, 'small');
+      this.hub.refuse(index);
+      this.sfx.full();
       return;
     }
-    if (s.gems < tier.cost) {
-      this.hud.toast(`Need ${tier.cost - s.gems} more gems`, 'bad small');
+    const cost = tier.cost * count;
+    if (s.gems < cost) {
+      this.hud.toast(`Need ${formatCoins(cost - s.gems)} more gems`, 'bad small');
+      this.hub.refuse(index);
+      this.sfx.full();
       return;
     }
     const got: Owned[] = [];
@@ -1116,12 +1200,13 @@ export class Game {
     }
     const isNew = got.map((o) => this.addToBook(o.name));
     this.completeHint('pull');
+    this.completeHint(`tier-${tier.id}`);
     this.autoDisplay();
     writeSave(s);
-    // The machine shakes silently; the sound comes when the capsule opens.
-    this.base.shakeMachine();
-    this.pulling = PULL_TIME;
-    this.pendingPull = { got, tier, isNew };
+    // The machine spins with a soft ratchet; the big sound comes when the prize pops out.
+    this.pulling = this.hub.spin(index, count);
+    this.sfx.crank(this.pulling * 0.8);
+    this.pendingPull = { got, index, isNew };
   }
 
   private showPullResult(): void {
@@ -1129,7 +1214,7 @@ export class Game {
     this.pendingPull = null;
     if (!pending) return;
     const best = pending.got.reduce((a, b) => (b.rarity > a.rarity ? b : a));
-    this.fx.burst(Base.capsuleExit(this.tmp), {
+    this.fx.burst(this.hub.machineExit(pending.index, this.tmp), {
       count: 20 + best.rarity * 12,
       color: RARITIES[best.rarity].color,
       speed: 8 + best.rarity,
@@ -1143,13 +1228,13 @@ export class Game {
       const r = RARITIES[best.rarity];
       this.server.reportLocal({ kind: 'pull', text: `pulled ${r.name === 'Epic' ? 'an' : 'a'} ${r.name.toUpperCase()} ${best.name}!`, rarity: best.rarity });
     }
-    // Flip the cards, then back to the machine's panel so pulling again is one more click.
+    // Flip the cards, then straight back to the machine: still on the pad, pulling again is one more press.
     const title = pending.got.length > 1 ? `Tap the cards to flip them!` : 'Tap the card to flip it!';
     this.hud.revealCards(
       this.revealItems(pending.got, pending.isNew),
       title,
       (item) => this.onCardFlip(item),
-      () => this.openGacha(),
+      () => {},
       () => this.sfx.suspense(),
     );
   }
@@ -1212,7 +1297,7 @@ export class Game {
       }
       s.inventory.splice(k, 1);
       s.pads[pad] = { name: cand.name, rarity: cand.rarity, cash: 0, level: 1 };
-      this.fx.burst(Base.padPosition(pad, this.tmp).setY(1.2), {
+      this.fx.burst(this.padAt(pad, this.tmp).setY(1.2), {
         count: 16,
         color: RARITIES[cand.rarity].color,
         speed: 6,
@@ -1290,10 +1375,10 @@ export class Game {
     this.completeHint('merge');
     this.autoDisplay();
     writeSave(s);
-    this.base.stirMerger();
+    this.hub.stir();
     const best = owned.reduce((a, b) => (b.rarity > a.rarity ? b : a), owned[0]);
     if (best) {
-      this.fx.burst(Base.mergerExit(this.tmp), {
+      this.fx.burst(this.hub.mergerExit(this.tmp), {
         count: 24 + best.rarity * 10,
         color: RARITIES[best.rarity].color,
         speed: 8,
@@ -1322,7 +1407,7 @@ export class Game {
     const reopen = () => this.openBackpack(slot);
     if (!s.inventory.length) {
       const text = document.createElement('p');
-      text.textContent = 'Your backpack is empty. Pull the gacha machine beside the cannon to get brainrots.';
+      text.textContent = 'Your backpack is empty. Pull a gacha machine in the hub to get brainrots.';
       this.hud.showModal('Backpack', [text], [{ label: 'Close' }]);
       return;
     }
@@ -1411,7 +1496,7 @@ export class Game {
     s.pads[pad] = { name: got.name, rarity: got.rarity, cash: 0, level: 1 };
     this.base.sync(s);
     this.hud.closeModal();
-    this.fx.burst(Base.padPosition(pad, this.tmp).setY(1.2), {
+    this.fx.burst(this.padAt(pad, this.tmp).setY(1.2), {
       count: 20,
       color: RARITIES[got.rarity].color,
       speed: 6,
@@ -1495,7 +1580,7 @@ export class Game {
     this.py = lerp(this.py, this.floorHere(), damp(20, dt));
     this.save.pads.forEach((slot, i) => {
       if (!slot || slot.cash < 1) return;
-      const pad = Base.padPosition(i, this.tmp);
+      const pad = this.padAt(i, this.tmp);
       if (Math.hypot(pad.x - this.px, pad.z - this.pz) < COLLECT_RADIUS) this.collect(i);
     });
     if (space) {
@@ -1541,8 +1626,8 @@ export class Game {
       const k = damp(12, dt);
       this.walkVel.x += (wantX - this.walkVel.x) * k;
       this.walkVel.y += (wantZ - this.walkVel.y) * k;
-      // Fences hold except at the gates; the street joins the plots.
-      [this.px, this.pz] = fenceStep(this.px, this.pz, this.px + this.walkVel.x * dt, this.pz + this.walkVel.y * dt);
+      // No fences: neighbours' plots, the lane and the hub are all open; only things on the ground are solid.
+      [this.px, this.pz] = walkStep(this.px + this.walkVel.x * dt, this.pz + this.walkVel.y * dt);
       [this.px, this.pz] = bumpSolids(this.px, this.pz, PLAYER_RADIUS);
       this.stepping = this.walkVel.length() > 0.6;
     } else {
@@ -1560,13 +1645,17 @@ export class Game {
     this.server.update(realDt);
     this.remote.update(this.time, realDt, this.px, this.pz);
     for (const e of this.server.drain()) {
+      if (e.kind === 'act') {
+        this.onRemoteAct(e.act, e.tier ?? 0, e.count ?? 1);
+        continue;
+      }
       this.hud.feed(e.name, e.text, e.kind, e.color);
       // Players appear and vanish in a puff.
       if (e.at && (e.kind === 'join' || e.kind === 'leave')) {
         this.fx.burst(this.tmp.set(...e.at), { count: 22, color: 0xffffff, speed: 4, life: 0.9, size: 1.1, grow: 1.6, up: 2 });
       }
     }
-    this.hud.setOnline(this.server.online, this.server.name);
+    this.hud.setOnline(this.server.online, this.server.name, CAPACITY);
     this.boardTimer -= realDt;
     if (this.boardTimer <= 0) {
       this.boardTimer = 2;
@@ -1575,6 +1664,23 @@ export class Game {
         sorted.map((p) => ({ name: p.name, value: value(p), you: p.you }));
       this.env.drawBoard(0, 'TOP EARNERS', rows([...all].sort((a, b) => b.income - a.income), (p) => `${formatCoins(p.income)}/s`));
       this.env.drawBoard(1, 'TOP FLYERS', rows([...all].sort((a, b) => b.best - a.best), (p) => `${Math.round(p.best)} m`));
+    }
+  }
+
+  /** Another player used something shared: the cannon fires them off, a machine spins, the cauldron bubbles. */
+  private onRemoteAct(act: 'fire' | 'spin' | 'stir' | undefined, tier: number, count: number): void {
+    if (act === 'fire') {
+      const muzzle = this.tmp.set(0, MUZZLE_Y + 1.2, 0);
+      this.fx.burst(muzzle, { count: 18, color: 0xd9dde3, speed: 6, life: 1, size: 1.4, grow: 2.2, up: 2, drag: 2.5 });
+      this.fx.burst(muzzle, { count: 8, color: 0xffb347, speed: 8, life: 0.3, size: 1 });
+      // Heard across town, quieter with distance; not while the player is up in the sky.
+      const d = Math.hypot(this.px, this.pz);
+      if (this.state === 'home' || this.state === 'boarding') this.sfx.distantBoom(clamp(1 - d / 90, 0, 1) * 0.7);
+      if (this.state !== 'aim' && this.state !== 'charging') this.recoil = Math.max(this.recoil, 0.8);
+    } else if (act === 'spin') {
+      this.hub.spin(tier, count);
+    } else if (act === 'stir') {
+      this.hub.stir();
     }
   }
 
@@ -1615,20 +1721,9 @@ export class Game {
     return best;
   }
 
-  /** Whether the player stands on one of the platforms in another player's plot. */
-  private onVisitPlatform(): boolean {
-    if (this.visiting === null) return false;
-    const slot = SLOTS[this.visiting];
-    return [MACHINE_FRONT, MERGER_FRONT].some((f) => {
-      const [x, z] = fromPlot(slot, f.x, f.z);
-      return Math.hypot(x - this.px, z - this.pz) < PLATFORM_RADIUS;
-    });
-  }
-
   private visitLabel(): string | null {
     const owner = this.visiting !== null ? this.remote.ownerOf(this.visiting) : null;
     if (!owner) return null;
-    if (this.onVisitPlatform()) return `${owner.name}'s machine`;
     const near = this.visitPad();
     return near ? `View ${near.pad.name}` : null;
   }
@@ -1638,10 +1733,6 @@ export class Game {
     const owner = this.visiting !== null ? this.remote.ownerOf(this.visiting) : null;
     if (!owner) {
       this.hud.toast('Nobody owns this plot yet', 'small');
-      return;
-    }
-    if (this.onVisitPlatform()) {
-      this.hud.toast(`Only ${owner.name} can use their machines`, 'small');
       return;
     }
     const near = this.visitPad();
@@ -1665,7 +1756,7 @@ export class Game {
     ]);
   }
 
-  /** Height of the floor under the player: raised on the platforms, the showcase floor and its carpet. */
+  /** Height of the floor under the player: raised on the pads, the cauldron platform and showcase floors. */
   private floorHere(): number {
     return floorWorld(this.px, this.pz);
   }
@@ -1675,7 +1766,7 @@ export class Game {
     let best: number | null = null;
     let bestD = COLLECT_RADIUS;
     for (let i = 0; i < this.save.pads.length; i++) {
-      const at = Base.padPosition(i, this.tmp);
+      const at = this.padAt(i, this.tmp);
       const d = Math.hypot(at.x - this.px, at.z - this.pz);
       if (d < bestD) {
         bestD = d;
@@ -1688,7 +1779,7 @@ export class Game {
   /** A locked slot the player stands on, or null. */
   private lockedUnderfoot(): number | null {
     for (let i = this.save.pads.length; i < ECONOMY.maxPads; i++) {
-      const at = Base.padPosition(i, this.tmp);
+      const at = this.padAt(i, this.tmp);
       if (Math.hypot(at.x - this.px, at.z - this.pz) < COLLECT_RADIUS) return i;
     }
     return null;
@@ -1697,8 +1788,15 @@ export class Game {
   /** What E (or the action button) would do here, or null when there's nothing to do. */
   private actionLabel(): string | null {
     if (this.visiting !== null) return this.visitLabel();
-    if (this.onPlatform(MACHINE_FRONT)) return `Gacha · ${formatCoins(this.save.gems)} gems`;
-    if (this.onPlatform(MERGER_FRONT)) return 'Merge station';
+    const pull = this.pullPadUnder();
+    if (pull) {
+      const tier = GACHA[pull.index];
+      if (!tierUnlocked(this.save, tier)) return `${tier.short} · reach ${tier.unlockBest} m`;
+      const n = pull.ten ? 10 : 1;
+      return `Pull ${tier.short} ×${n} · ${formatCoins(tier.cost * n)} gems`;
+    }
+    if (this.onPlatform(CAULDRON_SPOT)) return 'Merge station';
+    if (this.atShop()) return 'Upgrades';
     const pad = this.padUnderfoot();
     if (pad !== null) {
       const slot = this.save.pads[pad];
@@ -1713,18 +1811,34 @@ export class Game {
     return Math.hypot(at.x - this.px, at.z - this.pz) < PLATFORM_RADIUS;
   }
 
+  /** Whether the player stands at the shop's counter. */
+  private atShop(): boolean {
+    return Math.hypot(SHOP_SPOT.x - this.px, SHOP_SPOT.z - this.pz) < 1.8;
+  }
+
+  /** Slot i of this client's showcase, in world space. */
+  private padAt(i: number, out: THREE.Vector3): THREE.Vector3 {
+    return Base.padWorld(OWN, i, out);
+  }
+
   private useHere(): void {
     if (this.state !== 'home') return;
     if (this.visiting !== null) {
       this.useVisit();
       return;
     }
-    if (this.onPlatform(MACHINE_FRONT)) {
-      this.openGacha();
+    const pull = this.pullPadUnder();
+    if (pull) {
+      this.pullMachine(pull.index, pull.ten ? 10 : 1);
       return;
     }
-    if (this.onPlatform(MERGER_FRONT)) {
+    if (this.onPlatform(CAULDRON_SPOT)) {
       this.openMerger();
+      return;
+    }
+    if (this.atShop()) {
+      this.hub.greet();
+      this.openShopPanel();
       return;
     }
     const pad = this.padUnderfoot();
@@ -1739,7 +1853,7 @@ export class Game {
       this.refreshShop();
       return;
     }
-    this.hud.toast('Walk up to a slot, or onto a platform, first', 'small');
+    this.hud.toast('Walk up to a slot, a machine pad, the cauldron or the shop first', 'small');
   }
 
   private collect(i: number): void {
@@ -1749,7 +1863,7 @@ export class Game {
     if (amount < 1) return;
     slot.cash -= amount;
     this.save.coins += amount;
-    const at = Base.padPosition(i, this.tmp2).setY(1.4);
+    const at = this.padAt(i, this.tmp2).setY(1.4);
     this.fx.burst(at, { count: 10, color: 0xffc21a, speed: 5, life: 0.6, size: 0.5, up: 5, gravity: 10 });
     this.floatAt(at, `+${formatCoins(amount)}`);
     this.sfx.coin();
@@ -1801,22 +1915,32 @@ export class Game {
     const empty = s.pads.findIndex((slot) => slot === null);
     const cashPad = s.pads.findIndex((slot) => slot !== null && slot.cash >= 1);
     if (this.wantsPullHint()) {
-      return { text: `Step on the pink platform by the gacha machine and ${press}`, target: MACHINE_FRONT };
+      const p = pullPad(0, false);
+      return { text: `Stand on the ×1 pad at the BASIC machine and ${press}`, target: this.objTarget.set(p.x, 0, p.z) };
+    }
+    // A machine just unlocked and affordable: point it out once.
+    const fresh = GACHA.findIndex((t, i) => i > 0 && tierUnlocked(s, t) && s.gems >= t.cost && !this.hasHint(`tier-${t.id}`));
+    if (fresh > 0 && this.hasHint('pull')) {
+      const p = pullPad(fresh, false);
+      return {
+        text: `The ${GACHA[fresh].short} machine is open: better odds! Stand on its ×1 pad and ${press}`,
+        target: this.objTarget.set(p.x, 0, p.z),
+      };
     }
     if (!this.hasHint('place') && s.inventory.length && empty >= 0) {
       return {
         text: `Walk up to the glowing slot and ${press} to display your brainrot`,
-        target: Base.padPosition(empty, this.objTarget),
+        target: this.padAt(empty, this.objTarget),
       };
     }
     if (!this.hasHint('collect') && cashPad >= 0) {
-      return { text: 'Walk up to the slot to collect its coins', target: Base.padPosition(cashPad, this.objTarget) };
+      return { text: 'Walk up to the slot to collect its coins', target: this.padAt(cashPad, this.objTarget) };
     }
     const mergeable = this.mergeableRarity();
     if (!this.hasHint('merge') && mergeable !== null) {
       return {
-        text: `Step on the purple platform by the merge station and ${press}: you have enough ${RARITIES[mergeable].name}s`,
-        target: MERGER_FRONT,
+        text: `Step on the purple platform by the cauldron and ${press}: you have enough ${RARITIES[mergeable].name}s`,
+        target: CAULDRON_SPOT,
       };
     }
     if (this.wantsUpgradeHint()) return { text: 'Upgrade your cannon!', target: null };
@@ -1825,7 +1949,7 @@ export class Game {
       const ready = s.pads.findIndex((slot) => slot !== null && levelReady(slot));
       return {
         text: 'Click Level up under your brainrot',
-        target: ready >= 0 ? Base.padPosition(ready, this.objTarget) : null,
+        target: ready >= 0 ? this.padAt(ready, this.objTarget) : null,
       };
     }
     if (s.flightNo < 6 && s.gems < basic.cost && !s.inventory.length && empty >= 0) {
@@ -1840,37 +1964,125 @@ export class Game {
     this.guideTarget = target;
   }
 
-  /** Walks to the cannon: out through the gate of whatever plot the player is visiting, and in through our own. */
+  /**
+   * Launch: from across the town the player teleports straight to the cannon; close by, they hop over. Either
+   * way they then dive in.
+   */
   private startBoarding(): void {
     this.state = 'boarding';
     this.guideTarget = null;
     this.hud.prompt('');
-    const stops: THREE.Vector3[] = [];
-    const own = SLOTS[OWN_SLOT];
-    const here = plotAt(this.px, this.pz);
-    if (here !== own) {
-      if (here) {
-        const [ix, iz] = gatePoint(here, true);
-        const [ox, oz] = gatePoint(here, false);
-        stops.push(new THREE.Vector3(ix, 0, iz), new THREE.Vector3(ox, 0, oz));
-      }
-      const [ox, oz] = gatePoint(own, false);
-      const [ix, iz] = gatePoint(own, true);
-      stops.push(new THREE.Vector3(ox, 0, oz), new THREE.Vector3(ix, 0, iz));
-    }
-    stops.push(CANNON_FOOT);
-    const next = () => {
-      const stop = stops.shift();
-      if (stop) this.walkTo(stop, stops.length ? next : null);
-    };
-    next();
+    const d = Math.hypot(this.px - CANNON_FOOT.x, this.pz - CANNON_FOOT.z);
+    // Behind the cannon counts as far: walking round it would look silly.
+    if (d > TELEPORT_RANGE || this.pz < CANNON_FOOT.z - 1) this.teleport(CANNON_FOOT, 0, () => this.startDive());
+    else if (d > 0.3) this.walkTo(CANNON_FOOT, () => this.startDive());
+    else this.startDive();
   }
 
-  /** Into the cannon, ready to charge. */
+  /**
+   * A puff of smoke where the player was, a sparkle where they arrive, and a squash-and-stretch pop-in. The
+   * camera cuts rather than flying across town.
+   */
+  private teleport(to: THREE.Vector3, yaw: number, then: () => void): void {
+    const from = this.tmp.set(this.px, this.py + 1, this.pz);
+    this.fx.burst(from, { count: 22, color: 0xffffff, speed: 5, life: 0.6, size: 1, grow: 1.5, up: 2 });
+    this.fx.burst(from, { count: 12, color: 0x9dfcff, speed: 9, life: 0.5, size: 0.4, up: 4 });
+    this.sfx.teleport();
+    this.px = to.x;
+    this.pz = to.z;
+    this.py = floorWorld(to.x, to.z);
+    this.walkVel.set(0, 0);
+    this.walking = false;
+    this.arrive = null;
+    this.facing = yaw;
+    this.camYaw = yaw;
+    this.camSnap = true;
+    this.appear = 0.4;
+    this.fx.burst(this.tmp.set(this.px, this.py + 1, this.pz), { count: 18, color: 0xfff3a8, speed: 6, life: 0.6, size: 0.45, up: 3 });
+    this.after(0.3, then);
+  }
+
+  /** Upgrades: off to the shop's counter (teleporting there from afar), a wave from the keeper, and the shop opens. */
+  private goShop(): void {
+    this.rebirthArmed = false;
+    if (this.state === 'aim' || this.state === 'charging') {
+      // Out of the cannon first.
+      this.state = 'home';
+      this.hud.showCharge(null);
+      this.hud.prompt('');
+      this.player.body.rotation.set(0, 0, 0);
+      this.aim = 0;
+    } else if (this.state !== 'home') {
+      return;
+    }
+    if (Math.hypot(this.px - SHOP_SPOT.x, this.pz - SHOP_SPOT.z) > 2.5) {
+      this.teleport(SHOP_SPOT, -Math.PI / 2, () => {
+        this.hub.greet();
+        this.openShopPanel();
+      });
+    } else {
+      this.hub.greet();
+      this.openShopPanel();
+    }
+  }
+
+  private openShopPanel(): void {
+    this.hud.openShop();
+    this.refreshShop();
+  }
+
+  private startDive(): void {
+    this.state = 'boarding';
+    this.walking = false;
+    this.px = CANNON_FOOT.x;
+    this.pz = CANNON_FOOT.z;
+    this.facing = 0;
+    this.dive = 0;
+  }
+
+  /** The dive's sound cues; the pose itself is drawn in updateVisuals. */
+  private updateDive(dt: number): void {
+    const before = this.dive;
+    this.dive += dt;
+    const crossed = (at: number) => before < at && this.dive >= at;
+    if (crossed(0.2)) this.sfx.whoop();
+    if (crossed(0.62)) {
+      this.sfx.gulp();
+      this.gulp = 1;
+    }
+    if (crossed(0.84)) this.fx.burst(this.tmp.set(0, MUZZLE_Y + 1.4, 0), { count: 10, color: 0xd9dde3, speed: 3, life: 0.5, size: 0.8, grow: 1.5 });
+    if (this.dive >= DIVE_TIME) {
+      this.dive = -1;
+      this.boardCannon();
+    }
+  }
+
+  /** Aiming in the cannon: the mouse, A/D or arrows, or a drag swings it a little left or right. */
+  private updateAim(dt: number): void {
+    switch (this.input.mode) {
+      case 'mouse':
+        this.aim = clamp((this.input.mouseX * 2 - 1) * 1.3, -1, 1);
+        break;
+      case 'touch':
+        this.aim = clamp(this.aim + this.input.consumeTouchDx() * (2.4 / window.innerWidth), -1, 1);
+        break;
+      case 'keys':
+        this.aim = clamp(this.aim + this.input.axis * dt * 2.2, -1, 1);
+        break;
+    }
+  }
+
+  /** Into the cannon, ready to charge: the player pops back up out of the muzzle and a helmet drops on. */
   private boardCannon(): void {
     this.px = this.prevX = 0;
     this.py = this.prevY = MUZZLE_Y;
     this.pz = 0;
+    this.dive = -1;
+    this.aim = 0;
+    this.popOut = 0.35;
+    this.helmetDrop = 0.7;
+    this.clonked = false;
+    this.hud.chuteAlarm(false);
     this.vx = this.vy = 0;
     this.targetX = 0;
     this.facing = 0;
@@ -1889,7 +2101,8 @@ export class Game {
     const howTo = this.input.isTouch
       ? 'Hold to charge, release to fire'
       : 'Hold Space or the mouse to charge, release to fire';
-    this.hud.prompt(this.save.flightNo < 2 ? howTo : 'Fire again!', true);
+    const aimTip = this.input.isTouch ? 'Drag to aim, hold to charge' : 'Aim with the mouse, hold to charge';
+    this.hud.prompt(this.save.flightNo < 2 ? howTo : aimTip, true);
   }
 
   // ---------------------------------------------------------------- economy and shop
@@ -2048,7 +2261,7 @@ export class Game {
     this.hud.toast(`REBIRTH! ×${incomeMultiplier(s)} income`, 'gold big');
     platform.happytime();
     this.sfx.sparkle();
-    this.fx.burst(Base.padPosition(0, this.tmp).setY(2), { count: 60, color: 0xffd84a, speed: 12, life: 1.2, size: 0.7, up: 6 });
+    this.fx.burst(this.padAt(0, this.tmp).setY(2), { count: 60, color: 0xffd84a, speed: 12, life: 1.2, size: 0.7, up: 6 });
   }
 
   /** Each rebirth unlocks a cannon colour: the design doc's cosmetic skin, in gray-box form. */
@@ -2121,7 +2334,7 @@ export class Game {
       writeSave(s);
       this.sfx.levelUp();
       this.hud.toast(`${slot.name} Lv ${slot.level}!`, 'gold');
-      this.fx.burst(Base.padPosition(i, this.tmp).setY(1), {
+      this.fx.burst(this.padAt(i, this.tmp).setY(1), {
         count: 18,
         color: RARITIES[slot.rarity].color,
         speed: 6,
@@ -2143,7 +2356,7 @@ export class Game {
     this.base.sync(s);
     writeSave(s);
     this.sfx.coin();
-    this.floatAt(Base.padPosition(i, this.tmp).setY(1.6), `Sold +${formatCoins(coins)}`);
+    this.floatAt(this.padAt(i, this.tmp).setY(1.6), `Sold +${formatCoins(coins)}`);
   }
 
   /** The cheapest level-up on the base, for the level hint. */
@@ -2330,9 +2543,34 @@ export class Game {
 
     const landingDrift = (this.state === 'fall' && this.chute !== 'closed') || this.state === 'landed';
     if (landingDrift) this.pz = lerp(this.pz, LANDING_Z, damp(1.5, dt));
+    // The cannon's swing chases the aim on a spring, so it eases in and overshoots a touch as it settles.
+    const inCannon = this.state === 'aim' || this.state === 'charging';
+    const wantAim = inCannon ? this.aim : 0;
+    this.aimVel += ((wantAim - this.aimShown) * 120 - this.aimVel * 14) * realDt;
+    this.aimShown += this.aimVel * realDt;
+    // Positive aim swings the muzzle right (+x), which is a negative turn about z.
+    const tilt = -this.aimShown * AIM_TILT;
+    if (inCannon) {
+      // Sitting in the barrel, swung with it.
+      this.px = -Math.sin(tilt) * BARREL_REACH;
+      this.py = MUZZLE_Y - (1 - Math.cos(tilt)) * BARREL_REACH;
+    }
     this.player.group.position.set(this.px, this.py - squash * 0.5, this.pz);
     this.player.group.rotation.y = atBase ? this.facing : 0;
-    if (crashed) {
+    // Squash and stretch for pop-ins: after a teleport, and popping up out of the muzzle.
+    this.appear = Math.max(0, this.appear - realDt);
+    this.popOut = Math.max(0, this.popOut - realDt);
+    let stretch = 0;
+    if (this.appear > 0) stretch = Math.sin((1 - this.appear / 0.4) * Math.PI) * 0.35;
+    if (this.popOut > 0) {
+      const p = 1 - this.popOut / 0.35;
+      stretch = Math.sin(p * Math.PI) * 0.3;
+      this.player.group.position.y += Math.sin(p * Math.PI) * 0.6;
+    }
+    body.scale.set(1 - stretch * 0.45, 1 + stretch, 1 - stretch * 0.45);
+    if (this.dive >= 0) {
+      this.poseDive(body);
+    } else if (crashed) {
       if (this.bounces > 0) {
         body.rotation.z += this.spin * dt;
       } else {
@@ -2342,10 +2580,11 @@ export class Game {
       body.rotation.x = lerp(body.rotation.x, 0, damp(10, dt));
     } else if (this.state !== 'reveal') {
       const freefall = this.state === 'fall' && this.chute === 'closed';
-      body.rotation.x = lerp(body.rotation.x, freefall ? -1.1 : 0, damp(5, dt));
-      body.rotation.z = lerp(body.rotation.z, clamp(-this.vx * 0.035, -0.5, 0.5), damp(10, dt));
+      body.rotation.x = lerp(body.rotation.x, freefall ? -1.1 : 0, damp(inCannon || atBase ? 14 : 5, dt));
+      const roll = inCannon ? tilt : clamp(-this.vx * 0.035, -0.5, 0.5);
+      body.rotation.z = lerp(body.rotation.z, roll, damp(inCannon ? 30 : 10, dt));
     }
-    body.position.y = lerp(body.position.y, lying ? 0.35 : 0.9, damp(10, dt));
+    if (this.dive < 0) body.position.y = lerp(body.position.y, lying ? 0.35 : 0.9, damp(10, dt));
     if (atBase && (this.walking || this.stepping)) body.position.y = 0.9 + Math.abs(Math.sin(this.time * 14)) * 0.08;
     body.visible = this.invuln <= 0 || Math.floor(this.time * 20) % 2 === 0;
     this.animateLimbs(dt, atBase);
@@ -2354,8 +2593,14 @@ export class Game {
     this.chuteScale = lerp(this.chuteScale, chuteTarget, damp(this.chuteScale < chuteTarget ? 14 : 6, realDt));
     this.player.chute.visible = this.chuteScale > 0.02;
     this.player.chute.scale.setScalar(this.chuteScale);
+    // The canopy flutters harder the faster it's coming down (a parachute opened high drops fast).
+    const flutter = clamp((-this.vy - FLIGHT.chuteSpeed) / 30, 0, 1);
     this.player.chute.rotation.z =
-      this.chute === 'tangled' ? Math.sin(this.time * 30) * 0.3 : Math.sin(this.time * 1.5) * 0.05;
+      this.chute === 'tangled'
+        ? Math.sin(this.time * 30) * 0.3
+        : Math.sin(this.time * (1.5 + flutter * 12)) * (0.05 + flutter * 0.08);
+    this.player.chute.scale.y = this.chuteScale * (1 - flutter * 0.15 + Math.sin(this.time * 20) * flutter * 0.05);
+    this.updateHelmet(realDt);
 
     const free = this.state === 'home' && !this.walking && this.pulling <= 0 && !this.hud.modalOpen;
     this.hud.showAction(free ? this.actionLabel() : null);
@@ -2372,7 +2617,8 @@ export class Game {
     shadow.scale.set(s, s, 1);
     (shadow.material as THREE.MeshBasicMaterial).opacity =
       this.state === 'aim' || this.state === 'charging' ? 0 : clamp(0.4 - this.py / 150, 0, 0.4);
-    this.env.barrel.scale.set(1 + squash * 0.08, 1 - squash * 0.12, 1 + squash * 0.08);
+    this.animateCannon(realDt, squash, tilt);
+    this.env.followSun(this.px, this.pz);
 
     skyColorAt(Math.max(0, this.py), this.sky);
 
@@ -2412,7 +2658,7 @@ export class Game {
         const cost = levelCost(slot);
         const need = xpNeeded(slot);
         if (cost === null || need === null) return;
-        const at = Base.buttonAnchor(i, this.screen);
+        const at = Base.buttonWorld(OWN, i, this.screen);
         if (Math.hypot(at.x - this.px, at.z - this.pz) > BUTTON_RANGE) return;
         at.project(this.camera);
         if (at.z > 1 || Math.abs(at.x) > 1.1 || Math.abs(at.y) > 1.1) return;
@@ -2459,11 +2705,8 @@ export class Game {
       else hud.coach(touch ? 'Drag left and right to steer!' : 'Move the mouse to steer into gems!', { mode: 'swipe', x: 0.5, y: 0.72 });
       return;
     }
-    if (this.state === 'fall' && newbie && this.chute === 'closed' && this.secondsToImpact() < 3.4) {
-      hud.coach(
-        touch ? 'Tap PARACHUTE now!' : 'Press SPACE to open your parachute!',
-        touch ? { mode: 'tap', el: hud.chuteBtn } : { mode: 'tap', x: 0.5, y: 0.66 },
-      );
+    if (this.state === 'fall' && this.chute === 'closed' && this.secondsToImpact() < (newbie ? 3.4 : this.chuteWarnAt())) {
+      hud.coach(touch ? 'TAP PARACHUTE NOW!' : 'PRESS SPACE: PARACHUTE!', { mode: 'tap', el: hud.chuteBtn });
       return;
     }
     if (this.state === 'home' && !this.walking) {
@@ -2554,6 +2797,19 @@ export class Game {
     } else if (this.state === 'fall') {
       armOut = 2.75;
       legSwing = Math.sin(t * 2) * 0.25;
+    } else if (this.dive >= 0) {
+      if (this.dive < 0.2) {
+        // Winding up: arms swung back.
+        armOut = 0.5;
+        armSwing = -1.1;
+      } else {
+        // Arms out front like a diver; legs kick once stuck in the muzzle.
+        armOut = 2.9;
+        if (this.dive > 0.62) {
+          flail = 0.0001;
+          legSpread = 0.25;
+        }
+      }
     } else if (this.state === 'charging') {
       armOut = 0.05;
     } else if (this.state === 'landed' && this.chute !== 'open') {
@@ -2570,11 +2826,107 @@ export class Game {
     });
     legs.forEach((leg, i) => {
       const side = i === 0 ? -1 : 1;
-      const kick = flail ? Math.sin(t * 11 + i * Math.PI) * 0.6 : 0;
+      const kick = this.dive > 0.62 ? Math.sin(t * 38 + i * Math.PI) * 0.9 : flail ? Math.sin(t * 11 + i * Math.PI) * 0.6 : 0;
       leg.rotation.x = lerp(leg.rotation.x, side * legSwing + kick, k);
       leg.rotation.z = lerp(leg.rotation.z, side * legSpread, k);
     });
     body.rotation.y = lerp(body.rotation.y, wobble, damp(6, dt));
+  }
+
+  /**
+   * The dive into the cannon, in four beats: a crouch (anticipation), a leap in an arc turning head first
+   * (stretched along the motion), stuck in the muzzle with legs kicking, and a slurp as the cannon swallows them.
+   */
+  private poseDive(body: THREE.Group): void {
+    const t = this.dive;
+    const g = this.player.group;
+    let x = CANNON_FOOT.x;
+    let y = this.floorHere() + 0.9;
+    let z = CANNON_FOOT.z;
+    let pitch = 0;
+    let sx = 1;
+    let sy = 1;
+    if (t < 0.2) {
+      const a = easeInOut(t / 0.2);
+      sy = 1 - 0.3 * a;
+      sx = 1 + 0.18 * a;
+      y -= 0.25 * a;
+      pitch = -0.3 * a;
+    } else if (t < 0.62) {
+      // A quadratic arc from the foot, up over the muzzle, and down into it.
+      const u = (t - 0.2) / 0.42;
+      const p0 = [CANNON_FOOT.x, y, CANNON_FOOT.z];
+      const p1 = [0, 8.4, 1.6];
+      const p2 = [0, 4.8, 0];
+      const b0 = (1 - u) * (1 - u);
+      const b1 = 2 * u * (1 - u);
+      const b2 = u * u;
+      x = b0 * p0[0] + b1 * p1[0] + b2 * p2[0];
+      y = b0 * p0[1] + b1 * p1[1] + b2 * p2[1];
+      z = b0 * p0[2] + b1 * p1[2] + b2 * p2[2];
+      pitch = -Math.PI * easeInOut(u);
+      const s = Math.sin(u * Math.PI);
+      sy = 1 + 0.28 * s;
+      sx = 1 - 0.14 * s;
+    } else if (t < 0.82) {
+      // Stuck: legs in the air, wiggling, sinking slowly.
+      const u = (t - 0.62) / 0.2;
+      x = Math.sin(this.time * 30) * 0.06;
+      y = 4.8 - u * 0.35;
+      z = 0;
+      pitch = -Math.PI + Math.sin(this.time * 26) * 0.12;
+      sy = 1 - Math.sin(u * Math.PI) * 0.08;
+    } else {
+      // Slurped in: a stretch as they're pulled down out of sight.
+      const u = Math.min(1, (t - 0.82) / 0.13);
+      x = 0;
+      y = 4.45 - u * u * 3.1;
+      z = 0;
+      pitch = -Math.PI;
+      sy = 1 + 0.35 * u;
+      sx = 1 - 0.25 * u;
+    }
+    this.px = x;
+    this.pz = z;
+    this.py = y - 0.9;
+    g.position.set(x, y - 0.9, z);
+    g.rotation.y = 0;
+    body.position.y = 0.9;
+    body.rotation.set(pitch, 0, 0);
+    body.scale.set(sx, sy, sx);
+  }
+
+  /** The helmet is on in the cannon and in flight; boarding drops it onto the player's head with a bounce. */
+  private updateHelmet(realDt: number): void {
+    const { helmet, cap } = this.player;
+    const on = this.state === 'aim' || this.state === 'charging' || this.state === 'ascent' || this.state === 'fall' || this.state === 'landed' || this.state === 'reveal';
+    helmet.visible = on;
+    cap.visible = !on;
+    if (!on) return;
+    this.helmetDrop = Math.max(0, this.helmetDrop - realDt);
+    const p = 1 - this.helmetDrop / 0.7;
+    helmet.position.y = 0.8 + (1 - bounceOut(clamp(p, 0, 1))) * 1.8;
+    if (!this.clonked && p > 0.37) {
+      this.clonked = true;
+      this.sfx.clonk();
+    }
+  }
+
+  /**
+   * The cannon: swung by the aim, squashed while charging, kicking down and springing back when it fires (or
+   * fires someone else), and bulging as it swallows a diver.
+   */
+  private animateCannon(realDt: number, squash: number, tilt: number): void {
+    const barrel = this.env.barrel;
+    this.recoil = Math.max(0, this.recoil - realDt * 1.8);
+    this.gulp = Math.max(0, this.gulp - realDt * 2.2);
+    const r = this.recoil;
+    // Fired: a sharp stretch up, then a wobble back to rest.
+    const kick = r > 0 ? Math.sin((1 - r) * Math.PI * 3) * r * 0.22 : 0;
+    const bulge = this.gulp > 0 ? Math.sin((1 - this.gulp) * Math.PI * 2.5) * this.gulp * 0.16 : 0;
+    barrel.scale.set(1 + squash * 0.08 - kick * 0.4 + bulge, 1 - squash * 0.12 + kick - bulge * 0.6, 1 + squash * 0.08 - kick * 0.4 + bulge);
+    barrel.position.y = 1.25 - r * r * 0.35;
+    barrel.rotation.z = tilt;
   }
 
   /**
@@ -2591,11 +2943,13 @@ export class Game {
 
     switch (this.state) {
       case 'aim':
-      case 'charging':
-        // Behind the cannon, looking up the barrel.
-        pos.set(0, MUZZLE_Y - 0.8, 8.5 + portrait * 4);
-        look.set(0, MUZZLE_Y + 3.8, -1.5);
+      case 'charging': {
+        // Behind the cannon, looking up the barrel, leaning a little the way it's swung.
+        const lean = this.aimShown * AIM_TILT;
+        pos.set(lean * 3, MUZZLE_Y - 0.8, 8.5 + portrait * 4);
+        look.set(Math.sin(lean) * 8, MUZZLE_Y + 3.8, -1.5);
         break;
+      }
       case 'ascent':
       case 'fall': {
         const follow = lerp(0.6, 0.92, portrait);
@@ -2623,6 +2977,13 @@ export class Game {
         break;
       case 'home':
       case 'boarding': {
+        if (this.dive >= 0) {
+          // A three-quarter view of the cannon, to watch the dive.
+          pos.set(4.5, 3.4, 9.5 + portrait * 4);
+          look.set(0, 3.2, 0);
+          rate = 5;
+          break;
+        }
         // Third person: behind and above the player, swinging round behind them as they walk forward.
         const moving = this.walking || this.stepping;
         // Only a tap-to-walk swings the camera round; with keys or the stick, the player owns it.
@@ -2644,7 +3005,8 @@ export class Game {
       this.camLook.set(0, 1, 0);
     }
     if (!Number.isFinite(this.camera.fov)) this.camera.fov = 60;
-    const k = damp(rate, realDt);
+    const k = this.camSnap ? 1 : damp(rate, realDt);
+    this.camSnap = false;
     this.camOff.lerp(pos.sub(player), k);
     this.camLook.lerp(look.sub(player), k);
     const jitter = () => (Math.random() - 0.5) * this.shake;

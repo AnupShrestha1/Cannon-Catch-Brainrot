@@ -71,8 +71,11 @@ export const GEMS = {
 };
 
 export interface GachaTier {
-  id: 'basic' | 'super' | 'ultra';
+  id: 'basic' | 'lucky' | 'super' | 'ultra' | 'cosmic';
   name: string;
+  /** The machine's sign, and its theme colour (sign border, pads). */
+  short: string;
+  color: string;
   cost: number;
   /** [rarity, chance] pairs that sum to 1. */
   odds: [number, number][];
@@ -85,19 +88,35 @@ export interface GachaTier {
   pity: [number, number][];
 }
 
-/** The gacha machine beside the cannon. */
+/** The gacha machines in the hub, cheapest first: each tier is its own machine, unlocked by flight height. */
 export const GACHA: GachaTier[] = [
   {
     id: 'basic',
     name: 'Basic pull',
+    short: 'BASIC',
+    color: '#ff5f7e',
     cost: 10,
     odds: [[0, 0.62], [1, 0.28], [2, 0.08], [3, 0.018], [4, 0.002]],
     unlockBest: 0,
     pity: [[1, 15], [2, 30], [3, 60], [4, 90]],
   },
   {
+    id: 'lucky',
+    name: 'Lucky pull',
+    short: 'LUCKY',
+    color: '#3ccf8e',
+    cost: 30,
+    // Uncommon or better: the first step up, a couple of flights after the first pull. Worth a little more per
+    // gem than Basic and a little less than Super (`npm run sim`).
+    odds: [[1, 0.55], [2, 0.33], [3, 0.1], [4, 0.02]],
+    unlockBest: 125,
+    pity: [[2, 4], [3, 15], [4, 60]],
+  },
+  {
     id: 'super',
     name: 'Super pull',
+    short: 'SUPER',
+    color: '#3f8cff',
     cost: 100,
     // Always Rare or better, and worth more per gem than ten Basic pulls on every count: about 1.4× the
     // Legendaries, 1.5× the Epics and 1.2× the merge value (`npm run sim` prints the comparison). Without
@@ -110,6 +129,8 @@ export const GACHA: GachaTier[] = [
   {
     id: 'ultra',
     name: 'Ultra pull',
+    short: 'ULTRA',
+    color: '#b45cff',
     cost: 400,
     // Epic or better, with a real shot at a Mythic. Worth more per gem than Super pulls on every count
     // (`npm run sim` prints the comparison). Unlocks once a flight reaches the Storm Layer.
@@ -117,6 +138,18 @@ export const GACHA: GachaTier[] = [
     unlockBest: 400,
     // A Legendary or better at least every 3 Ultra pulls, and a Mythic every 6.
     pity: [[4, 3], [5, 6]],
+  },
+  {
+    id: 'cosmic',
+    name: 'Cosmic pull',
+    short: 'COSMIC',
+    color: '#ffc21a',
+    cost: 600,
+    // Legendary or better, mostly Mythic: the late-game machine, for flights high in the Storm Layer.
+    odds: [[4, 0.3], [5, 0.7]],
+    unlockBest: 550,
+    // A Mythic at least every 2 Cosmic pulls.
+    pity: [[5, 2]],
   },
 ];
 
@@ -253,7 +286,7 @@ export const REBIRTH = {
 };
 
 export const ECONOMY = {
-  /** The showcase: two rows of 5 slots either side of the carpet, 4 open at the start, 2 more per expansion. */
+  /** The showcase: two rows of 5 slots along the lane, 4 open at the start, 2 more per expansion. */
   startPads: 4,
   padStep: 2,
   maxPads: 10,
