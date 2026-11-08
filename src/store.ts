@@ -30,6 +30,8 @@ export interface Owned {
 export interface Save {
   flightNo: number;
   best: number;
+  /** The best height since the last rebirth: gacha machines unlock from this, so they lock again on rebirth. */
+  bestSinceRebirth: number;
   /** Cannon level, from 1. */
   cannon: number;
   /** Gem finder, gem magnet, steering and parachute upgrades bought. */
@@ -84,6 +86,7 @@ export function defaultSave(): Save {
   return {
     flightNo: 0,
     best: 0,
+    bestSinceRebirth: 0,
     cannon: 1,
     finder: 0,
     shield: 0,
@@ -121,6 +124,8 @@ export function loadSave(): Save {
       delete old.carrying;
       delete old.carryLevel;
       Object.assign(save, old);
+      // Saves from before machines re-locked on rebirth: their machines stay as they were.
+      if (old.bestSinceRebirth === undefined) save.bestSinceRebirth = save.best;
     }
   } catch {
     // fall through to defaults

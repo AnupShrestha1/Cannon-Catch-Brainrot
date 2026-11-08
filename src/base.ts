@@ -62,10 +62,26 @@ interface PadView {
 const LINE_X = 2.7;
 const FIRST_DEPTH = 3.6;
 const PAD_STEP = 4.2;
-/** Height between floors, and where the lift pad stands on each floor (back of the aisle), in plot space. */
+/** Height between floors. */
 export const FLOOR_H = 5.6;
-export const LIFT_Z = -22.6;
-export const LIFT_RADIUS = 1.05;
+/**
+ * Stairs up the outside of the plot, one flight per floor above the ground, alternating sides (+x first).
+ * Each flight runs back from the lane: a bottom landing (z0 to z0 + landing), the steps (z0 to z1), and a top
+ * landing (z1 - landing to z1); `inner` to `outer` is its width, just outside the plot's edge. The landings
+ * meet gaps in the deck railings.
+ */
+export const STAIR = { inner: PLOT_HALF + 0.25, outer: PLOT_HALF + 2.45, z0: -2.4, z1: -13.6, landing: 2.2 };
+
+/** Which side flight k runs up: +1 (the +x side) or -1. */
+export function stairSide(k: number): number {
+  return k % 2 === 0 ? 1 : -1;
+}
+
+/** Floor height on flight k at depth lz (flat on the landings). */
+export function stairHeight(k: number, lz: number): number {
+  const t = Math.min(1, Math.max(0, (STAIR.z0 - lz) / (STAIR.z0 - STAIR.z1)));
+  return (k + t) * FLOOR_H;
+}
 /** Where the name board's posts stand, in plot space. */
 const BOARD_Z = -PLOT_DEPTH + 0.9;
 const BOARD_POST_X = 3.9;
@@ -232,8 +248,9 @@ export class Base {
   private labelTimer = 0;
   /** One group per floor, raised FLOOR_H each, holding that floor's pedestals (and deck, above the ground). */
   private floorGroups: THREE.Group[] = [];
-  /** The lift pads' rising rings, one per floor once there's more than one. */
-  private lifts: { ring: THREE.Mesh; arrow: THREE.Group; seed: number }[] = [];
+  /** Each deck's railing (rebuilt as floors are added, to open gaps where stairs arrive), and the flights built. */
+  private rails: THREE.Group[] = [];
+  private flights = 0;
   private own: boolean;
   private marker: { group: THREE.Group; star: THREE.Mesh } | null = null;
 
@@ -298,7 +315,116 @@ export class Base {
       if (k > 0) this.buildDeck(g);
       for (let i = 0; i < ECONOMY.padsPerFloor; i++) this.addPad(k * ECONOMY.padsPerFloor + i);
     }
-    if (n > 1) while (this.lifts.length < this.floorGroups.length) this.buildLift(this.floorGroups[this.lifts.length]);
+    // A flight of stairs up to each floor above the ground, and railings with gaps where they arrive.
+    while (this.flights < this.floorGroups.length - 1) this.buildStairs(this.flights++);
+    for (const r of this.rails) r.removeFromParent();
+    this.rails = this.floorGroups.slice(1).map((g, i) => this.buildRail(g, i + 1));
+  }
+
+  /**
+   * Flight k, from floor k up to floor k + 1, outside the plot's edge: chunky steps on two stringers, a handrail
+   * on the outer side, landings at both ends, and posts under it.
+   */
+  private buildStairs(k: number): void {
+    const g = new THREE.Group();
+    const side = stairSide(k);
+    const width = STAIR.outer - STAIR.inner;
+    const cx = side * (STAIR.inner + width / 2);
+    const stepMat = new THREE.MeshPhongMaterial({ color: this.own ? 0xffe2a0 : 0xf3ead8, shininess: 30 });
+    const woodMat = new THREE.MeshPhongMaterial({ color: 0xb07a45, shininess: 25 });
+    const railMat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 80 });
+    const run = STAIR.z0 - STAIR.z1;
+    const steps = 20;
+    const stepGeo = new RoundedBoxGeometry(width, 0.22, run / steps + 0.06, 2, 0.06);
+    for (let i = 0; i < steps; i++) {
+      const z = STAIR.z0 - ((i + 0.5) * run) / steps;
+      const step = new THREE.Mesh(stepGeo, stepMat);
+      step.position.set(cx, stairHeight(k, z) + (FLOOR_H / steps) * 0.5 - 0.11, z);
+      step.castShadow = step.receiveShadow = true;
+      g.add(step);
+    }
+    // Landings at both ends.
+    for (const [z, y] of [
+      [STAIR.z0 + STAIR.landing / 2, k * FLOOR_H],
+      [STAIR.z1 - STAIR.landing / 2, (k + 1) * FLOOR_H],
+    ]) {
+      const landing = new THREE.Mesh(new RoundedBoxGeometry(width + 0.1, 0.3, STAIR.landing, 2, 0.08), stepMat);
+      landing.position.set(cx, y - 0.15, z);
+      landing.castShadow = landing.receiveShadow = true;
+      g.add(landing);
+    }
+    // Stringers along both sides, sloping with the steps.
+    const len = Math.hypot(run, FLOOR_H);
+    const tilt = Math.atan2(FLOOR_H, run);
+    for (const x of [side * STAIR.inner, side * STAIR.outer]) {
+      const stringer = new THREE.Mesh(new RoundedBoxGeometry(0.16, 0.4, len, 2, 0.06), woodMat);
+      stringer.position.set(x, (k + 0.5) * FLOOR_H - 0.2, (STAIR.z0 + STAIR.z1) / 2);
+      stringer.rotation.x = tilt;
+      g.add(stringer);
+    }
+    // A handrail on the outer side, on posts.
+    const handrail = new THREE.Mesh(new RoundedBoxGeometry(0.12, 0.12, len, 2, 0.05), railMat);
+    handrail.position.set(side * STAIR.outer, (k + 0.5) * FLOOR_H + 1.0, (STAIR.z0 + STAIR.z1) / 2);
+    handrail.rotation.x = tilt;
+    g.add(handrail);
+    for (let i = 0; i <= 4; i++) {
+      const z = STAIR.z0 - (i * run) / 4;
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0, 8), railMat);
+      post.position.set(side * STAIR.outer, stairHeight(k, z) + 0.5, z);
+      g.add(post);
+    }
+    // Posts holding it up, down to the floor below.
+    const postMat = new THREE.MeshPhongMaterial({ color: 0xf6efe2, shininess: 30 });
+    for (const z of [STAIR.z0 - run * 0.5, STAIR.z1 - STAIR.landing / 2]) {
+      const h = stairHeight(k, z) - k * FLOOR_H;
+      if (h < 0.5) continue;
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, h, 14), postMat);
+      post.position.set(cx, k * FLOOR_H + h / 2 - 0.3, z);
+      post.castShadow = true;
+      g.add(post);
+    }
+    this.group.add(g);
+  }
+
+  /**
+   * Deck k's railing: posts and a rounded top rail all round, with gaps where a flight of stairs arrives (the
+   * top of flight k - 1) and where the next one leaves (the bottom of flight k, once there is one).
+   */
+  private buildRail(g: THREE.Group, k: number): THREE.Group {
+    const rails = new THREE.Group();
+    const w = PLOT_HALF * 2;
+    const d = PLOT_DEPTH;
+    const gaps: { side: number; z0: number; z1: number }[] = [{ side: stairSide(k - 1), z0: STAIR.z1 - STAIR.landing, z1: STAIR.z1 }];
+    if (k < this.floorGroups.length - 1) gaps.push({ side: stairSide(k), z0: STAIR.z0, z1: STAIR.z0 + STAIR.landing });
+    const railMat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 80 });
+    const rail = (x: number, z: number, sx: number, sz: number) => {
+      if (sx <= 0.05 || sz <= 0.05) return;
+      const mesh = new THREE.Mesh(new RoundedBoxGeometry(sx, 0.14, sz, 2, 0.06), railMat);
+      mesh.position.set(x, 1.0, z);
+      rails.add(mesh);
+    };
+    // Each long side, broken where a gap is (z runs 0 at the front to -d at the back).
+    for (const side of [-1, 1]) {
+      const cuts = gaps.filter((gap) => gap.side === side).sort((a, b) => b.z1 - a.z1);
+      let from = 0;
+      for (const gap of cuts) {
+        rail((side * w) / 2, (from + gap.z1) / 2, 0.14, from - gap.z1);
+        from = gap.z0;
+      }
+      rail((side * w) / 2, (from - d) / 2, 0.14, from + d);
+    }
+    rail(0, -d, w, 0.14);
+    rail(0, 0, w, 0.14);
+    const inGap = (x: number, z: number) => gaps.some((gap) => Math.sign(x) === gap.side && Math.abs(x) > w / 2 - 0.1 && z > gap.z0 - 0.1 && z < gap.z1 + 0.1);
+    const spots: [number, number][] = [];
+    for (let z = 0; z >= -d; z -= 1.6) for (const x of [-w / 2, w / 2]) if (!inGap(x, z)) spots.push([x, z]);
+    for (let x = -w / 2 + 1.6; x < w / 2; x += 1.6) spots.push([x, 0], [x, -d]);
+    const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.06, 0.06, 1.0, 8), railMat, spots.length);
+    const m = new THREE.Matrix4();
+    spots.forEach(([x, z], i) => posts.setMatrixAt(i, m.makeTranslation(x, 0.5, z)));
+    rails.add(posts);
+    g.add(rails);
+    return rails;
   }
 
   /** A deck over the floor below: a tiled slab on pillars, edged by a railing. */
@@ -328,55 +454,6 @@ export class Base {
         g.add(pillar);
       }
     }
-    // A railing all round: posts and a rounded top rail.
-    const railMat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 80 });
-    const rail = (x: number, z: number, sx: number, sz: number) => {
-      const mesh = new THREE.Mesh(new RoundedBoxGeometry(sx, 0.14, sz, 2, 0.06), railMat);
-      mesh.position.set(x, 1.0, z);
-      g.add(mesh);
-    };
-    rail(-w / 2, -d / 2, 0.14, d);
-    rail(w / 2, -d / 2, 0.14, d);
-    rail(0, -d, w, 0.14);
-    rail(0, 0, w, 0.14);
-    const postGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.0, 8);
-    const spots: [number, number][] = [];
-    for (let z = 0; z >= -d; z -= 1.6) spots.push([-w / 2, z], [w / 2, z]);
-    for (let x = -w / 2 + 1.6; x < w / 2; x += 1.6) spots.push([x, 0], [x, -d]);
-    const posts = new THREE.InstancedMesh(postGeo, railMat, spots.length);
-    const m = new THREE.Matrix4();
-    spots.forEach(([x, z], i) => posts.setMatrixAt(i, m.makeTranslation(x, 0.5, z)));
-    g.add(posts);
-  }
-
-  /** A glowing round lift pad with an arrow, at the back of the aisle. */
-  private buildLift(g: THREE.Group): void {
-    const pad = new THREE.Group();
-    pad.position.set(0, 0, LIFT_Z);
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(LIFT_RADIUS + 0.15, LIFT_RADIUS + 0.25, 0.16, 40), stoneMat);
-    base.position.y = 0.08;
-    const disc = new THREE.Mesh(
-      new THREE.CylinderGeometry(LIFT_RADIUS, LIFT_RADIUS, 0.05, 40),
-      new THREE.MeshLambertMaterial({ color: 0x3fd8ff, emissive: 0x1aa8e0, emissiveIntensity: 0.7 }),
-    );
-    disc.position.y = 0.18;
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(LIFT_RADIUS * 0.9, 0.05, 6, 40).rotateX(Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0xbff4ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
-    );
-    // An up-and-down arrow hovering over it.
-    const arrow = new THREE.Group();
-    const arrowMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    for (const dir of [1, -1]) {
-      const head = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.32, 16), arrowMat);
-      head.position.y = dir * 0.3;
-      if (dir < 0) head.rotation.z = Math.PI;
-      arrow.add(head);
-    }
-    arrow.position.y = 1.4;
-    pad.add(base, disc, ring, arrow);
-    g.add(pad);
-    this.lifts.push({ ring, arrow, seed: Math.random() });
   }
 
   /** Shows or hides the brainrots on display: other players' plots hide theirs when the player is far away. */
@@ -460,14 +537,6 @@ export class Base {
       // Up over the top floor, bobbing and turning slowly.
       this.marker.group.position.y = 8.2 + (this.floors - 1) * FLOOR_H + Math.sin(time * 1.4) * 0.25;
       this.marker.star.rotation.y = time * 0.9;
-    }
-    for (const lift of this.lifts) {
-      const t = (time * 0.8 + lift.seed) % 1;
-      lift.ring.position.y = 0.2 + t * 2.2;
-      lift.ring.scale.setScalar(1 - t * 0.25);
-      (lift.ring.material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - t);
-      lift.arrow.position.y = 1.4 + Math.sin(time * 2.5 + lift.seed * 6) * 0.15;
-      lift.arrow.rotation.y = time * 1.5;
     }
     if (this.vacant) return;
     this.views.forEach((view, i) => {

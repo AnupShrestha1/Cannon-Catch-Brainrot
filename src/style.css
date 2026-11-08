@@ -3167,3 +3167,19 @@ body.chute-alarm::after {
     filter: brightness(1.35);
   }
 }
+
+/* ---------------------------------------------------------------- readable hotkey hints on the big buttons */
+
+#launchBtn .key,
+#chuteBtn .key {
+  margin-top: 3px;
+  font-family: var(--display);
+  font-size: 17px;
+  letter-spacing: 0.02em;
+  text-shadow: var(--stroke-thin);
+  opacity: 1;
+}
+
+#chuteBtn .key {
+  font-size: 14px;
+}

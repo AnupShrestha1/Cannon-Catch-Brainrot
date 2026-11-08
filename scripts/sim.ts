@@ -214,6 +214,7 @@ function simulate(minutes: number): { m: Milestones; two: AtTwo } {
     const grab = save.flightNo === 1 ? 1 : GRAB_RATE;
     save.gems += Math.round(gemsPassed(apex, save.flightNo) * grab * trackBoost(save, 'finder'));
     save.best = Math.max(save.best, apex);
+    save.bestSinceRebirth = Math.max(save.bestSinceRebirth, apex);
     if (apex >= 150) mark('cloudKingdom', t);
     if (apex >= REBIRTH.unlockHeight) mark('stormLayer', t);
 
@@ -297,7 +298,7 @@ console.log('Gacha value per 1,000 gems (pity included):');
 for (const tier of GACHA) {
   const save = defaultSave();
   save.pulls = 10;
-  save.best = 1_000;
+  save.best = save.bestSinceRebirth = 1_000;
   save.gems = 2_000_000;
   const spent = save.gems;
   const counts = [0, 0, 0, 0, 0, 0, 0];

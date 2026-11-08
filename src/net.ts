@@ -360,6 +360,7 @@ function headStart(save: Save, minutes: number): void {
     save.flightNo += 1;
     save.gems += Math.round(gemsFrom(apex, save.flightNo === 1 ? 1 : 0.6) * trackBoost(save, 'finder'));
     save.best = Math.max(save.best, apex);
+    save.bestSinceRebirth = Math.max(save.bestSinceRebirth, apex);
     pullAll(save);
     mergeAll(save);
     shop(save, 50);
@@ -1150,6 +1151,7 @@ export class FakeServer {
     s.flightNo += 1;
     s.gems += Math.round(gemsFrom(apex, rand(0.45, 0.8)) * trackBoost(s, 'finder'));
     s.best = Math.max(s.best, apex);
+    s.bestSinceRebirth = Math.max(s.bestSinceRebirth, apex);
     const zone = Math.min(zoneIndexAt(apex), MAX_ZONE);
     if (zone > beforeZone) {
       const z = ZONES[zone];

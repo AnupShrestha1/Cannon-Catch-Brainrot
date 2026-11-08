@@ -181,7 +181,9 @@ export function rollTier(tier: GachaTier): number {
 // Normal-launch apex per cannon level, log-linear between these anchors, so each zone's level
 // in the design doc is the first level whose normal launch reaches it.
 // The first few levels climb fast, so a good launch reaches Cloud Kingdom within the first few minutes.
-const HEIGHT_ANCHORS: [number, number][] = [[1, 90], [6, 155], [28, 410], [45, 820], [60, 1550]];
+// The Storm Layer (400 m) comes at level 25, just after the first rebirth's level (22), so a reborn player
+// has a new area to reach soon after.
+const HEIGHT_ANCHORS: [number, number][] = [[1, 90], [6, 155], [25, 410], [45, 820], [60, 1550]];
 
 export function launchHeight(level: number): number {
   const l = Math.min(60, Math.max(1, level));

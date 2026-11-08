@@ -4,7 +4,7 @@
 // flight is scripted rather than simulated, so the apex hits launchHeight() exactly.
 import * as THREE from 'three';
 import { Sfx } from './audio';
-import { Base, FLOOR_H, LIFT_RADIUS, LIFT_Z, PLATFORM_RADIUS, bumpSolids, floorWorld } from './base';
+import { Base, FLOOR_H, PLATFORM_RADIUS, STAIR, bumpSolids, floorWorld, stairHeight, stairSide } from './base';
 import { animateShared } from './characters';
 import { Hub } from './hub';
 import { brainrotIcon } from './icons';
@@ -386,9 +386,9 @@ export class Game {
   /** Seconds toward the next once-a-second income tick. */
   private incomeTimer = 0;
   /** Rebirth needs a second tap in the shop. */
-  /** Which floor of the base the player is on (0 is the ground), and the lift ride between floors. */
+  /** Which floor of the base the player is on (0 is the ground), and the flight of stairs they're on (or -1). */
   private level = 0;
-  private lift: { from: number; to: number; t: number } | null = null;
+  private stair = -1;
   /** Jumping at the base: height, upward speed, and the squash on landing (1 easing to 0). */
   private jumpY = 0;
   private jumpV = 0;
@@ -422,7 +422,7 @@ export class Game {
       const near = 1 - Math.hypot(at.x - this.px, at.z - this.pz) / 18;
       if (near > 0 && (this.state === 'home' || this.state === 'boarding')) this.sfx.bounce(strength * near);
     };
-    this.shownBest = this.save.best;
+    this.shownBest = this.save.bestSinceRebirth;
     this.remote = new RemoteView(this.scene, this.server);
     this.player = makePlayer();
     this.player.group.traverse((o) => {
@@ -698,7 +698,7 @@ export class Game {
         break;
     }
     // Machine locks catch up with the player's best only at the base, so an unlock plays out in front of them.
-    if (this.state === 'home' || this.state === 'aim' || this.state === 'boarding') this.shownBest = this.save.best;
+    if (this.state === 'home' || this.state === 'aim' || this.state === 'boarding') this.shownBest = this.save.bestSinceRebirth;
     this.server.setCannonBusy(this.state === 'aim' || this.state === 'charging' || this.dive >= 0);
 
     // Camera drags only mean something at the base; drop any made during a run.
@@ -1077,6 +1077,7 @@ export class Game {
     const goal = this.showGoal();
     this.slowmo = Math.max(this.slowmo, goal ? 1.1 : 0.55);
     this.hud.toast(`${Math.round(this.apex)} m`, 'big');
+    this.save.bestSinceRebirth = Math.max(this.save.bestSinceRebirth, this.apex);
     if (this.apex > this.save.best) {
       this.save.best = this.apex;
       writeSave(this.save);
@@ -1790,10 +1791,6 @@ export class Game {
 
   private updateHome(dt: number, space: boolean, blocked: boolean): void {
     this.stepping = false;
-    if (this.lift) {
-      this.updateLift(dt);
-      return;
-    }
     this.moveAtBase(dt, blocked);
     this.updateWalk(dt);
     // Step up onto platforms and the showcase floor.
@@ -1831,49 +1828,63 @@ export class Game {
     }
   }
 
-  /** Whether the player stands on their base's lift pad (on whichever floor they're on). */
-  private atLift(): boolean {
-    if (this.base.floors < 2) return false;
-    const [x, z] = fromPlot(OWN, 0, LIFT_Z);
-    return Math.hypot(x - this.px, z - this.pz) < LIFT_RADIUS + 0.2;
-  }
-
-  /** The floor the lift goes to next: up a floor, or from the top back down to the ground. */
-  private liftTarget(): number {
-    return this.level + 1 < this.base.floors ? this.level + 1 : 0;
-  }
-
-  private startLift(): void {
-    const [x, z] = fromPlot(OWN, 0, LIFT_Z);
-    this.px = x;
-    this.pz = z;
-    this.walkVel.set(0, 0);
-    this.walking = false;
-    this.jumpY = this.jumpV = 0;
-    this.lift = { from: this.level, to: this.liftTarget(), t: 0 };
-    this.sfx.teleport();
-  }
-
-  /** The lift ride: eased up or down between floors with a column of sparkles, then off you step. */
-  private updateLift(dt: number): void {
-    const l = this.lift!;
-    l.t += dt;
-    const k = easeInOut(Math.min(1, l.t / 1.1));
-    this.py = lerp(l.from, l.to, k) * FLOOR_H + 0.02;
-    if (Math.random() < dt * 30) {
-      this.fx.burst(this.tmp.set(this.px + rand(-0.8, 0.8), this.py + rand(0, 2), this.pz + rand(-0.8, 0.8)), {
-        count: 1,
-        color: 0xbff4ff,
-        speed: 0.5,
-        life: 0.6,
-        size: 0.35,
-        up: l.to > l.from ? 2 : -2,
-      });
+  /**
+   * Walking the base's stairs. On a flight the player stays on its treads and climbs or descends with depth;
+   * stepping off the top landing (or a higher flight's bottom landing) onto a deck puts them on that floor, and
+   * off the ground flight's bottom onto the ground. On a deck, the railing holds except at its gaps, where a
+   * landing waits. On the ground, the climbing part of the first flight is solid.
+   */
+  private walkStairs(): void {
+    const floors = this.base.floors;
+    let [lx, lz] = toPlot(OWN, this.px, this.pz);
+    const S = STAIR;
+    const onFlight = (k: number) => {
+      const a = stairSide(k) * lx;
+      return a > S.inner - 0.05 && a < S.outer + 0.3 && lz < S.z0 + S.landing && lz > S.z1 - S.landing;
+    };
+    if (this.stair >= 0) {
+      const k = this.stair;
+      const side = stairSide(k);
+      const a = side * lx;
+      const atTop = lz < S.z1;
+      const atBottom = lz > S.z0;
+      if (a < S.inner + 0.25 && atTop) {
+        this.level = k + 1;
+        this.stair = -1;
+      } else if (a < S.inner + 0.25 && atBottom) {
+        this.level = k;
+        this.stair = -1;
+      } else if (k === 0 && lz > S.z0 + S.landing - 0.3) {
+        this.level = 0;
+        this.stair = -1;
+      } else {
+        // Held on the treads between the handrail and the plot's edge.
+        lx = side * clamp(a, S.inner + 0.2, S.outer - 0.35);
+        lz = clamp(lz, S.z1 - S.landing + 0.35, k === 0 ? S.z0 + S.landing : S.z0 + S.landing - 0.35);
+        [this.px, this.pz] = fromPlot(OWN, lx, lz);
+      }
+      return;
     }
-    if (l.t >= 1.1) {
-      this.level = l.to;
-      this.lift = null;
-      this.hud.toast(this.level === 0 ? 'Ground floor' : `Floor ${this.level + 1}`, 'small');
+    // Stepping onto a flight: at its bottom from the floor it leaves, or at its top from the deck it reaches.
+    for (let k = 0; k < floors - 1; k++) {
+      if (!onFlight(k)) continue;
+      if ((this.level === k && lz > S.z0) || (this.level === k + 1 && lz < S.z1)) {
+        this.stair = k;
+        return;
+      }
+    }
+    if (this.level > 0) {
+      // On a deck: the railing holds, except at the gaps where a flight's landing meets it.
+      const gapAt = (k: number, top: boolean) =>
+        k >= 0 && k < floors - 1 && Math.sign(lx) === stairSide(k) && (top ? lz < S.z1 && lz > S.z1 - S.landing : lz > S.z0 && lz < S.z0 + S.landing);
+      const open = gapAt(this.level - 1, true) || gapAt(this.level, false);
+      const edge = open ? S.outer : PLOT_HALF - 0.6;
+      [this.px, this.pz] = fromPlot(OWN, clamp(lx, -edge, edge), clamp(lz, -PLOT_DEPTH + 0.6, -0.6));
+    } else if (floors > 1 && stairSide(0) * lx > S.inner - 0.45 && stairSide(0) * lx < S.outer + 0.45 && lz < S.z0 && lz > S.z1 - S.landing) {
+      // On the ground, the first flight's climbing part is solid: step back out to the nearer side.
+      const a = stairSide(0) * lx;
+      const out = a - (S.inner - 0.45) < S.outer + 0.45 - a ? S.inner - 0.45 : S.outer + 0.45;
+      [this.px, this.pz] = fromPlot(OWN, stairSide(0) * out, lz);
     }
   }
 
@@ -1917,11 +1928,7 @@ export class Game {
       // No fences: neighbours' plots, the lane and the hub are all open; only things on the ground are solid.
       [this.px, this.pz] = walkStep(this.px + this.walkVel.x * dt, this.pz + this.walkVel.y * dt);
       [this.px, this.pz] = bumpSolids(this.px, this.pz, PLAYER_RADIUS);
-      if (this.level > 0) {
-        // Up on a deck, the railing keeps the player on it.
-        const [lx, lz] = toPlot(OWN, this.px, this.pz);
-        [this.px, this.pz] = fromPlot(OWN, clamp(lx, -PLOT_HALF + 0.6, PLOT_HALF - 0.6), clamp(lz, -PLOT_DEPTH + 0.6, -0.6));
-      }
+      this.walkStairs();
       this.stepping = this.walkVel.length() > 0.6;
     } else {
       this.walkVel.set(0, 0);
@@ -2056,6 +2063,7 @@ export class Game {
 
   /** Height of the floor under the player: raised on the pads, the cauldron platform and showcase floors. */
   private floorHere(): number {
+    if (this.stair >= 0) return stairHeight(this.stair, toPlot(OWN, this.px, this.pz)[1]) + 0.02;
     if (this.level > 0) return this.level * FLOOR_H + 0.02;
     return floorWorld(this.px, this.pz);
   }
@@ -2097,10 +2105,6 @@ export class Game {
       return `Pull ${tier.short} ×${n} · ${formatCoins(tier.cost * n)} gems`;
     }
     if (this.atCannon()) return 'Get in the cannon';
-    if (this.atLift()) {
-      const to = this.liftTarget();
-      return to > this.level ? `Lift ▲ Floor ${to + 1}` : 'Lift ▼ Ground floor';
-    }
     if (this.onRebirthPad()) {
       const s = this.save;
       const need = rebirthCannonLevel(s);
@@ -2149,10 +2153,6 @@ export class Game {
     }
     if (this.atCannon()) {
       this.startBoarding();
-      return;
-    }
-    if (this.atLift()) {
-      this.startLift();
       return;
     }
     if (this.onRebirthPad()) {
@@ -2361,7 +2361,7 @@ export class Game {
     this.walking = false;
     this.arrive = null;
     this.level = 0;
-    this.lift = null;
+    this.stair = -1;
     this.jumpY = this.jumpV = 0;
     this.facing = yaw;
     this.camYaw = yaw;

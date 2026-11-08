@@ -37,7 +37,7 @@ the Network URL it prints.
 | Merge station, shop | Step on the cauldron's platform or the shop's rug, press E | Same, tap the action button |
 | Launch | Launch button or F (walks over from nearby, teleports from afar) | Launch button |
 | Get in the cannon / climb out | E next to the cannon, any side / Exit button or Q | Action button / Exit button |
-| Ride your base's lift between floors | Stand on the lift pad, press E | Stand on it, tap the action button |
+| Go between your base's floors | Walk up or down the stairs outside its side | Same |
 | Unlock 2 more slots | Unlock button over the next locked pair, or E beside it | Tap the Unlock button |
 | Rebirth | Stand on the rebirth station's gold pad, press E | Same, tap the action button |
 | Upgrades | Upgrades in the dock (teleports you to the shop) | Same |
@@ -212,8 +212,11 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   the last). Empty open slots pulse a ring of light.
 - **Floors**: the first two rebirths each add a floor to the base, a deck on pillars over the one below
   with a white railing, holding another 10 slots (4 open straight away, and every slot below it opens
-  too). A glowing lift pad at the back of the aisle rides you up a floor, and from the top back down to
-  the ground; up on a deck the railing keeps you on it. Other players' bases grow floors too.
+  too). Stairs climb the outside of the base, one flight per floor, alternating sides (Floor 2's on the
+  right, Floor 3's on the left): chunky steps on wooden stringers with a handrail and a landing at each
+  end. Walk up them and step off the top landing through a gap in the deck's railing; walk down to go
+  back. Up on a deck the railing holds you except at those gaps. Other players' bases grow floors and
+  stairs too.
 - **Slots**: a brainrot on display earns coins once a second by rarity (Common 1/s up to Legendary 90/s),
   up to 10 minutes' worth. The coins waiting show as a big gold coin spinning slowly over its head, with
   the amount above it. Pedestals are solid: walk up to one to collect its coins. Right under each
@@ -246,7 +249,8 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - **New zones**: entering a zone on the way up shows its name and gem value; the first time ever, it's a
   big NEW ZONE banner with a sparkle and a moment of slow motion. The cannon's first levels climb fast
   (90 m at level 1, 155 m at level 6), so a good launch reaches Cloud Kingdom within the first few
-  minutes; after that, each level adds less (410 m at level 28).
+  minutes; after that, each level adds less (the Storm Layer, 410 m, at level 25, just after the first
+  rebirth's level 22, so a reborn player soon has a new area to reach).
 - **Shields** (in the shop): each level adds one shield, and each shield blocks one hazard hit per flight
   (no gems lost, no stun). They're stingy: 300 coins for the first (a few minutes in), then ten times the
   last for each (3K, 30K, 300K, 3M), up to 5. In flight a faint cyan bubble surrounds you with a ring
@@ -260,7 +264,9 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   rings, with a pillar of light once you can rebirth; its sign says what you'd get, or the cannon level
   still needed with a progress bar. The first unlocks at cannon level 22 (about 40 minutes in), and each one
   after asks for 2 more levels (24, 26, 28 and so on, up to the top level, 37). Stand on
-  its gold pad, press E and confirm. It resets coins, gems, upgrades, slot levels and the backpack,
+  its gold pad, press E and confirm. It resets coins, gems, upgrades, slot levels and the backpack, locks the gacha
+  machines again (they unlock as this run's flights reach their heights; your all-time best stays on the
+  leaderboard),
   keeps the rarest brainrot and every open slot, adds +50% income per rebirth, and recolours the cannon;
   the first two also add a floor to your base. It's grand and short (about three seconds): the crystal
   dips and blasts up in a pillar of light with a shockwave across the ground, the screen flashes gold, a

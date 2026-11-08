@@ -87,6 +87,8 @@ export function rebirthSave(save: Save): { kept: Owned | null; newFloor: boolean
   save.coins = 0;
   save.gems = 0;
   save.cannon = 1;
+  // The gacha machines lock again: they unlock as this run's flights reach their heights.
+  save.bestSinceRebirth = 0;
   save.finder = save.magnet = save.steering = save.chute = save.shield = 0;
   let open = Math.max(ECONOMY.startPads, save.pads.length);
   // A new floor: everything below it opens, and it comes with a few slots of its own.
@@ -168,7 +170,7 @@ export function pickName(rarity: number): string {
 
 /** Whether a gacha tier is unlocked: the Super pull waits until a run has reached Cloud Kingdom. */
 export function tierUnlocked(save: Save, tier: GachaTier): boolean {
-  return save.best >= tier.unlockBest;
+  return save.bestSinceRebirth >= tier.unlockBest;
 }
 
 /**
