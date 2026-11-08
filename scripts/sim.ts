@@ -26,6 +26,9 @@ import {
 } from '../src/config';
 import {
   flightApex,
+  rebirthSave,
+  rebirthCannonLevel,
+  incomeMultiplier,
   maxPads,
   putOnPad,
   buyUpgrade,
@@ -310,4 +313,60 @@ for (const tier of GACHA) {
     `  ${tier.name.padEnd(10)} Mythic ${per(counts[5])}, Legendary+ ${per(counts[4] + counts[5])}, Epic+ ${per(counts[3] + counts[4] + counts[5])}, ` +
       `merged-up value ${((value / mergeValue[4] / spent) * 1000).toFixed(2)} Legendaries`,
   );
+}
+
+// ---------------------------------------------------------------- the whole journey, rebirths included
+// The same player, playing on: they rebirth as soon as the cannon reaches the rebirth level.
+function journey(hours: number): Map<string, number> {
+  const save = defaultSave();
+  const marks = new Map<string, number>();
+  const mark = (key: string, t: number) => {
+    if (!marks.has(key)) marks.set(key, t);
+  };
+  let t = 0;
+  let gift = 0;
+  while (t < hours * 3600) {
+    const roll = Math.random();
+    const bonus = roll < 0.25 ? CHARGE.perfectBonus : roll < 0.65 ? CHARGE.greenBonus : 0;
+    const apex = flightApex(save, bonus);
+    const runTime = 2.2 * FLIGHT.ascentTime(apex) + 20;
+    save.coins += incomePerSecond(save) * runTime;
+    for (const slot of save.pads) if (slot) gainXp(slot, runTime);
+    t += runTime;
+    while (gift < GIFTS.length && t >= GIFTS[gift].at) {
+      save.coins += Math.max(GIFT_COINS.min, incomePerSecond(save) * GIFTS[gift].incomeSeconds);
+      save.gems += GIFTS[gift].gems;
+      gift++;
+    }
+    save.flightNo += 1;
+    save.gems += Math.round(gemsPassed(apex, save.flightNo) * GRAB_RATE * trackBoost(save, 'finder'));
+    save.best = Math.max(save.best, apex);
+    save.bestSinceRebirth = Math.max(save.bestSinceRebirth, apex);
+    for (const z of ZONES.slice(1)) if (apex >= z.from) mark(`reach ${z.name} (${z.from} m)`, t);
+    gacha(save);
+    const owned = [...save.pads, ...save.inventory];
+    for (let r = 4; r < 7; r++) if (owned.some((o) => o && o.rarity >= r)) mark(`first ${['', '', '', '', 'Legendary', 'Mythic', 'Celestial'][r]}`, t);
+    shop(save);
+    if (save.cannon >= UPGRADES.cannon.max + 1) mark('cannon maxed', t);
+    if (save.rebirths >= REBIRTH.floors && save.pads.length >= maxPads(save)) mark('every slot on every floor open', t);
+    if (save.cannon >= rebirthCannonLevel(save) && save.rebirths < 8) {
+      rebirthSave(save);
+      mark(`rebirth ${save.rebirths} (x${incomeMultiplier(save).toFixed(2)})`, t);
+    }
+  }
+  return marks;
+}
+
+const journeys = Array.from({ length: 120 }, () => journey(16));
+const keys = [...new Set(journeys.flatMap((j) => [...j.keys()]))];
+const at = (key: string) => {
+  const v = journeys.map((j) => j.get(key)).filter((x): x is number => x !== undefined).sort((a, b) => a - b);
+  return { mid: v[Math.floor(v.length / 2)], n: v.length };
+};
+const fmt = (s: number) => (s < 3600 ? `${(s / 60).toFixed(0)} min` : `${(s / 3600).toFixed(1)} h`);
+console.log('');
+console.log(`The whole journey (median of ${journeys.length} players, 16 hours each, rebirthing when allowed):`);
+for (const key of keys.sort((a, b) => at(a).mid - at(b).mid)) {
+  const { mid, n } = at(key);
+  console.log(`  ${key.padEnd(40)} ${fmt(mid)}${n < journeys.length ? ` (${n}/${journeys.length})` : ''}`);
 }

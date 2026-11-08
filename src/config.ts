@@ -315,6 +315,8 @@ export const REBIRTH = {
    */
   endGameAfter: 3,
   endGameBonus: 0.3,
+  /** End-game rebirths need at least this cannon level: the one whose normal launch reaches Outer Space. */
+  endGameCannonLevel: 36,
   /** Each rebirth asks for this many more cannon levels than the last (capped at the top level): 21, 25, 29... */
   cannonStep: 4,
   /** The first this-many rebirths each add a floor to the base (on top of the bonus); later ones only the bonus. */

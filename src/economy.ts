@@ -65,7 +65,10 @@ export function upgradeCost(save: Save, track: Track): number | null {
 
 /** The cannon level the next rebirth needs: a little higher each time, up to the top level. */
 export function rebirthCannonLevel(save: Pick<Save, 'rebirths'>): number {
-  return Math.min(UPGRADES.cannon.max + 1, REBIRTH.cannonLevel + REBIRTH.cannonStep * save.rebirths);
+  const level = REBIRTH.cannonLevel + REBIRTH.cannonStep * save.rebirths;
+  // End-game rebirths (once Outer Space is open) need a cannon that reaches it, so it's never skipped.
+  const floor = save.rebirths >= REBIRTH.endGameAfter ? REBIRTH.endGameCannonLevel : 0;
+  return Math.min(UPGRADES.cannon.max + 1, Math.max(level, floor));
 }
 
 /**

@@ -756,8 +756,8 @@ const boltMat = new THREE.MeshBasicMaterial({ color: 0xfff27a });
 const boltGeo = new THREE.BoxGeometry(0.18, 1.6, 0.18);
 
 /** A dark thundercloud with a lightning bolt that flickers beneath it. */
-const meteorRockMat = flat(0x5a4436);
-const meteorCraterMat = flat(0x3a2a22);
+const meteorRockMat = flat(0x9a7c66, { emissive: 0x3a2a20 });
+const meteorCraterMat = flat(0x6a5040, { emissive: 0x1a1008 });
 const satBodyMat = flat(0xd9a531, { emissive: 0x3a2600 });
 const satPanelMat = flat(0x2a4fa8, { emissive: 0x0a1640 });
 const satFrameMat = flat(0xc9ced8);
@@ -807,7 +807,12 @@ export function makeMeteor(): BirdRig {
     crater.scale.setScalar(0.6 + (i % 2) * 0.4);
     rock.add(crater);
   }
-  group.add(rock);
+  // A faint pale glow so the rock reads against the black sky (no fire trail).
+  const glow = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: softTexture(), color: 0xc9d6ff, transparent: true, opacity: 0.35, depthWrite: false }),
+  );
+  glow.scale.setScalar(3.2);
+  group.add(glow, rock);
   return { group, wings: [], spinner: rock };
 }
 

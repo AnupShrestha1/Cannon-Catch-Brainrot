@@ -424,27 +424,33 @@ each milestone over 200 simulated players. Try other numbers without editing the
 SIM='{"cannon":{"growth":1.3},"gems":{"bigChance":0.2}}' npm run sim
 ```
 
-It reports the first two minutes (the hook) and the long game. With the current numbers:
+It reports the first two minutes (the hook), the run to the first rebirth, and the whole journey (a
+player who rebirths as soon as allowed, through the end game). With the current numbers (medians):
 
 | When | What happens |
 | --- | --- |
-| 33 s | First pull (an Uncommon or better) |
+| 33 s | First pull |
 | 67 s | First cannon upgrade |
-| 100 s | Third pull: a guaranteed Rare, the first glowing card |
-| 101 s | First brainrot level-up |
-| 2 min | Gift: 20 gems, two more pulls |
-| 2.3 min | First Cloud Kingdom run: new-zone banner, gems worth 3× |
-| 4.6 min | Super pull unlocked and used |
-| 5 min | First Epic |
-| 7 min | First showcase expansion |
-| 11 min | First Legendary on display |
-| 25 min | All 10 slots open |
-| 37 min | First Storm Layer run |
-| ~60 min | Rebirth unlocks |
+| 3 min | First Cloud Kingdom run |
+| 9 min | First slot expansion, first Epic |
+| 24 min | First Legendary |
+| 29 min | All 10 ground-floor slots open |
+| 36 min | Rebirth 1 (×1.5), Floor 2 |
+| 53 min | First Storm Layer run |
+| 1.1 h | Rebirth 2 (×2), Floor 3 |
+| 1.7 h | First Edge of Space run |
+| 1.8 h | First Mythic; rebirth 3 (×2.5), Floor 4 |
+| 2.8 h | First Outer Space run |
+| 3.2 h | Every slot on every floor open |
+| 3.3 h | Rebirth 4 (×3.25) |
+| 4.5 h | Rebirth 5 (×4.2) |
+| 5.8 h | First Celestial (trophy) |
+| 6.3 h | Rebirth 6 (×5.5) |
+| 8.5 h | Rebirth 7 (×7.1) |
+| 12.7 h | Rebirth 8 (×9.3) |
 
-By 2 minutes the median player has had 8 rewards (pulls, upgrades and level-ups), has cannon level 5
-and earns about 12 coins a second, and every simulated player has a Rare. Each big milestone after
-that takes roughly twice as long as the one before. Offline earnings aren't modelled.
+End-game rebirths (the 4th on) need at least cannon Lv 36, the level that reaches Outer Space, so it's
+never skipped. Offline earnings aren't modelled.
 
 It also prints each gacha tier's value per 1,000 gems, pity included, so a pricier tier is always
 checked to be worth more per gem (Super: 1.67 Legendaries and 5.6 Epic-or-better per 1,000 gems,
