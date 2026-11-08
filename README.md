@@ -219,8 +219,9 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   end. Walk up them and step off the top landing through a gap in the deck's railing; walk down to go
   back. Up on a deck the railing holds you except at those gaps. Other players' bases grow floors and
   stairs too.
-- **Collect all**: from the second rebirth, a gold pad with a coin on it appears on the path into your base,
-  under a COLLECT ALL sign. Step on it and every slot on every floor pays out at once, with coins
+- **Collect all**: from the second rebirth, a gold pad with a coin on it appears beside the path into your
+  base (on the grass, leaving the way in clear), under a COLLECT ALL sign that shows the coins waiting
+  across all your slots. Step on it and every slot on every floor pays out at once, with coins
   bursting from each and one total.
 - **Slots**: a brainrot on display earns coins once a second by rarity (Common 1/s up to Legendary 90/s),
   up to 10 minutes' worth. The coins waiting show as a big gold coin spinning slowly over its head, with

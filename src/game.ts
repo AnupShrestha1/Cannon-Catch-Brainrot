@@ -4,7 +4,7 @@
 // flight is scripted rather than simulated, so the apex hits launchHeight() exactly.
 import * as THREE from 'three';
 import { Sfx } from './audio';
-import { Base, COLLECT_RADIUS_PAD, COLLECT_Z, FLOOR_H, PLATFORM_RADIUS, STAIR, bumpSolids, floorWorld, stairHeight, stairSide } from './base';
+import { Base, COLLECT_RADIUS_PAD, COLLECT_X, COLLECT_Z, FLOOR_H, PLATFORM_RADIUS, STAIR, bumpSolids, floorWorld, stairHeight, stairSide } from './base';
 import { animateShared } from './characters';
 import { Hub } from './hub';
 import { brainrotIcon } from './icons';
@@ -1815,7 +1815,7 @@ export class Game {
     });
     // From the second rebirth, the Collect all pad on your path collects every slot at once.
     if (this.save.rebirths >= 2 && this.level === 0) {
-      const [cx, cz] = fromPlot(OWN, 0, COLLECT_Z);
+      const [cx, cz] = fromPlot(OWN, COLLECT_X, COLLECT_Z);
       if (Math.hypot(cx - this.px, cz - this.pz) < COLLECT_RADIUS_PAD) this.collectAll();
     }
     // F (or the Launch button) heads for the cannon.

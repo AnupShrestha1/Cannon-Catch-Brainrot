@@ -62,7 +62,8 @@ interface PadView {
 const LINE_X = 2.7;
 const FIRST_DEPTH = 3.6;
 const PAD_STEP = 4.2;
-/** The Collect all pad on your base's path (after the second rebirth), in plot space, and its radius. */
+/** The Collect all pad beside your base's path (after the second rebirth), in plot space, and its radius. */
+export const COLLECT_X = 3.6;
 export const COLLECT_Z = SETBACK / 2;
 export const COLLECT_RADIUS_PAD = 1.15;
 /** Height between floors. */
@@ -257,7 +258,7 @@ export class Base {
   private own: boolean;
   private marker: { group: THREE.Group; star: THREE.Mesh } | null = null;
   /** The Collect all pad, shown on your own base from the second rebirth. */
-  private collectPad: { group: THREE.Group; ring: THREE.Mesh } | null = null;
+  private collectPad: { group: THREE.Group; ring: THREE.Mesh; total: Label; shown: number } | null = null;
 
   /** Builds a plot's showcase at its slot; `vacant` leaves it unclaimed, `owner` makes it another player's. */
   constructor(scene: THREE.Scene, slot: PlotSlot, options: BaseOptions = {}) {
@@ -286,7 +287,7 @@ export class Base {
    */
   private buildCollectPad(): void {
     const g = new THREE.Group();
-    g.position.set(0, 0, COLLECT_Z);
+    g.position.set(COLLECT_X, 0, COLLECT_Z);
     const base = new THREE.Mesh(new THREE.CylinderGeometry(COLLECT_RADIUS_PAD + 0.12, COLLECT_RADIUS_PAD + 0.22, 0.14, 40), stoneMat);
     base.position.y = 0.07;
     const disc = new THREE.Mesh(
@@ -304,10 +305,15 @@ export class Base {
     sign.set('COLLECT ALL', '#ffd84a');
     sign.sprite.position.y = 2.4;
     sign.sprite.scale.multiplyScalar(0.55);
+    // The coins waiting over all your slots, above the sign.
+    const total = makeLabel();
+    total.sprite.position.y = 3.15;
+    total.sprite.scale.multiplyScalar(0.7);
+    g.add(total.sprite);
     g.add(base, disc, coin, ring, sign.sprite);
     g.visible = false;
     this.group.add(g);
-    this.collectPad = { group: g, ring };
+    this.collectPad = { group: g, ring, total, shown: -1 };
   }
 
   /** Your base's marker: a gold star turning gently high over the name board, with a soft glow. */
@@ -575,6 +581,13 @@ export class Base {
     const refreshLabels = this.labelTimer <= 0;
     if (refreshLabels) this.labelTimer = 0.2;
     if (this.collectPad?.group.visible) {
+      if (refreshLabels) {
+        const sum = Math.floor(save.pads.reduce((n, p) => n + (p ? Math.floor(p.cash) : 0), 0));
+        if (sum !== this.collectPad.shown) {
+          this.collectPad.shown = sum;
+          this.collectPad.total.set(`+${formatCoins(sum)}`, sum > 0 ? '#ffd84a' : '#c9ced6');
+        }
+      }
       const t = (time * 0.9) % 1;
       this.collectPad.ring.position.y = 0.15 + t * 1.6;
       this.collectPad.ring.scale.setScalar(1 - t * 0.3);
