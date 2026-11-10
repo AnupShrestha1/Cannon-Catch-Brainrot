@@ -5,7 +5,7 @@ Back at the base, spend gems on the gacha machine for brainrots, put them on dis
 where they earn coins, and spend coins on upgrades. Extra brainrots can be sold or merged into rarer ones.
 It covers Low Sky, Cloud Kingdom and the Storm Layer with 10 characters, and adds rebirth.
 
-Still to come: final art, recorded voice lines and music. Those need assets from outside this repo.
+Still to come: final art and recorded voice lines (music is generated for now). Those need assets from outside this repo.
 
 Design doc: https://claude.ai/artifact/EMeouczHhzvifYLtwFvrqL (it still describes catching brainrots in
 the sky; this build replaces that with gems and a gacha machine).
@@ -316,6 +316,11 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   huge REBIRTH! banner slams in over turning rays and confetti, the camera tilts up, and a volley of
   fireworks whistles up behind the station and bursts in colour with a crackle. Bots rebirth at the
   station too, with a smaller show.
+- **Background music**, generated live like the sound effects (src/music.ts): a bouncy toy-box track at the
+  base, an airy faster one in the Low Sky and Cloud Kingdom, a darker driving minor-key one in the Storm
+  Layer, and a slow floating one with bells from the Edge of Space up. Tracks crossfade on the beat as you
+  climb and come back. The lead tune rests every other pass so it doesn't wear thin. The Music button (top
+  right) turns it off and is saved; Sound off silences it too.
 - Offline earnings: brainrots keep earning while you're away, at half rate, stored for up to 2 hours plus
   an hour per rebirth (Rebirth Lv 1: 3 h, Lv 2: 4 h...). The limit shows in the Upgrades panel, the
   Welcome back popup and the rebirth popup; the rebirth station's sign shows your Rebirth Lv.

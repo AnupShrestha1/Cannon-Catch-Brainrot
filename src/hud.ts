@@ -57,6 +57,7 @@ export class Hud {
   readonly chuteBtn = byId<HTMLButtonElement>('chuteBtn');
   readonly againBtn = byId<HTMLButtonElement>('againBtn');
   readonly soundBtn = byId<HTMLButtonElement>('soundBtn');
+  readonly musicBtn = byId<HTMLButtonElement>('musicBtn');
   readonly tuneBtn = byId<HTMLButtonElement>('tuneBtn');
   readonly profileBtn = byId<HTMLButtonElement>('profileBtn');
   readonly upgradesBtn = byId<HTMLButtonElement>('upgradesBtn');
@@ -402,6 +403,10 @@ export class Hud {
 
   setSound(on: boolean): void {
     this.soundBtn.textContent = on ? 'Sound on' : 'Sound off';
+  }
+
+  setMusic(on: boolean): void {
+    this.musicBtn.textContent = on ? 'Music on' : 'Music off';
   }
 
   /** After landing: the gems this run brought home, and the new total. */

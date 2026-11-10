@@ -58,6 +58,8 @@ export interface Save {
   inventory: Owned[];
   hazards: HazardMode;
   muted: boolean;
+  /** Background music switched off (sound effects stay on). */
+  musicOff: boolean;
   /** Tutorial hints already completed. */
   hints: string[];
   /** When the game last saved, for offline earnings (ms since 1970). */
@@ -109,6 +111,7 @@ export function defaultSave(): Save {
     inventory: [],
     hazards: 'auto',
     muted: false,
+    musicOff: false,
     hints: [],
     lastSeen: 0,
     dailyStreak: 0,

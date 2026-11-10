@@ -1,4 +1,5 @@
 // Sound effects and voices synthesised with Web Audio, so the game ships no audio files.
+import { Music, type Mood } from './music';
 
 export class Sfx {
   private ctx: AudioContext | null = null;
@@ -7,6 +8,9 @@ export class Sfx {
   private windFilter!: BiquadFilterNode;
   private noise!: AudioBuffer;
   private muted = false;
+  private music: Music | null = null;
+  private musicOn = true;
+  private mood: Mood = 'base';
 
   /** Browsers only allow audio after a user gesture, so this runs on the first press. */
   unlock(): void {
@@ -39,6 +43,22 @@ export class Sfx {
     this.windGain.gain.value = 0;
     wind.connect(this.windFilter).connect(this.windGain).connect(this.master);
     wind.start();
+
+    this.music = new Music(ctx, this.master, this.noise);
+    this.music.setEnabled(this.musicOn);
+    this.music.setMood(this.mood);
+  }
+
+  /** Background music on or off (the master mute silences it too). */
+  setMusic(on: boolean): void {
+    this.musicOn = on;
+    this.music?.setEnabled(on);
+  }
+
+  /** Which music track fits what's happening. */
+  setMood(mood: Mood): void {
+    this.mood = mood;
+    this.music?.setMood(mood);
   }
 
   setMuted(muted: boolean): void {

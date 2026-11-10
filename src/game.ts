@@ -581,6 +581,7 @@ export class Game {
       if (this.state === 'reveal') this.goHome();
     });
     onClick(hud.soundBtn, () => this.toggleMute());
+    onClick(hud.musicBtn, () => this.toggleMusic());
     onClick(hud.tuneBtn, () => hud.tunePanel.classList.toggle('hidden'));
     onClick(hud.profileBtn, () => this.openProfile());
     onClick(hud.upgradesBtn, () => this.goShop());
@@ -635,6 +636,8 @@ export class Game {
       },
     });
     hud.setSound(!this.save.muted);
+    hud.setMusic(!this.save.musicOff);
+    this.sfx.setMusic(!this.save.musicOff);
   }
 
   /** The player says something: into the feed, in a bubble over their head, and to everyone on the server. */
@@ -647,6 +650,24 @@ export class Game {
   /** The game's own mute, overridden by CrazyGames' mute setting. */
   private applyMute(): void {
     this.sfx.setMuted(this.save.muted || platform.muted);
+  }
+
+  private toggleMusic(): void {
+    this.save.musicOff = !this.save.musicOff;
+    this.sfx.setMusic(!this.save.musicOff);
+    this.hud.setMusic(!this.save.musicOff);
+    writeSave(this.save);
+  }
+
+  /** The music follows the flight: the base track at home, then the sky, the storm and space as you climb. */
+  private updateMusic(): void {
+    const flying = this.state === 'ascent' || this.state === 'fall';
+    if (!flying) {
+      this.sfx.setMood('base');
+      return;
+    }
+    const zone = zoneIndexAt(this.py);
+    this.sfx.setMood(zone >= 3 ? 'space' : zone === 2 ? 'storm' : 'sky');
   }
 
   private toggleMute(): void {
@@ -3258,6 +3279,7 @@ export class Game {
     this.hud.showAction(free ? this.actionLabel() : null);
     this.updateGuide();
     this.updateCoach();
+    this.updateMusic();
     this.updatePadButtons(atBase);
     animateShared(this.time);
     animateGems(this.time);
