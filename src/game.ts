@@ -661,8 +661,8 @@ export class Game {
 
   /** The music follows the flight: the base track at home, then the sky, the storm and space as you climb. */
   private updateMusic(): void {
-    const flying = this.state === 'ascent' || this.state === 'fall';
-    if (!flying) {
+    if (this.state === 'fall') return; // keep the flight's track through the fall, switch once landed
+    if (this.state !== 'ascent') {
       this.sfx.setMood('base');
       return;
     }

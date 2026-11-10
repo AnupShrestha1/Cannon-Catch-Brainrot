@@ -115,14 +115,26 @@ const TRACKS: Record<Mood, Track> = {
 
 const midiHz = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
+/** One track playing: its own fader and place in the loop. Two overlap while crossfading. */
+interface Player {
+  mood: Mood;
+  fader: GainNode;
+  step: number;
+  nextTime: number;
+  /** When a fading-out track stops scheduling notes (Infinity while it's the current one). */
+  until: number;
+}
+
+/** Seconds the old track keeps playing, fading out, while the new one fades in. */
+const CROSSFADE = 3;
+
 export class Music {
   private out: GainNode;
-  /** The current track's own fader, so the old one can fade while the new one starts. */
-  private fader: GainNode | null = null;
-  private mood: Mood | null = null;
+  /** The current track last; earlier ones are fading out. */
+  private players: Player[] = [];
+  /** The player being scheduled right now (the note helpers write to its fader). */
+  private p!: Player;
   private wanted: Mood = 'base';
-  private step = 0;
-  private nextTime = 0;
   private timer = 0;
   private on = true;
 
@@ -136,9 +148,6 @@ export class Music {
     this.out.connect(dest);
     // Schedule a little ahead on a timer; pause while the tab is hidden (timers are throttled there).
     this.timer = window.setInterval(() => this.pump(), 25);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') this.nextTime = 0;
-    });
   }
 
   setEnabled(on: boolean): void {
@@ -146,7 +155,7 @@ export class Music {
     this.out.gain.setTargetAtTime(on ? 0.32 : 0, this.ctx.currentTime, 0.15);
   }
 
-  /** Which track should play; it changes on the next beat, crossfading. */
+  /** Which track should play; it comes in on the current one's next bar, crossfading. */
   setMood(mood: Mood): void {
     this.wanted = mood;
   }
@@ -159,30 +168,49 @@ export class Music {
     const ctx = this.ctx;
     if (!this.on || ctx.state !== 'running' || document.visibilityState !== 'visible') return;
     const now = ctx.currentTime;
-    if (this.nextTime < now) this.nextTime = now + 0.05;
-    while (this.nextTime < now + 0.15) {
-      // Switch tracks on a beat.
-      if (this.wanted !== this.mood && this.step % 4 === 0) this.switchTo(this.wanted, this.nextTime);
-      this.playStep(this.nextTime);
-      const track = TRACKS[this.mood!];
-      this.nextTime += 60 / track.bpm / 4;
-      this.step = (this.step + 1) % (16 * 8 * 2);
+    const horizon = now + 0.15;
+    const cur = this.players[this.players.length - 1];
+    if (!cur) this.players.push(this.start(this.wanted, now + 0.05, 0.6));
+    for (const p of this.players) if (p.nextTime < now) p.nextTime = now + 0.05;
+    // Each player schedules its own steps (they may have different tempos).
+    for (const p of [...this.players]) {
+      this.p = p;
+      while (p.nextTime < horizon && p.nextTime < p.until) {
+        const current = p === this.players[this.players.length - 1];
+        // The new track comes in on a bar line of the old one, so the downbeats meet.
+        if (current && this.wanted !== p.mood && p.step % 16 === 0) {
+          p.until = p.nextTime + CROSSFADE;
+          p.fader.gain.cancelScheduledValues(p.nextTime);
+          p.fader.gain.setValueAtTime(TRACKS[p.mood].level, p.nextTime);
+          p.fader.gain.linearRampToValueAtTime(0.0001, p.until);
+          this.players.push(this.start(this.wanted, p.nextTime, CROSSFADE * 0.6));
+          this.p = p;
+        }
+        this.playStep(p.nextTime);
+        p.nextTime += 60 / TRACKS[p.mood].bpm / 4;
+        p.step = (p.step + 1) % (16 * 8 * 2);
+      }
+    }
+    // Drop tracks that have faded out (only the current one and its predecessors fading stay).
+    this.players = this.players.filter((p) => {
+      if (p.until === Infinity || now < p.until + 1) return true;
+      p.fader.disconnect();
+      return false;
+    });
+    // If tracks change again mid-fade, more than two could pile up: keep the newest two.
+    while (this.players.length > 2) {
+      const old = this.players.shift()!;
+      old.fader.gain.setTargetAtTime(0, now, 0.1);
+      setTimeout(() => old.fader.disconnect(), 1000);
     }
   }
 
-  private switchTo(mood: Mood, t: number): void {
-    if (this.fader) {
-      const old = this.fader;
-      old.gain.setTargetAtTime(0, t, 0.4);
-      setTimeout(() => old.disconnect(), 3000);
-    }
-    const f = this.ctx.createGain();
-    f.gain.setValueAtTime(0.0001, t);
-    f.gain.setTargetAtTime(TRACKS[mood].level, t, 0.5);
-    f.connect(this.out);
-    this.fader = f;
-    this.mood = mood;
-    this.step = 0;
+  private start(mood: Mood, t: number, fadeIn: number): Player {
+    const fader = this.ctx.createGain();
+    fader.gain.setValueAtTime(0.0001, t);
+    fader.gain.linearRampToValueAtTime(TRACKS[mood].level, t + fadeIn);
+    fader.connect(this.out);
+    return { mood, fader, step: 0, nextTime: t, until: Infinity };
   }
 
   private note(track: Track, degree: number, octave = 0): number {
@@ -192,12 +220,12 @@ export class Music {
   }
 
   private playStep(t: number): void {
-    const track = TRACKS[this.mood!];
+    const track = TRACKS[this.p.mood];
     const s16 = 60 / track.bpm / 4;
-    const inBar = this.step % 16;
-    const bar = Math.floor(this.step / 16) % 8;
+    const inBar = this.p.step % 16;
+    const bar = Math.floor(this.p.step / 16) % 8;
     // Every other pass through the 8 bars the lead rests, so the tune doesn't wear thin.
-    const leadOn = Math.floor(this.step / 128) % 2 === 0;
+    const leadOn = Math.floor(this.p.step / 128) % 2 === 0;
     const chord = track.chords[bar];
     const tones = [chord, chord + 2, chord + 4];
 
@@ -231,7 +259,7 @@ export class Music {
       const m = this.note(track, tones[k % 3], k === 3 ? 1 : 0);
       // Without drums (space), the arpeggio slows to eighths.
       if (track.drums !== '.'.repeat(16) || inBar % 2 === 0)
-        this.voice('triangle', midiHz(m + 12), t, s16 * 0.9, this.mood === 'space' ? 0.05 : 0.035, 0.003, 3000);
+        this.voice('triangle', midiHz(m + 12), t, s16 * 0.9, this.p.mood === 'space' ? 0.05 : 0.035, 0.003, 3000);
     }
 
     // Lead, on eighth notes.
@@ -248,7 +276,7 @@ export class Music {
         const dur = s16 * 2 * len;
         const vol = track.leadWave === 'square' ? 0.035 : 0.09;
         this.voice(track.leadWave, midiHz(m), t, dur, vol, 0.01, track.leadWave === 'square' ? 2200 : 5000);
-        if (this.mood === 'space') this.voice('sine', midiHz(m + 12), t, dur * 1.5, 0.03, 0.005, 6000);
+        if (this.p.mood === 'space') this.voice('sine', midiHz(m + 12), t, dur * 1.5, 0.03, 0.005, 6000);
       }
     }
   }
@@ -263,7 +291,7 @@ export class Music {
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.value = cutoff;
-    filter.connect(env).connect(this.fader!);
+    filter.connect(env).connect(this.p.fader);
     for (const mul of detune ? [1, detune] : [1]) {
       const osc = ctx.createOscillator();
       osc.type = type;
@@ -282,7 +310,7 @@ export class Music {
     const env = ctx.createGain();
     env.gain.setValueAtTime(0.5, t);
     env.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-    osc.connect(env).connect(this.fader!);
+    osc.connect(env).connect(this.p.fader);
     osc.start(t);
     osc.stop(t + 0.25);
   }
@@ -297,7 +325,7 @@ export class Music {
     const env = ctx.createGain();
     env.gain.setValueAtTime(vol, t);
     env.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    src.connect(filter).connect(env).connect(this.fader!);
+    src.connect(filter).connect(env).connect(this.p.fader);
     src.start(t, Math.random());
     src.stop(t + dur + 0.05);
   }
@@ -320,7 +348,7 @@ export class Music {
     const env = ctx.createGain();
     env.gain.setValueAtTime(0.3, t);
     env.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-    osc.connect(env).connect(this.fader!);
+    osc.connect(env).connect(this.p.fader);
     osc.start(t);
     osc.stop(t + 0.25);
   }
