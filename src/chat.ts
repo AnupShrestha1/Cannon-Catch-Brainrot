@@ -19,6 +19,9 @@ const GAME_LINES = [
   'shop guy waved at me', 'lucky machine is lucky', 'that plane came out of nowhere', 'parachute at the last second',
   'how is everyone so high up', 'my base is getting full', 'need more gems', 'one more launch then i sleep',
   'pulled 3 commons in a row', 'i keep missing the green', 'satellites hurt', 'space is so pretty', 'meteor hit me',
+  'the shop guy waves so much', 'who else is grinding gems', 'my cannon is so slow', 'just need 1 more legendary',
+  'the cauldron sound is so satisfying', 'parachute timing is hard', 'i love the music here', 'bullseye is addicting',
+  'everyone dance lol', 'this lobby is chill', 'my bag is full', 'clouds look like cotton candy',
 ];
 
 /** Each persona's own lines, mixed in with the game ones. */
@@ -67,6 +70,15 @@ export const THREADS: [string, string[]][] = [
   ['anyone else lagging', ['nope', 'a bit', 'no']],
   ['what time is it for u', ['3am lol', 'lunch', 'too late']],
   ['why is the cannon so loud', [] as string[]],
+  ['which machine is the best', ['cosmic if u can afford it', 'super is good value', 'galaxy for mythics']],
+  ['how do u get more floors', ['rebirth', 'rebirth gives a floor', 'first 3 rebirths add one']],
+  ['whats a celestial', ['merge mythics', 'trophy brainrot', 'the rarest one']],
+  ['is the shield worth it', ['ya for storm layer', 'saves ur gems from birds', 'kinda']],
+  ['how do u emote', ['press G', 'the pink button', 'emote button bottom left']],
+  ['anyone got a mythic yet', ['not yet 😭', 'one', 'nope']],
+  ['what does the parachute upgrade do', ['bigger safe window', 'easier landings']],
+  ['is it worth leveling commons', [] as string[]],
+  ['wait how do i get to space', ['cannon lv 36ish', 'rebirth a lot']],
 ];
 
 /** Short reactions to someone else's line, to keep a burst of chat going. */
@@ -84,7 +96,8 @@ export function idleLine(p: Persona): string {
 export function style(text: string, p: Persona): string {
   // Emoji-only and noise lines stay as they are.
   if (!/[a-z]{2}/i.test(text) || NOISE.includes(text)) return text;
-  let t = text;
+  // A fat-finger now and then, on an ordinary lowercase word (never a name, which starts with a capital).
+  let t = Math.random() < 0.08 ? typo(text) : text;
   switch (p) {
     case 'genz':
       t = t.toLowerCase().replace(/[.!]+$/, '');
@@ -106,23 +119,114 @@ export function style(text: string, p: Persona): string {
       t = t.toLowerCase();
       break;
   }
-  if (Math.random() < 0.08) t = typo(t);
-  return t;
+  // Lower-casing a line shouldn't flatten its smileys.
+  return t.replace(/:d\b/g, ':D').replace(/\bxd\b/g, 'XD');
 }
 
 /** Stretches one vowel run now and then: "so" to "sooo". */
 function stretch(t: string, chance: number): string {
   if (Math.random() > chance) return t;
-  return t.replace(/([aeiouy])(?=[^aeiouy]*$)/i, (m) => m.repeat(Math.floor(rand(3, 6))));
+  // Only everyday words get stretched, never names ("hey Bob" stays Bob).
+  return t.replace(/\b(so|no|yes|hi|hey|go|wow|yay|lol|cool|nice|omg|woo|please|pls|what|why|ok)\b/i, (w) =>
+    w.replace(/([aeiouy])(?!.*[aeiouy])/i, (v) => v.repeat(Math.floor(rand(3, 6)))),
+  );
 }
 
 /** One fat-finger: two letters swapped, or one dropped. */
 function typo(t: string): string {
   const words = t.split(' ');
-  const i = words.findIndex((w) => w.length > 4);
+  const i = words.findIndex((w) => w.length > 4 && /^[a-z]+$/.test(w));
   if (i < 0) return t;
   const w = words[i];
   const j = 1 + Math.floor(Math.random() * (w.length - 2));
   words[i] = Math.random() < 0.5 ? w.slice(0, j) + w[j + 1] + w[j] + w.slice(j + 2) : w.slice(0, j) + w.slice(j + 1);
   return words.join(' ');
+}
+
+// ---------------------------------------------------------------- lines for things that happen
+
+/**
+ * What people say when something happens, by event. {name} is another player, {zone} a zone, {fav} the best
+ * brainrot on a base, {thing} a brainrot just pulled or merged. Each line is said by one person at a time:
+ * the server skips any line said in the last few minutes, so two bots never echo each other.
+ */
+export const LINES = {
+  /** Someone new arrived in town (said by people already here). */
+  welcome: [
+    'hi {name}', 'welcome {name}!', 'yo {name}', 'hey {name} 👋', 'hii', 'welcome!', 'sup {name}', 'o/ {name}',
+    'another one lol', 'hey new person', 'hello {name}', 'welcome to the sky lol',
+  ],
+  /** A newcomer, a little after arriving. */
+  arrived: [
+    'hi everyone', 'hey all', 'whats up', 'yo', 'hi', 'back again lol', 'ok where was i', 'hello hello',
+    'first time here', 'how do i play', 'is this the cannon game', 'my friend told me to try this',
+  ],
+  /** Leaving. */
+  bye: [
+    'gtg bye', 'bye guys', 'cya', 'gotta go eat', 'bye!', 'mom says bed', 'ok im off', 'later', 'peace',
+    'gn everyone', 'brb forever lol', 'cya tomorrow', 'homework time 😭', 'bye bye',
+  ],
+  /** Stepping away, and coming back. */
+  afkGoing: ['brb', 'brb food', 'afk a sec', 'one sec', 'brb door', 'phone call brb'],
+  afkBack: ['back', 'im back', 'ok back', 'what did i miss', 'back lol', 'sorry was eating'],
+  /** The local player walked into their base. */
+  greetHost: [
+    'hi!! 👋', 'welcome to my base!', 'hey there 😄', 'check out my brainrots!', "don't steal anything lol",
+    'oh hi', 'visitor!!', 'like my base?', 'make urself at home', 'careful the brainrots bite', 'ayy a guest',
+  ],
+  /** Thanks for a like. */
+  thanks: [
+    'thanks!! 😄', 'ty! took forever', 'hehe thanks', '❤️', 'tysm', 'aw thanks', 'ty ty', 'thank u!!',
+    'ikr its my fav', 'took me ages lol', 'it was a lucky pull',
+  ],
+  /** Visiting someone's base. */
+  visit: [
+    'nice base', 'how did u get {fav}', 'cool {fav}!', 'ur base is cool', 'wow {fav}', 'i want {fav} so bad',
+    'this base is huge', 'trade me {fav} lol', 'ur so rich', 'how many floors is this', '{fav} is so cute',
+    'stealing this layout', 'nice', 'clean base',
+  ],
+  /** Someone else (you or a bot) pulled a Legendary. */
+  wowLegendary: ['nice legendary', 'gg', 'lucky', 'omg a legendary', 'W pull', 'no way', 'jealous', 'sheesh', 'ok thats a good one'],
+  /** ...a Mythic. */
+  wowMythic: ['A MYTHIC??', 'no way a mythic', 'WHAT', 'mythic?? teach me', 'insane pull', 'im so jealous 😭', 'the luck', 'bro is blessed'],
+  /** ...a Celestial. */
+  wowCelestial: ['CELESTIAL???', 'is that even real', 'NO WAY', 'screenshot that', 'bro just won the game', 'how 😭😭'],
+  /** Their own pulls. */
+  selfLegendary: ['LETS GOOO', 'YESSS', 'finally!!', 'omg omg', 'legendary!!', 'first legendary today', 'ok im happy'],
+  selfMythic: ['MYTHIC!!!', 'I GOT A MYTHIC', 'no way no way', 'im shaking', 'MYTHIC LETS GOOO', 'best day ever'],
+  selfCelestial: ['CELESTIAL!!!!', 'IM CRYING', 'trophy time', 'GG GO NEXT'],
+  /** A run of junk. */
+  commonStreak: ['3 commons in a row 💀', 'all commons bruh', 'this machine hates me', 'rigged lol', 'commons again', 'L pull'],
+  /** Merged into something good. */
+  selfMerge: ['merge worked!', 'the pot is goated', 'merged into {thing}!', 'cauldron go bloop', 'free upgrade lol'],
+  /** Reached a new zone (their own flight). */
+  selfZone: ['made it to {zone}!', '{zone} finally', 'new zone!!', '{zone} is so pretty', 'look how high i went', 'woah {zone}'],
+  /** Someone else reached a new zone. */
+  otherZone: ['gz', 'gz on {zone}', 'nice one', '{zone} already?', 'how high did u go', 'W'],
+  /** Their own rebirth. */
+  selfRebirth: ['REBIRTH LETS GO', 'new floor!!', 'finally rebirthed', 'ez', 'starting over lol', 'income go brrr', 'rebirth #{n} done'],
+  /** Someone else's rebirth. */
+  otherRebirth: ['gg {name}', 'nice rebirth', 'gz on rebirth', 'already?? im so far behind', 'W rebirth'],
+  /** Buying upgrades. */
+  shop: ['ka-ching', 'cannon go brrr', 'upgrade time', 'ty shop guy', 'broke again lol', 'max cannon soon', 'bought the magnet'],
+  /** Landings. */
+  landPerfect: ['PERFECT', 'bullseye!!', 'perfect landing ez', 'did u see that', 'nailed it', 'x1.5 baby'],
+  landCrash: ['bruh i crashed', 'chute too late 💀', 'ouch', 'i forgot the parachute lol', 'that hurt', 'face first lol'],
+  landHazard: ['why is there a plane', 'the bird got me', 'stupid satellite', 'meteor rekt me', 'lost my gems 😭', 'who put a balloon there'],
+  /** A big flight. */
+  bigFlight: ['new best!', 'so high', 'i saw space for a sec', 'that was a good shot', 'cannon is op now'],
+  /** The local player emoted near them. */
+  emoteDance: ['dance battle!!', 'lol nice moves', 'dance off', 'teach me that', 'party at the cannon'],
+  emoteWave: ['hi!', 'o/', 'hey 👋', 'hii'],
+  emoteFlex: ['flexing on us', 'ok mr muscles', 'big flex', 'lol'],
+  emoteCry: ['whats wrong', 'dont cry lol', 'its ok', 'need a hug?'],
+  emoteLaugh: ['what so funny', 'lol', 'haha', '😂'],
+  emoteClap: ['ty ty', 'clap clap', '👏', 'lol thanks'],
+};
+
+export type Topic = keyof typeof LINES;
+
+/** Fills {name}, {zone}, {fav}, {thing}, {n} in a line. */
+export function fill(line: string, vars: Record<string, string | number> = {}): string {
+  return line.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
 }

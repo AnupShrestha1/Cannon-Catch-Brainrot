@@ -326,7 +326,12 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - **Chat that sounds like people**: each other player has a way of typing (a Gen Z kid fluent in brainrot,
   a hyped kid in caps, a chill one-word typer, a Gen X parent, a tryhard), with the odd typo or stretched
   word. Chat comes in bursts and lulls, some of it noise ("wooooo"), and about half the questions get no
-  answer. Nobody talks more than once every 12 seconds.
+  answer. Nobody talks more than once every 12 seconds. Nobody repeats a line anyone said in the last 2½
+  minutes (lines are reserved the moment they're planned, so two bots never pick the same one), there's
+  always a beat between two lines, and each line waits for the time it takes to type. There are lines for
+  arrivals and welcomes, goodbyes, going AFK and coming back, visiting and liking bases, big pulls (yours
+  and theirs, by rarity), junk ten-pulls, merges, new zones, rebirths, shopping, landings (perfect, crashes,
+  hazards) and your emotes. Stretched words and typos never touch names.
 - **Gacha spin sound**: a coin clunks in, the crank ratchets faster then slows like a prize wheel, capsules
   rattle inside over a motor whirr, and a ka-chunk drops the capsule; a big prize adds a rising shimmer.
   Other players' pulls are heard nearby, quieter with distance.
