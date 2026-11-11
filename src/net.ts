@@ -639,7 +639,7 @@ export class FakeServer {
     };
     this.bots.push(bot);
     if (!joining) return;
-    this.events.push({ kind: 'join', name, text: 'joined the game', at: [x, 1, z] });
+    this.events.push({ kind: 'join', name, text: 'arrived in town', at: [x, 1, z] });
     // Walk home up the lane.
     this.goHome(bot);
     // A couple of people say hi.
@@ -652,7 +652,7 @@ export class FakeServer {
   private removeBot(bot: Bot): void {
     if (!this.bots.includes(bot)) return;
     this.bots.splice(this.bots.indexOf(bot), 1);
-    this.events.push({ kind: 'leave', name: bot.name, text: 'left the game', at: [bot.x, bot.y + 1, bot.z] });
+    this.events.push({ kind: 'leave', name: bot.name, text: 'left town', at: [bot.x, bot.y + 1, bot.z] });
     // Matchmaking fills the slot: usually within a minute, now and then it stays open a while.
     const wait = Math.random() < 0.8 ? rand(10, 45) : rand(60, 140);
     this.joins.push({ slot: bot.slotRef, at: this.time + wait });

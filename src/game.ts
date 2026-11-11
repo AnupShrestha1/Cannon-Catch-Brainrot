@@ -590,7 +590,9 @@ export class Game {
     });
     onClick(hud.soundBtn, () => this.toggleMute());
     onClick(hud.musicBtn, () => this.toggleMusic());
-    onClick(hud.tuneBtn, () => hud.tunePanel.classList.toggle('hidden'));
+    // The Tune panel (cheats for playtesting: levels, coins, game speed, reset) only exists in development.
+    if (import.meta.env.DEV) onClick(hud.tuneBtn, () => hud.tunePanel.classList.toggle('hidden'));
+    else hud.removeTuning();
     onClick(hud.profileBtn, () => this.openProfile());
     onClick(hud.upgradesBtn, () => this.goShop());
     onClick(hud.exitBtn, () => this.exitCannon());
@@ -618,7 +620,7 @@ export class Game {
         hud.openChat();
         return;
       }
-      if (e.code === 'KeyT') hud.tunePanel.classList.toggle('hidden');
+      if (e.code === 'KeyT' && import.meta.env.DEV) hud.tunePanel.classList.toggle('hidden');
       const atBase = !hud.modalOpen && (this.state === 'home' || this.state === 'aim');
       if (this.wheel.key(e.code, true)) {
         e.preventDefault();
@@ -632,7 +634,7 @@ export class Game {
       if (e.code === 'KeyM') this.toggleMute();
       if (e.code === 'Escape') hud.closeShop();
     });
-    hud.bindTuning(this.save, {
+    if (import.meta.env.DEV) hud.bindTuning(this.save, {
       changed: () => {
         writeSave(this.save);
         this.refreshShop();

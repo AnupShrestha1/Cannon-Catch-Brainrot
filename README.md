@@ -111,7 +111,9 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     from the shared cannon (dive, up, free fall, parachute), pulls, merges, buys upgrades, levels up and
     rebirths. Their helmets go on in the cannon, like yours.
   - The feed (bottom left) shows joins and leaves, Epic and Legendary pulls and merges, new zones,
-    rebirths and chat. The online counter shows the server name and player count.
+    rebirths and chat. The counter top right shows the town's name and how many plots are taken
+    ("Sky-2103 · 6/8 in town"); since the other players are simulated, nothing claims they're online, and the
+    feed says they "arrived in town" or "left town".
   - You can visit too: walk into anyone's plot ("Visiting Mia's base"), and the owner may say hi. Walk up
     to one of their brainrots and press E to see its level and income and give it a 👍 (they'll thank
     you).
@@ -499,7 +501,8 @@ against Basic's 1.21 and 3.5).
 
 ## Tuning
 
-Press **T** (or the Tune button) for the tuning panel: cannon level, a game-speed slider (×1 to ×20, not
+Development builds only (`npm run dev`; release builds remove it): press **T** (or the Tune button) for
+the tuning panel: cannon level, a game-speed slider (×1 to ×20, not
 saved), active play time (game time, which counts sped-up time, and real time; only while the tab is on
 screen), hazards, coin buttons (+1K to +1B), gem buttons (+10 to +10K), and a full reset that needs a
 second tap. **M** mutes.

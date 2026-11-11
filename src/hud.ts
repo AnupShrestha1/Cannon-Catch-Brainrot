@@ -706,12 +706,15 @@ export class Hud {
     }
   }
 
-  /** How many players are on the server, and its name. */
+  /**
+   * The town's name and how many plots are taken. The other players are simulated, so this never claims
+   * anyone is "online".
+   */
   setOnline(count: number, server: string, capacity: number): void {
     const key = `${count}|${server}`;
     if (key === this.onlineKey) return;
     this.onlineKey = key;
-    this.onlineEl.textContent = `${server} · ${count}/${capacity} online`;
+    this.onlineEl.textContent = `${server} · ${count}/${capacity} in town`;
   }
 
   /** Places one level-up button per item, reusing them frame to frame, and hides the rest. */
@@ -995,6 +998,12 @@ export class Hud {
   }
 
   /** The dev tuning panel. It edits the save directly, so it can skip past upgrade costs. */
+  /** Release builds: the Tune button and panel are taken out of the page. */
+  removeTuning(): void {
+    this.tuneBtn.remove();
+    this.tunePanel.remove();
+  }
+
   bindTuning(save: Save, hooks: TuningHooks): void {
     const level = byId<HTMLInputElement>('levelIn');
     const hazards = byId<HTMLSelectElement>('hazIn');
