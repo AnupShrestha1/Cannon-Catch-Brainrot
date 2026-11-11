@@ -1,5 +1,5 @@
 // HTML overlay on top of the 3D canvas.
-import { CHARGE, RARITIES, UPGRADES, launchHeight, type Track } from './config';
+import { CHARGE, RARITIES, UPGRADES, ZONES, launchHeight, type Track } from './config';
 import { formatCoins } from './economy';
 import type { HazardMode, Save } from './store';
 
@@ -53,6 +53,20 @@ export interface TuningHooks {
   resetAll(): void;
 }
 
+/** Each zone's colour on the height meter (brighter than the skies themselves, to read on any of them). */
+const ZONE_CSS = ['#7fd6ff', '#ffb36b', '#b57bff', '#5b7bff', '#ff7ad9'];
+
+/** Where height y sits on the gauge, 0 to 1: each zone gets an equal share, the last one up to 1.5× its start. */
+function gaugeAt(y: number): number {
+  const n = ZONES.length;
+  for (let i = n - 1; i >= 0; i--) {
+    if (y < ZONES[i].from) continue;
+    const top = ZONES[i + 1]?.from ?? ZONES[i].from * 1.5;
+    return Math.min(1, (i + Math.min(1, (y - ZONES[i].from) / (top - ZONES[i].from))) / n);
+  }
+  return 0;
+}
+
 export class Hud {
   readonly chuteBtn = byId<HTMLButtonElement>('chuteBtn');
   readonly againBtn = byId<HTMLButtonElement>('againBtn');
@@ -62,6 +76,7 @@ export class Hud {
   readonly profileBtn = byId<HTMLButtonElement>('profileBtn');
   readonly upgradesBtn = byId<HTMLButtonElement>('upgradesBtn');
   readonly bookBtn = byId<HTMLButtonElement>('bookBtn');
+  readonly emoteBtn = byId<HTMLButtonElement>('emoteBtn');
   readonly backpackBtn = byId<HTMLButtonElement>('backpackBtn');
   /** A portrait image for a brainrot, or '' to fall back to the plain rarity swatch. */
   iconFor: (name: string, rarity: number) => string = () => '';
@@ -81,6 +96,13 @@ export class Hud {
   private altNum = byId('altNum');
   private zone = byId('zone');
   private best = byId('best');
+  private altNext = byId('altNext');
+  private altMark = this.alt.querySelector<HTMLElement>('.alt-mark')!;
+  private altBest = this.alt.querySelector<HTMLElement>('.alt-best')!;
+  private altDir = this.alt.querySelector<HTMLElement>('.alt-dir')!;
+  /** The altitude readout's last update (real ms) and height, to throttle it and tell up from down. */
+  private altAt = 0;
+  private altY = 0;
   private stack = byId('stack');
   /** Shields left this flight, under the run's gems. */
   private shieldsEl = (() => {
@@ -145,6 +167,7 @@ export class Hud {
 
   constructor() {
     this.bindChat();
+    this.buildGauge();
     for (const id of ['modalBody', 'shopRows', 'cards']) this.dragScroll(byId(id));
     // Modals answer the keyboard and the backdrop too, so there's always a way out. Capture phase and
     // stopImmediatePropagation keep the key from also reaching the game (Space would launch).
@@ -212,23 +235,64 @@ export class Hud {
     }
   }
 
+  /**
+   * The height meter: a gauge of the sky's zones (each an equal band) with a marker climbing it and a tick at
+   * your best, beside the height in big digits, the zone's name in its colour and how far the next zone is.
+   * The digits update at most 20 times a second, in fixed-width figures, so they don't shimmer at speed.
+   */
   setAlt(visible: boolean, y: number, zone: string, best: number): void {
     this.alt.classList.toggle('hidden-soft', !visible);
     if (!visible) return;
-    const alt = Math.round(y);
+    const now = performance.now();
+    this.altMark.style.bottom = `${gaugeAt(y) * 100}%`;
+    if (now - this.altAt < 50) return;
+    const dy = y - this.altY;
+    this.altAt = now;
+    this.altY = y;
+    const dir = Math.abs(dy) < 0.05 ? '' : dy > 0 ? 'up' : 'down';
+    if (dir !== this.altDir.dataset.dir) {
+      this.altDir.dataset.dir = dir;
+      this.altDir.textContent = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '';
+    }
+    const alt = Math.max(0, Math.round(y));
     if (alt !== this.last.alt) {
       this.last.alt = alt;
       this.altNum.textContent = String(alt);
+      const zi = ZONES.findIndex((z) => z.name === zone);
+      const next = ZONES[zi + 1];
+      this.altNext.textContent = next ? `${next.name} in ${Math.max(0, next.from - alt)} m` : 'The top of the sky!';
     }
     if (zone !== this.last.zone) {
       this.last.zone = zone;
       this.zone.textContent = zone;
+      const zi = ZONES.findIndex((z) => z.name === zone);
+      this.alt.style.setProperty('--zone', ZONE_CSS[zi] ?? '#ffe58a');
+      // A little bump when a new zone is reached.
+      this.zone.classList.remove('bump');
+      void this.zone.offsetWidth;
+      this.zone.classList.add('bump');
     }
     const b = Math.round(best);
     if (b !== this.last.best) {
       this.last.best = b;
       this.best.textContent = b > 0 ? `Best ${b} m` : '';
+      this.altBest.style.bottom = `${gaugeAt(b) * 100}%`;
+      this.altBest.style.display = b > 0 ? '' : 'none';
     }
+  }
+
+  /** Builds the gauge's coloured zone bands (once). */
+  private buildGauge(): void {
+    const bands = this.alt.querySelector('.alt-bands')!;
+    bands.replaceChildren(
+      ...ZONES.map((z, i) => {
+        const band = document.createElement('div');
+        band.className = 'alt-band';
+        band.style.background = `linear-gradient(0deg, ${ZONE_CSS[i]}, ${ZONE_CSS[i + 1] ?? ZONE_CSS[i]})`;
+        band.title = `${z.name} from ${z.from} m`;
+        return band;
+      }),
+    );
   }
 
   /** The gems collected this run, shown at the top during a flight; null hides it. */
@@ -373,6 +437,7 @@ export class Hud {
       [this.upgradesBtn, pulse.upgrades],
       [this.backpackBtn, false],
       [this.bookBtn, pulse.book],
+      [this.emoteBtn, false],
     ];
     for (const [tile, on] of tiles) {
       tile.classList.toggle('on', dock);

@@ -5,6 +5,8 @@
 import * as THREE from 'three';
 import { Sfx } from './audio';
 import { profileEditor } from './profile';
+import { EmojiPops, applyEmote, type Emote } from './emotes';
+import { EmoteWheel } from './emoteWheel';
 import { Base, COLLECT_RADIUS_PAD, COLLECT_X, COLLECT_Z, UPGRADE_X, FLOOR_H, PLATFORM_RADIUS, STAIR, bumpSolids, floorWorld, stairHeight, stairSide } from './base';
 import { animateShared } from './characters';
 import { Hub } from './hub';
@@ -26,6 +28,7 @@ import {
   pullPad,
   toPlot,
   walkStep,
+  type PlotSlot,
 } from './layout';
 import { CAPACITY, FakeServer, describePad } from './net';
 import { RemoteView, makeBubble } from './remote';
@@ -267,6 +270,11 @@ export class Game {
   private boardTimer = 0;
   private player: PlayerRig;
   private fx: Particles;
+  /** Emoji popping up: over your head when you emote, over a brainrot you liked. */
+  private pops = new EmojiPops();
+  /** The emote wheel, and the emote you're playing (seconds in). */
+  private wheel = new EmoteWheel((e) => this.playEmote(e));
+  private emote: { e: Emote; t: number } | null = null;
   private streaks: Streaks;
   private input: Input;
   private hud = new Hud();
@@ -591,6 +599,11 @@ export class Game {
     });
     onClick(hud.giftBtn, () => this.claimGift());
     onClick(hud.bookBtn, () => this.openBook());
+    onClick(hud.emoteBtn, () => this.wheel.toggle());
+    window.addEventListener('keyup', (e) => {
+      if (e.target instanceof HTMLInputElement) return;
+      this.wheel.key(e.code, false);
+    });
     onClick(hud.backpackBtn, () => this.openBackpack());
     hud.iconFor = brainrotIcon;
     hud.onBuy = (item) => this.buy(item);
@@ -607,6 +620,14 @@ export class Game {
       }
       if (e.code === 'KeyT') hud.tunePanel.classList.toggle('hidden');
       const atBase = !hud.modalOpen && (this.state === 'home' || this.state === 'aim');
+      if (this.wheel.key(e.code, true)) {
+        e.preventDefault();
+        return;
+      }
+      if (e.code === 'KeyG' && !e.repeat && this.state === 'home' && !hud.modalOpen) {
+        this.wheel.show(true);
+        return;
+      }
       if (e.code === 'KeyB' && atBase) this.openBackpack();
       if (e.code === 'KeyM') this.toggleMute();
       if (e.code === 'Escape') hud.closeShop();
@@ -782,6 +803,7 @@ export class Game {
     }
     this.updateServer(realDt);
     this.fx.update(dt);
+    this.pops.update(realDt);
     this.updateFireworks(realDt);
     this.updateVisuals(realDt, dt);
     // The reveal screen and the shop are breaks in play.
@@ -1949,6 +1971,9 @@ export class Game {
     }
   }
 
+  /** The plot whose stairs and decks the player is on (their own, or someone else's they climbed). */
+  private stairPlot: PlotSlot = OWN;
+
   /**
    * Walking the base's stairs. On a flight the player stays on its treads and climbs or descends with depth;
    * stepping off the top landing (or a higher flight's bottom landing) onto a deck puts them on that floor, and
@@ -1956,8 +1981,18 @@ export class Game {
    * landing waits. On the ground, the climbing part of the first flight is solid.
    */
   private walkStairs(): void {
-    const floors = this.base.floors;
-    let [lx, lz] = toPlot(OWN, this.px, this.pz);
+    // Anyone's base can be climbed: on the ground, whichever plot you're at; up top, the one you climbed.
+    if (this.level === 0 && this.stair < 0) {
+      // The plot whose stairs are nearest: they stand just outside the plot's edge.
+      this.stairPlot =
+        SLOTS.find((slot) => {
+          const [x, z] = toPlot(slot, this.px, this.pz);
+          return Math.abs(x) < STAIR.outer + 0.6 && z < STAIR.z0 + STAIR.landing + 0.5 && z > -PLOT_DEPTH - 1;
+        }) ?? OWN;
+    }
+    const plot = this.stairPlot;
+    const floors = plot === OWN ? this.base.floors : this.remote.floorsOf(plot.index);
+    let [lx, lz] = toPlot(plot, this.px, this.pz);
     const S = STAIR;
     const onFlight = (k: number) => {
       const a = stairSide(k) * lx;
@@ -1982,7 +2017,7 @@ export class Game {
         // Held on the treads between the handrail and the plot's edge.
         lx = side * clamp(a, S.inner + 0.2, S.outer - 0.35);
         lz = clamp(lz, S.z1 - S.landing + 0.35, k === 0 ? S.z0 + S.landing : S.z0 + S.landing - 0.35);
-        [this.px, this.pz] = fromPlot(OWN, lx, lz);
+        [this.px, this.pz] = fromPlot(plot, lx, lz);
       }
       return;
     }
@@ -2000,12 +2035,12 @@ export class Game {
         k >= 0 && k < floors - 1 && Math.sign(lx) === stairSide(k) && (top ? lz < S.z1 && lz > S.z1 - S.landing : lz > S.z0 && lz < S.z0 + S.landing);
       const open = gapAt(this.level - 1, true) || gapAt(this.level, false);
       const edge = open ? S.outer : PLOT_HALF - 0.6;
-      [this.px, this.pz] = fromPlot(OWN, clamp(lx, -edge, edge), clamp(lz, -PLOT_DEPTH + 0.6, -0.6));
+      [this.px, this.pz] = fromPlot(plot, clamp(lx, -edge, edge), clamp(lz, -PLOT_DEPTH + 0.6, -0.6));
     } else if (floors > 1 && stairSide(0) * lx > S.inner - 0.45 && stairSide(0) * lx < S.outer + 0.45 && lz < S.z0 && lz > S.z1 - S.landing) {
       // On the ground, the first flight's climbing part is solid: step back out to the nearer side.
       const a = stairSide(0) * lx;
       const out = a - (S.inner - 0.45) < S.outer + 0.45 - a ? S.inner - 0.45 : S.outer + 0.45;
-      [this.px, this.pz] = fromPlot(OWN, stairSide(0) * out, lz);
+      [this.px, this.pz] = fromPlot(plot, stairSide(0) * out, lz);
     }
   }
 
@@ -2135,7 +2170,8 @@ export class Game {
     let best: { index: number; pad: PadSlot } | null = null;
     let bestD = COLLECT_RADIUS;
     owner.pads.forEach((pad, i) => {
-      if (!pad) return;
+      // Only brainrots on the floor you're standing on (their decks can be climbed).
+      if (!pad || Base.padFloor(i) !== this.level) return;
       const local = Base.padPosition(i, this.tmp);
       const [x, z] = fromPlot(slot, local.x, local.z);
       const d = Math.hypot(x - this.px, z - this.pz);
@@ -2174,6 +2210,7 @@ export class Game {
         label: '👍 Nice!',
         primary: true,
         action: () => {
+          this.likePop(SLOTS[owner.slot], near.index);
           this.server.like(owner.id);
           this.hud.feed('You', `liked ${owner.name}'s ${near.pad.name}`, 'news');
         },
@@ -2184,7 +2221,7 @@ export class Game {
 
   /** Height of the floor under the player: raised on the pads, the cauldron platform and showcase floors. */
   private floorHere(): number {
-    if (this.stair >= 0) return stairHeight(this.stair, toPlot(OWN, this.px, this.pz)[1]) + 0.02;
+    if (this.stair >= 0) return stairHeight(this.stair, toPlot(this.stairPlot, this.px, this.pz)[1]) + 0.02;
     if (this.level > 0) return this.level * FLOOR_H + 0.02;
     return floorWorld(this.px, this.pz);
   }
@@ -3454,6 +3491,26 @@ export class Game {
     });
   }
 
+  /** A big thumbs up pops over a brainrot you liked, with a burst of gold sparkles and a ding. */
+  private likePop(slot: PlotSlot, index: number): void {
+    const at = Base.padWorld(slot, index, new THREE.Vector3());
+    at.y += 3.2;
+    this.pops.spawn(this.scene, '👍', at, { size: 1.8, life: 1.8, rise: 1.4 });
+    this.fx.burst(at, { count: 26, color: 0xffd23f, speed: 6, life: 0.8, size: 0.5, up: 3 });
+    this.sfx.ding();
+    this.sfx.sparkle();
+  }
+
+  /** Plays an emote: at the base, standing still. Its emoji pops over your head and people nearby may join in. */
+  private playEmote(e: Emote): void {
+    if (this.state !== 'home') return;
+    this.emote = { e, t: 0 };
+    this.walkVel.set(0, 0);
+    this.pops.spawn(this.player.group, e.emoji, new THREE.Vector3(0, 3.3, 0), { size: 0.9, life: Math.min(2.2, e.length) });
+    this.sfx.pop(2);
+    this.server.localEmote(e.id, this.px, this.pz);
+  }
+
   /**
    * Arm and leg poses for each state, eased so they blend: a walk cycle, Superman arms on the way up,
    * a flailing spread-eagle skydive with a wobble, and hanging from the straps under the parachute.
@@ -3531,6 +3588,15 @@ export class Game {
       leg.rotation.z = lerp(leg.rotation.z, side * legSpread, k);
     });
     body.rotation.y = lerp(body.rotation.y, wobble, damp(6, dt));
+    // An emote plays over all that while you stand still at the base; moving, jumping or leaving ends it.
+    if (this.emote) {
+      this.emote.t += dt;
+      const still = atBase && this.state === 'home' && !moving && this.jumpY === 0;
+      if (!still || !applyEmote(this.player, this.emote.e, this.emote.t, k)) {
+        this.emote = null;
+        body.position.y = 0.9;
+      }
+    }
   }
 
   /**

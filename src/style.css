@@ -175,38 +175,159 @@ button.primary,
   flex: none;
 }
 
+/* The height meter: a zone gauge with a climbing marker, beside the height and the zone. */
 #alt {
+  --zone: #7fd6ff;
   margin-top: 4px;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 8px 14px 9px 8px;
+  border: 4px solid var(--ink);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(29, 22, 64, 0.62), rgba(29, 22, 64, 0.42));
+  box-shadow:
+    0 4px 0 var(--ink),
+    inset 0 2px 0 rgba(255, 255, 255, 0.18);
   font-family: var(--display);
-  text-shadow: var(--stroke);
+  color: #fff;
 }
 
 #alt.hidden-soft {
   display: none;
 }
 
+.alt-gauge {
+  position: relative;
+  width: 14px;
+  min-height: 96px;
+  border: 3px solid var(--ink);
+  border-radius: 9px;
+  overflow: visible;
+}
+
+.alt-bands {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column-reverse;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.alt-band {
+  flex: 1;
+  border-top: 1px solid rgba(29, 22, 64, 0.35);
+}
+
+.alt-mark {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  margin-bottom: -11px;
+  transform: translateX(-50%);
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff, var(--zone) 70%);
+  box-shadow: 0 0 10px var(--zone);
+}
+
+.alt-best {
+  position: absolute;
+  left: -5px;
+  right: -5px;
+  height: 4px;
+  margin-bottom: -2px;
+  border-radius: 2px;
+  background: var(--gold);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.alt-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 128px;
+}
+
+.alt-read {
+  display: flex;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+
 #altNum {
-  font-size: 52px;
+  display: inline-block;
+  min-width: 2.2ch;
+  font-size: 46px;
+  line-height: 0.95;
+  font-variant-numeric: tabular-nums;
+  text-shadow: var(--stroke);
 }
 
 #alt .unit {
   margin-left: 3px;
-  font-size: 24px;
+  font-size: 22px;
+  text-shadow: var(--stroke-thin);
+}
+
+.alt-dir {
+  margin-left: 6px;
+  font-size: 16px;
+  text-shadow: var(--stroke-thin);
+}
+
+.alt-dir[data-dir='up'] {
+  color: #7dff9a;
+}
+
+.alt-dir[data-dir='down'] {
+  color: #ff8a8a;
 }
 
 #zone {
-  margin-top: 4px;
-  font-size: 16px;
-  letter-spacing: 0.06em;
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 3px 9px 2px;
+  border: 3px solid var(--ink);
+  border-radius: 10px;
+  background: var(--zone);
+  color: var(--ink);
+  font-size: 14px;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #ffe58a;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+#zone.bump {
+  animation: zone-bump 0.45s cubic-bezier(0.3, 1.8, 0.5, 1);
+}
+
+@keyframes zone-bump {
+  0% {
+    transform: scale(0.7);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+#altNext {
+  margin-top: 5px;
+  font-family: var(--body);
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.9;
 }
 
 #best {
-  margin-top: 4px;
+  margin-top: 2px;
   font-family: var(--body);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
+  color: #ffe58a;
 }
 
 /* Gems collected this flight, top centre. */
@@ -229,11 +350,24 @@ button.primary,
   animation: gem-bump 0.25s ease-out;
 }
 
+/* Top right: the buttons (wrapping onto more rows on narrow screens), and the gift under them, so nothing
+   overlaps however many rows there are. */
 #corner {
   position: absolute;
   top: max(12px, env(safe-area-inset-top));
   right: 12px;
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: calc(100vw - 170px);
+}
+
+.corner-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
   gap: 8px;
 }
 
@@ -247,9 +381,6 @@ button.primary,
   --c: #ffd23f;
   --hi: #fff1a8;
   --lo: #e0a400;
-  position: absolute;
-  top: calc(max(12px, env(safe-area-inset-top)) + 46px);
-  right: 12px;
   padding: 6px 12px;
   font-size: 14px;
 }
@@ -1497,7 +1628,15 @@ button.primary,
   }
 
   #altNum {
-    font-size: 40px;
+    font-size: 34px;
+  }
+
+  .alt-gauge {
+    min-height: 80px;
+  }
+
+  .alt-info {
+    min-width: 104px;
   }
 
   #stack {
@@ -3343,5 +3482,161 @@ body.chute-alarm::after {
 
   .profile-preview {
     width: 160px;
+  }
+}
+
+/* ---------------------------------------------------------------- emote wheel */
+
+#emoteWheel {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: radial-gradient(circle at center, rgba(29, 22, 64, 0.35), rgba(29, 22, 64, 0.65));
+  opacity: 0;
+  transition: opacity 0.12s ease-out;
+  touch-action: none;
+  user-select: none;
+}
+
+#emoteWheel.hidden {
+  display: none;
+}
+
+#emoteWheel.on {
+  opacity: 1;
+}
+
+.ew-ring {
+  position: relative;
+  width: min(340px, 86vw);
+  aspect-ratio: 1;
+  transform: scale(0.85);
+  transition: transform 0.18s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+#emoteWheel.on .ew-ring {
+  transform: scale(1);
+}
+
+.ew-ring svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 6px 0 var(--ink));
+}
+
+.ew-wedge {
+  fill: rgba(255, 253, 246, 0.92);
+  stroke: var(--ink);
+  stroke-width: 5;
+  stroke-linejoin: round;
+  transition:
+    fill 0.1s,
+    transform 0.12s;
+  transform-origin: 0 0;
+  cursor: pointer;
+}
+
+.ew-wedge.on {
+  fill: var(--pink);
+  transform: scale(1.07);
+}
+
+.ew-icon {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  transition: transform 0.12s;
+}
+
+.ew-icon.on {
+  transform: translate(-50%, -50%) scale(1.25);
+}
+
+.ew-emoji {
+  font-size: clamp(30px, 9vw, 42px);
+  line-height: 1;
+  filter: drop-shadow(0 2px 0 rgba(29, 22, 64, 0.5));
+}
+
+.ew-key {
+  margin-top: 2px;
+  font: 13px var(--display);
+  color: var(--ink);
+  opacity: 0.55;
+}
+
+.ew-icon.on .ew-key {
+  color: #fff;
+  opacity: 1;
+}
+
+.ew-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 34%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 5px solid var(--ink);
+  border-radius: 50%;
+  background: linear-gradient(180deg, var(--sky-hi), var(--sky));
+  color: #fff;
+  font: clamp(16px, 5vw, 22px) var(--display);
+  text-shadow: var(--stroke-thin);
+  pointer-events: none;
+}
+
+.ew-label.on {
+  background: linear-gradient(180deg, #ffe98a, var(--gold));
+}
+
+.ew-hint {
+  color: #fff;
+  font: 18px var(--display);
+  text-shadow: var(--stroke-thin);
+}
+
+/* Phones: the dock sits higher (above the Launch button), so the chat and the feed stack above it. */
+@media (max-width: 640px) {
+  #chat {
+    bottom: calc(max(108px, env(safe-area-inset-bottom)) + 74px);
+  }
+
+  #feed {
+    bottom: calc(max(108px, env(safe-area-inset-bottom)) + 124px);
+  }
+
+  #corner {
+    max-width: calc(100vw - 150px);
+    gap: 6px;
+  }
+
+  .corner-row {
+    gap: 6px;
+  }
+
+  #corner button {
+    padding: 5px 9px;
+    font-size: 12px;
+  }
+  /* The flight's gem count goes top right, under the buttons, clear of the height meter. */
+  #stack {
+    top: calc(max(12px, env(safe-area-inset-top)) + 112px);
+    left: auto;
+    right: 12px;
+    transform: none;
+    font-size: 24px;
   }
 }

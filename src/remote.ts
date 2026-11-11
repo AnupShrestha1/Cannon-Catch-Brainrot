@@ -3,6 +3,7 @@
 // reads RemotePlayer data, so it works the same for the fake server's bots and for real players later.
 import * as THREE from 'three';
 import { Base } from './base';
+import { EmojiPops, applyEmote, emoteById } from './emotes';
 import { OWN_SLOT, SLOTS, fromPlot, plotAt } from './layout';
 import type { FakeServer, RemotePlayer } from './net';
 import { makeLabel, makePlayer, type Label, type PlayerRig } from './world';
@@ -19,6 +20,9 @@ interface Avatar {
   drawBubble: (text: string) => void;
   bubbleText: string;
   phase: number;
+  /** The emote last seen playing, and how far in, to notice a new one starting. */
+  emote: string;
+  emoteT: number;
 }
 
 /** A speech bubble: a white rounded box with dark text and a little tail, drawn on a canvas. */
@@ -72,6 +76,8 @@ interface Plot {
 export class RemoteView {
   private avatars = new Map<number, Avatar>();
   private plots = new Map<number, Plot>();
+  /** Emoji over people's heads when they emote. */
+  private pops = new EmojiPops();
 
   constructor(
     private scene: THREE.Scene,
@@ -86,6 +92,11 @@ export class RemoteView {
         center: fromPlot(slot, 0, -12),
       });
     }
+  }
+
+  /** How many floors a plot's base has (its stairs and decks are walkable). */
+  floorsOf(slot: number): number {
+    return this.plots.get(slot)?.base.floors ?? 1;
   }
 
   /** Who owns a slot right now, or null. */
@@ -109,11 +120,12 @@ export class RemoteView {
         const bubble = makeBubble();
         rig.group.add(tag.sprite, bubble.sprite);
         this.scene.add(rig.group);
-        avatar = { rig, tag, tagText: p.name, bubble: bubble.sprite, drawBubble: bubble.draw, bubbleText: '', phase: Math.random() * 10 };
+        avatar = { rig, tag, tagText: p.name, bubble: bubble.sprite, drawBubble: bubble.draw, bubbleText: '', phase: Math.random() * 10, emote: '', emoteT: 0 };
         this.avatars.set(p.id, avatar);
       }
       this.pose(avatar, p, time, dt);
     }
+    this.pops.update(dt);
     for (const [id, avatar] of this.avatars) {
       if (seen.has(id)) continue;
       this.scene.remove(avatar.rig.group);
@@ -214,5 +226,18 @@ export class RemoteView {
       leg.rotation.x += (want - leg.rotation.x) * k;
       leg.rotation.z += (side * spread - leg.rotation.z) * k;
     });
+    // An emote on top, with its emoji popping up over their head when it starts.
+    const emote = p.emote && p.pose === 'idle' ? emoteById(p.emote) : undefined;
+    if (emote) {
+      if (p.emote !== avatar.emote || p.emoteT < avatar.emoteT) {
+        this.pops.spawn(rig.group, emote.emoji, new THREE.Vector3(0, 3.3, 0), { size: 0.85, life: Math.min(2.2, emote.length) });
+      }
+      applyEmote(rig, emote, p.emoteT, k);
+    } else {
+      rig.body.rotation.y += (0 - rig.body.rotation.y) * k;
+      rig.body.rotation.z += (0 - rig.body.rotation.z) * k;
+    }
+    avatar.emote = emote ? p.emote : '';
+    avatar.emoteT = p.emoteT;
   }
 }

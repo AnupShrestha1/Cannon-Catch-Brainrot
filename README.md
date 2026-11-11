@@ -316,6 +316,19 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   huge REBIRTH! banner slams in over turning rays and confetti, the camera tilts up, and a volley of
   fireworks whistles up behind the station and bursts in colour with a crackle. Bots rebirth at the
   station too, with a smaller show.
+- **Emotes** (the Emote tile in the dock, or hold G): a wheel of six, like a weapon wheel: point at one and
+  click, tap it, press 1-6, or let go of G. Wave, Dance, Clap, Flex, Cry and Laugh, each an animation with
+  its emoji popping over your head. Moving ends it. Players standing near may join in (a wave back, a
+  dance-off), and others emote now and then on their own or after a big pull.
+- **Likes**: 👍 Nice! on someone's brainrot pops a big thumbs up with gold sparkles over it.
+- **Chat that sounds like people**: each other player has a way of typing (a Gen Z kid fluent in brainrot,
+  a hyped kid in caps, a chill one-word typer, a Gen X parent, a tryhard), with the odd typo or stretched
+  word. Chat comes in bursts and lulls, some of it noise ("wooooo"), and about half the questions get no
+  answer. Nobody talks more than once every 12 seconds.
+- **Height meter**: a gauge of the sky's zones with a marker climbing it and a gold tick at your best, the
+  height in fixed-width digits (no shimmer at speed), the zone in its colour, and how far the next zone is.
+- **Climbing**: anyone's base can be climbed, not just your own; their brainrots upstairs can be viewed and
+  liked from their deck.
 - **Background music**, generated live like the sound effects (src/music.ts): a bouncy toy-box track at the
   base, an airy faster one in the Low Sky and Cloud Kingdom, a darker driving minor-key one in the Storm
   Layer, and a slow floating one with bells from the Edge of Space up. Tracks change on a bar line: the old one keeps

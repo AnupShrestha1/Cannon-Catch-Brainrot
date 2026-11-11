@@ -210,7 +210,7 @@ function pushOut(x: number, z: number, r: number, { circles, walls }: Solids): [
 }
 
 /** A plot whose pedestals a point is on or just beside, so walkers bump them from the lane too. */
-function plotNear(x: number, z: number): PlotSlot | null {
+export function plotNear(x: number, z: number): PlotSlot | null {
   for (const slot of SLOTS) {
     const [lx, lz] = toPlot(slot, x, z);
     if (Math.abs(lx) < PLOT_HALF + 1 && lz < SETBACK && lz > -PLOT_DEPTH - 1) return slot;

@@ -63,6 +63,8 @@ import {
 } from './layout';
 import { defaultSave, type Owned, type PadSlot, type Save } from './store';
 import type { Outfit } from './world';
+import { emoteById } from './emotes';
+import { BACKCHANNEL, PERSONAS, THREADS, idleLine, style, type Persona } from './chat';
 
 export type Pose = 'idle' | 'walk' | 'hidden' | 'dive' | 'up' | 'fall' | 'chute' | 'land';
 
@@ -87,6 +89,9 @@ export interface RemotePlayer {
   afk: boolean;
   /** What they said last, while it's still showing over their head ('' for nothing). */
   bubble: string;
+  /** The emote they're playing ('' for none), and how many seconds into it. */
+  emote: string;
+  emoteT: number;
   /** Their showcase. */
   pads: (PadSlot | null)[];
   income: number;
@@ -138,25 +143,6 @@ const OUTFITS: Outfit[] = [
   { skin: 0xd9a066, shirt: 0x1d1640, pants: 0x6b6b7a, cap: 0xff7a1a },
 ];
 
-/** Lines people say out of nowhere. */
-const IDLE_CHAT = [
-  'gg', 'this cannon is so op', 'storm layer is scary', 'super pulls are worth it fr', 'merging 10 commons rn',
-  'perfect launch!!', 'lol', 'my hippo is lvl 5', 'the fountain is pretty', 'bruh i crashed', 'so close to legendary',
-  'who wants to see my base', 'brb', 'im so rich lol', 'just got cloud kingdom', 'wait for the cannon pls',
-  'the cosmic machine looks insane', 'shop guy waved at me lol', 'lucky machine is lucky fr',
-];
-/** Questions, and answers another player gives a few seconds later. */
-const THREADS: [string, string[]][] = [
-  ['how do u get gems', ['launch higher, cloud kingdom gems are x3', 'fly through them lol']],
-  ['is super pull worth it', ['yes always rare or better', 'ya way better than basic']],
-  ['anyone wanna trade', ['no trading yet lol', 'trade what']],
-  ['whats the best brainrot', ['frigorifero fenicottero 100%', 'the hippo with the helicopter']],
-  ['how do u level up brainrots', ['click level up under them', 'wait for the xp bar then click']],
-  ['wheres the merge thing', ['purple pot behind the cannon', 'by the cannon, the bubbling pot']],
-  ['how do u unlock the other machines', ['fly higher, it says the height on top', 'reach the height on the sign']],
-  ['how high can u go', ['storm layer at like 400m', 'idk 400 something']],
-  ['what does rebirth do', ['more money forever', 'x1.5 income but u restart']],
-];
 const WELCOME = ['hi', 'hii', 'welcome!', 'yo', 'hey {name}', 'hi {name} 👋'];
 const BYE = ['gtg bye', 'bye guys', 'cya', 'gotta go eat', 'bye!'];
 const GREETINGS = ['hi!! 👋', 'welcome to my base!', 'hey there 😄', 'check out my brainrots!', "don't steal anything lol"];
@@ -213,6 +199,10 @@ interface Bot extends RemotePlayer {
   afkFor: number;
   nextAfkIn: number;
   leaving: boolean;
+  /** How they type. */
+  persona: Persona;
+  /** When they last said anything (server seconds), so nobody talks too often. */
+  lastSaid: number;
   greetCooldown: number;
   /** When it last went to the shop stall, so it doesn't run there for every coin. */
   shopAt: number;
@@ -389,6 +379,10 @@ function chatReply(t: string): { lines: string[]; chance: number; greeting?: boo
   if (has(/rebirth/)) return { lines: ['more money forever', 'x1.5 income but u restart'], chance: 0.6 };
   if (has(/trade|trading/)) return { lines: ['no trading yet lol', 'trade what'], chance: 0.6 };
   if (has(/\b(gg|nice|wow|cool|pog|poggers|lets go|let's go)\b/)) return { lines: ['ty', 'gg', '😄', 'ikr', 'gg'], chance: 0.5 };
+  if (has(/skibidi|rizz|sigma|ohio|cooked|no cap|fanum|aura|mewing|bussin|slay|tung|tralalero|bombardiro|sahur/))
+    return { lines: ['💀', 'bro said it', 'no shot', 'real', 'tung tung tung sahur', 'aura -1000', 'brainrot maxxing', 'chat is this real'], chance: 0.55 };
+  if (has(/\b(rad|gnarly|tubular|groovy|whatever)\b/)) return { lines: ['ok boomer lol', 'rad 😎', 'whats rad', 'lol who says that'], chance: 0.55 };
+  if (has(/^(w+o+|y+a+y+|w+e+e+|a+h+|let'?s go+|yippee)/)) return { lines: ['wooo', 'yippee', 'lol', 'W'], chance: 0.3 };
   if (has(/\b(lol|lmao|haha+|xd|lmfao)\b/)) return { lines: ['lol', '😂', 'lmao', 'haha'], chance: 0.4 };
   if (t.includes('?')) return { lines: ['idk', 'not sure lol', 'good question', 'no idea', 'try it and see'], chance: 0.45 };
   return { lines: ['lol', 'fr', 'true', 'ok', 'nice', 'same', 'real', '?'], chance: 0.22 };
@@ -516,6 +510,35 @@ export class FakeServer {
     }
   }
 
+  /** A bot plays an emote (only standing still, at the base). */
+  private emote(bot: Bot, id: string): void {
+    if (bot.flight || bot.speed > 0.5 || bot.afk) return;
+    bot.emote = id;
+    bot.emoteT = 0;
+  }
+
+  /** The local player did an emote: people standing nearby may join in (a wave back, a dance-off). */
+  localEmote(id: string, x: number, z: number): void {
+    const near = this.bots.filter((b) => !b.afk && !b.flight && Math.hypot(b.x - x, b.z - z) < 14);
+    const answer: Record<string, string[]> = {
+      wave: ['wave'],
+      dance: ['dance', 'dance', 'clap'],
+      clap: ['clap', 'flex'],
+      flex: ['flex', 'laugh', 'clap'],
+      cry: ['laugh', 'wave'],
+      laugh: ['laugh'],
+    };
+    let n = 0;
+    for (const bot of near.sort(() => Math.random() - 0.5)) {
+      if (n >= 2 || Math.random() > 0.5) continue;
+      n++;
+      this.after(rand(0.5, 1.6), () => {
+        bot.facing = Math.atan2(x - bot.x, z - bot.z) + Math.PI;
+        this.emote(bot, pick(answer[id] ?? ['wave']));
+      });
+    }
+  }
+
   /** The local player liked one of a bot's brainrots. */
   like(id: number): void {
     const bot = this.bots.find((b) => b.id === id);
@@ -583,6 +606,8 @@ export class FakeServer {
       chute: 0,
       afk: false,
       bubble: '',
+      emote: '',
+      emoteT: 0,
       pads: save.pads,
       income: incomePerSecond(save),
       best: save.best,
@@ -596,6 +621,8 @@ export class FakeServer {
       vx: 0,
       vz: 0,
       runSpeed: rand(7, 9.5),
+      persona: pick(PERSONAS),
+      lastSaid: -99,
       jumpV: 0,
       stuck: 0,
       lookAt: 0,
@@ -647,8 +674,10 @@ export class FakeServer {
 
   // ---------------------------------------------------------------- talking
 
-  private say(bot: Bot, text: string): void {
+  private say(bot: Bot, raw: string): void {
     if (!this.bots.includes(bot)) return;
+    const text = style(raw, bot.persona);
+    bot.lastSaid = this.time;
     bot.bubble = text;
     bot.bubbleTtl = BUBBLE_SECONDS;
     this.events.push({ kind: 'chat', name: bot.name, text });
@@ -665,26 +694,49 @@ export class FakeServer {
   /** A big pull somewhere: half the time, someone says something. */
   private react(not?: Bot): void {
     const bot = this.someone(not);
-    if (bot && Math.random() < 0.6) this.after(rand(1, 3), () => this.say(bot, pick(WOW)));
+    if (bot && Math.random() < 0.45) this.after(rand(1, 3), () => this.say(bot, pick(WOW)));
   }
 
-  /** Every so often: a question someone else answers, or a passing remark. */
+  /** Someone free to talk: not AFK, and quiet for a while. */
+  private talker(not?: Bot): Bot | null {
+    const pool = this.bots.filter((b) => b !== not && !b.afk && !b.leaving && this.time - b.lastSaid > 12);
+    return pool.length ? pick(pool) : null;
+  }
+
+  /**
+   * Every so often, unevenly: a remark (sometimes just noise), or a question that may or may not get an
+   * answer. A line now and then sets off a quick "lol" or "fr" from someone else, so chat comes in bursts.
+   */
   private chatter(dt: number): void {
     this.chatIn -= dt;
     if (this.chatIn > 0) return;
-    this.chatIn = rand(20, 55);
-    const asker = this.someone();
+    // Lulls and bursts: mostly 15-45 s apart, sometimes a long quiet.
+    this.chatIn = Math.random() < 0.2 ? rand(45, 90) : rand(15, 45);
+    const asker = this.talker();
     if (!asker) return;
-    if (Math.random() < 0.45) {
+    if (Math.random() < 0.3) {
       const threads = THREADS.filter(([q]) => !this.recent.includes(q));
       if (!threads.length) return;
       const [q, answers] = pick(threads);
       this.say(asker, q);
-      const answerer = this.someone(asker);
-      if (answerer) this.after(rand(2.5, 5.5), () => this.say(answerer, pick(answers)));
-    } else {
-      const lines = IDLE_CHAT.filter((l) => !this.recent.includes(l));
-      if (lines.length) this.say(asker, pick(lines));
+      // About half the questions get answered; a few get two answers, many just hang there.
+      const answerer = answers.length && Math.random() < 0.55 ? this.talker(asker) : null;
+      if (answerer) {
+        this.after(rand(2.5, 7), () => this.say(answerer, pick(answers)));
+        const second = Math.random() < 0.15 ? this.talker(answerer) : null;
+        if (second && second !== asker) this.after(rand(5, 9), () => this.say(second, pick(answers)));
+      } else if (Math.random() < 0.3) {
+        this.after(rand(8, 14), () => this.say(asker, pick(['??', 'anyone?', 'nvm', 'nvm found it', 'ok then', 'hello??'])));
+      }
+      return;
+    }
+    let line = idleLine(asker.persona);
+    for (let i = 0; i < 4 && this.recent.includes(line); i++) line = idleLine(asker.persona);
+    if (this.recent.includes(line)) return;
+    this.say(asker, line);
+    if (Math.random() < 0.25) {
+      const other = this.talker(asker);
+      if (other) this.after(rand(1.5, 4), () => this.say(other, pick(BACKCHANNEL)));
     }
   }
 
@@ -702,6 +754,13 @@ export class FakeServer {
     bot.greetCooldown = Math.max(0, bot.greetCooldown - dt);
     bot.bubbleTtl -= dt;
     if (bot.bubbleTtl <= 0) bot.bubble = '';
+    if (bot.emote) {
+      bot.emoteT += dt;
+      if (bot.emoteT > (emoteById(bot.emote)?.length ?? 0) || bot.pose !== 'idle') bot.emote = '';
+    } else if (bot.pose === 'idle' && !bot.afk && !bot.flight && Math.random() < dt / 120) {
+      // Now and then, someone standing around does an emote for no reason.
+      this.emote(bot, pick(['wave', 'dance', 'dance', 'flex', 'laugh', 'clap']));
+    }
     if (bot.flight) {
       this.fly(bot, dt);
       return;
@@ -836,6 +895,8 @@ export class FakeServer {
     // Players jump a lot while they run.
     if (bot.jump === 0 && Math.random() < dt * 0.3) bot.jumpV = JUMP_SPEED;
     bot.pose = bot.speed > 0.5 ? 'walk' : 'idle';
+    // Walking off ends an emote.
+    if (bot.pose === 'walk') bot.emote = '';
   }
 
   /** A point in the bot's own plot, in world space. */
@@ -976,6 +1037,7 @@ export class FakeServer {
           this.events.push({ kind: 'pull', name: bot.name, text: `pulled ${withArticle(best.rarity)} ${best.name}!`, color: r.css });
           if (best.rarity >= 4) {
             this.after(1, () => this.say(bot, pick(['LETS GOOO', 'YESSS', 'finally!!', 'omg omg'])));
+            this.after(0.6, () => this.emote(bot, pick(['dance', 'flex'])));
             this.react(bot);
           }
         }

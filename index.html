@@ -16,21 +16,27 @@
       <div id="topLeft">
         <div id="wallet" class="pill"><span class="coin"></span><span id="coins">0</span><span id="income"></span></div>
         <div id="gemWallet" class="pill"><span class="gem-icon"></span><span id="gemCount">0</span></div>
-        <div id="alt" class="outline">
-          <div><span id="altNum">0</span><span class="unit">m</span></div>
-          <div id="zone">Low Sky</div>
-          <div id="best"></div>
+        <div id="alt">
+          <div class="alt-gauge"><div class="alt-bands"></div><div class="alt-best"></div><div class="alt-mark"></div></div>
+          <div class="alt-info">
+            <div class="alt-read outline"><span id="altNum">0</span><span class="unit">m</span><span class="alt-dir"></span></div>
+            <div id="zone">Low Sky</div>
+            <div id="altNext"></div>
+            <div id="best"></div>
+          </div>
         </div>
       </div>
       <div id="stack" class="pill"></div>
       <div id="corner">
-        <div id="online" class="pill"></div>
-        <button id="profileBtn" type="button">Profile</button>
-        <button id="soundBtn" type="button">Sound on</button>
-        <button id="musicBtn" type="button">Music on</button>
-        <button id="tuneBtn" type="button">Tune</button>
+        <div class="corner-row">
+          <div id="online" class="pill"></div>
+          <button id="profileBtn" type="button">Profile</button>
+          <button id="soundBtn" type="button">Sound on</button>
+          <button id="musicBtn" type="button">Music on</button>
+          <button id="tuneBtn" type="button">Tune</button>
+        </div>
+        <button id="giftBtn" type="button" disabled></button>
       </div>
-      <button id="giftBtn" type="button" disabled></button>
       <div id="prompt"></div>
       <div id="coach"><span class="coach-text"></span></div>
       <div id="hand">
@@ -62,6 +68,9 @@
         </button>
         <button id="backpackBtn" class="tile t-blue" type="button">
           <svg viewBox="0 0 24 24"><path d="M9 8V6.5a3 3 0 0 1 6 0V8" class="line" /><path d="M5 8.5h14l-1.2 12H6.2z" /><path d="M9 13h6" class="line" /></svg><span>Bag</span><span id="backpackCount"></span>
+        </button>
+        <button id="emoteBtn" class="tile t-pink" type="button" title="Emotes (G)">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M8 14.5c2 2.4 6 2.4 8 0" class="line" /><circle cx="9" cy="10" r="0.6" class="line" /><circle cx="15" cy="10" r="0.6" class="line" /></svg><span>Emote</span>
         </button>
         <button id="bookBtn" class="tile t-teal" type="button">
           <svg viewBox="0 0 24 24"><path d="M3 5.5c3-1 6-1 8.5 1v13c-2.5-2-5.5-2-8.5-1z" /><path d="M21 5.5c-3-1-6-1-8.5 1v13c2.5-2 5.5-2 8.5-1z" /></svg><span>Book</span>
