@@ -3775,3 +3775,136 @@ body:has(#shop:not(.hidden)) #hand {
     zoom: 1.18;
   }
 }
+
+/* ---------------------------------------------------------------- phones upright: the bottom of the screen */
+
+/* Four rows, bottom up, so nothing shares space: (1) the action button beside LAUNCH, (2) the dock with a
+   round Chat button at its end, (3) the coach banner and prompt, (4) the chat feed. The chat box opens
+   above the dock, full width. */
+@media (max-width: 640px) {
+  #launchBtn {
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(14px, env(safe-area-inset-bottom));
+    padding: 10px 18px 6px;
+    font-size: var(--fs-2xl);
+  }
+
+  #actionBtn {
+    left: max(12px, env(safe-area-inset-left));
+    right: auto;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    transform: none;
+    max-width: calc(100vw - 196px);
+    padding: 8px 12px;
+    font-size: var(--fs-m);
+    line-height: 1.15;
+    white-space: normal;
+  }
+
+  #actionBtn:active {
+    transform: translateY(3px);
+  }
+
+  #dock {
+    left: max(12px, env(safe-area-inset-left));
+    bottom: calc(max(14px, env(safe-area-inset-bottom)) + 84px);
+  }
+
+  #chat {
+    left: auto;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: calc(max(14px, env(safe-area-inset-bottom)) + 84px + 10px);
+  }
+
+  #chatBtn {
+    width: 46px;
+    height: 46px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 50%;
+    font-size: var(--fs-xl);
+  }
+
+  #chatBtn span {
+    display: none;
+  }
+
+  #chatInput {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 10px);
+    width: calc(100vw - 24px);
+  }
+
+  #coach,
+  #prompt {
+    top: auto;
+    bottom: calc(max(14px, env(safe-area-inset-bottom)) + 84px + 72px);
+    max-width: calc(100vw - 24px);
+  }
+
+  #feed {
+    bottom: calc(max(14px, env(safe-area-inset-bottom)) + 84px + 72px + 82px);
+  }
+
+  #exitBtn {
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(14px, env(safe-area-inset-bottom));
+  }
+}
+
+/* Phones upright, in flight: the PARACHUTE button and its gauge own the bottom right, so the chat button and
+   the flight number step aside, and the banner keeps to the left of the gauge. */
+@media (max-width: 640px) {
+  body:has(#chuteBtn.on) #chat,
+  body:has(#chuteBtn.on) #feed,
+  #flightNo {
+    display: none;
+  }
+
+  body:has(#chuteBtn.on) #coach,
+  body:has(#chuteBtn.on) #prompt {
+    left: 12px;
+    right: auto;
+    margin: 0;
+    max-width: calc(100vw - 130px);
+    bottom: calc(max(14px, env(safe-area-inset-bottom)) + 192px);
+  }
+
+  /* Clear of the PARACHUTE button even while it bounces (the alarm swells it by a third). */
+  #groundBar {
+    --gb-bottom: calc(max(22px, env(safe-area-inset-bottom)) + 124px + 50px);
+    /* And below the gem count, top right. */
+    height: clamp(140px, calc(100vh - var(--gb-bottom) - 200px), 300px);
+  }
+
+  #alt {
+    min-width: 0;
+    width: 150px;
+    box-sizing: border-box;
+  }
+}
+
+/* Everywhere: the flight number sat on the LAUNCH, EXIT and PARACHUTE buttons in turn; it's dropped (the run
+   result still counts flights). The parachute gauge clears the button even while the alarm swells it. */
+#flightNo {
+  display: none !important;
+}
+
+#groundBar {
+  --gb-bottom: calc(max(22px, env(safe-area-inset-bottom)) + 124px + 50px);
+}
+
+/* Tablets: the top-right buttons reach the middle, so the flight's gem count sits under them, as on phones. */
+@media (min-width: 641px) and (max-width: 1100px) {
+  #feed {
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 156px + 76px);
+  }
+
+  #stack {
+    top: calc(max(12px, env(safe-area-inset-top)) + 96px);
+    left: auto;
+    right: 12px;
+    transform: none;
+  }
+}

@@ -333,7 +333,11 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   band marked ×1.5 (widened to 0.4 s; the bar now shows the last 3 s, so the zones fill more of it). One
   marker with one chip: the height, OPEN!, a pulsing pink NOW ×1.5, or CRASH!.
 - **Screen sizes**: short screens (phones on their side) shrink the HUD corners, dock and big buttons together;
-  1080p and up enlarge them a little; tablets put the action button on its own row above the dock. Reveal
+  1080p and up enlarge them a little; tablets put the action button on its own row above the dock. Phones upright stack the bottom in rows:
+  the action button beside LAUNCH, then the dock with a round Chat button at its end, then the banner, then
+  the feed; in flight the chat and feed step aside for the PARACHUTE button and its gauge. Checked for
+  overlaps at 320×640, 360×760, 412×915, 812×375, 768×1024 and 1280×720 (home, gacha pad, cannon, rising,
+  falling). Reveal
   cards size themselves from the screen. Every font size is one of 12 steps on a type scale (--fs-xs 12 px
   to --fs-hero 80 px; card micro-text on short screens is the one exception), corner radii are 6, 10, 14, 18,
   22 or pill, Lilita One is only used from 16 px up, and body text is Fredoka 500. Small reveal cards put
