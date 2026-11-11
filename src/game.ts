@@ -89,7 +89,7 @@ import {
 import { Particles, Sparks, Streaks } from './fx';
 import { Hud, type PadButton, type RevealItem, type ShopItem, type ShopRow } from './hud';
 import { Input } from './input';
-import { BOOK_ZONES, DAILY, bookEntries, dailyCoins, dailyStatus, dayKey, offlineCapHours, offlineEarnings, zoneComplete } from './meta';
+import { BOOK_ZONES, DAILY, bookEntries, dailyCoins, dailyStatus, dayKey, OFFLINE, offlineCapHours, offlineEarnings, zoneComplete } from './meta';
 import { platform } from './platform';
 import { clearSave, loadSave, writeSave, type Owned, type PadSlot, type Save } from './store';
 import {
@@ -3046,7 +3046,7 @@ export class Game {
     writeSave(this.save);
     const minutes = Math.round(away.seconds / 60);
     const text = document.createElement('p');
-    text.textContent = `Your characters kept earning for ${minutes} min while you were away, at half rate (stored up to ${offlineCapHours(this.save)} h; each rebirth adds an hour).`;
+    text.textContent = `Your characters kept earning for ${minutes} min while you were away, at ${Math.round(OFFLINE.rate * 100)}% of their rate (stored up to ${offlineCapHours(this.save)} h; each rebirth adds an hour).`;
     const amount = document.createElement('div');
     amount.className = 'big';
     amount.textContent = `+${formatCoins(away.coins)} coins`;

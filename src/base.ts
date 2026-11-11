@@ -471,7 +471,8 @@ export class Base {
       [STAIR.z1 - STAIR.landing / 2, (k + 1) * FLOOR_H],
     ]) {
       const landing = new THREE.Mesh(new RoundedBoxGeometry(width + 0.1, 0.3, STAIR.landing, 2, 0.08), stepMat);
-      landing.position.set(cx, y - 0.15, z);
+      // A hair above the ground or deck it meets, so the two tops don't flicker (z-fighting).
+      landing.position.set(cx, y - 0.12, z);
       landing.castShadow = landing.receiveShadow = true;
       g.add(landing);
     }

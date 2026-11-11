@@ -322,7 +322,8 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   playing as it fades out over 3 seconds while the new one fades in. The flight's track holds through the
   fall and hands over to the base track once you land. The lead tune rests every other pass so it doesn't wear thin. The Music button (top
   right) turns it off and is saved; Sound off silences it too.
-- Offline earnings: brainrots keep earning while you're away, at half rate, stored for up to 2 hours plus
+- Offline earnings: brainrots keep earning while you're away, at 20% of their rate (the slots also fill up while
+  you're away, up to 10 minutes of income each), stored for up to 2 hours plus
   an hour per rebirth (Rebirth Lv 1: 3 h, Lv 2: 4 h...). The limit shows in the Upgrades panel, the
   Welcome back popup and the rebirth popup; the rebirth station's sign shows your Rebirth Lv.
 - Pull reveals shout once: flipping several Rare-or-better cards together (Flip all on a ×10) plays only
