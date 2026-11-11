@@ -328,12 +328,11 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - **Gacha spin sound**: a coin clunks in, the crank ratchets faster then slows like a prize wheel, capsules
   rattle inside over a motor whirr, and a ka-chunk drops the capsule; a big prize adds a rising shimmer.
   Other players' pulls are heard nearby, quieter with distance.
-- **Parachute meter**: a sky gauge with stripes streaming up as you fall, the gold Perfect band and the
-  hatched red Crash band over a grass strip, ticks, the part already fallen past dimmed, and a 🪂 marker
-  with the height beside it. It turns gold in Perfect, shakes red in Crash, and glows with NOW! in the
-  bullseye.
-- **Height meter**: a gauge of the sky's zones with a marker climbing it and a gold tick at your best, the
-  height in fixed-width digits (no shimmer at speed), the zone in its colour, and how far the next zone is.
+- **Parachute meter**: a slim pill beside the player: sky above, the gold window and the red crash band at
+  the bottom, the bullseye a single white notch. One marker with one chip on it: the height while falling,
+  OPEN! in the window, a pulsing pink NOW ×1.5 on the bullseye, CRASH! too late.
+- **Height card** (top left, in flight): the height and the zone on one line, a thin bar filling toward the
+  next zone in the zone's colour, and how far that zone is. Fixed-width digits, so it doesn't shimmer.
 - **Climbing**: anyone's base can be climbed, not just your own; their brainrots upstairs can be viewed and
   liked from their deck.
 - **Background music**, generated live like the sound effects (src/music.ts): a bouncy toy-box track at the

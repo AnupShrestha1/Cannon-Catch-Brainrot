@@ -175,159 +175,74 @@ button.primary,
   flex: none;
 }
 
-/* The height meter: a zone gauge with a climbing marker, beside the height and the zone. */
+/* The height card: height and zone on a line, a thin bar to the next zone, and how far it is. */
 #alt {
-  --zone: #7fd6ff;
+  --zone: #3fb6ff;
+  --zone-ink: #1f7fd0;
   margin-top: 4px;
+  min-width: 170px;
   display: flex;
-  align-items: stretch;
-  gap: 10px;
-  padding: 8px 14px 9px 8px;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 12px 8px;
   border: 4px solid var(--ink);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(29, 22, 64, 0.62), rgba(29, 22, 64, 0.42));
-  box-shadow:
-    0 4px 0 var(--ink),
-    inset 0 2px 0 rgba(255, 255, 255, 0.18);
-  font-family: var(--display);
-  color: #fff;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 4px 0 var(--ink);
+  color: var(--ink);
 }
 
 #alt.hidden-soft {
   display: none;
 }
 
-.alt-gauge {
-  position: relative;
-  width: 14px;
-  min-height: 96px;
-  border: 3px solid var(--ink);
-  border-radius: 9px;
-  overflow: visible;
-}
-
-.alt-bands {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column-reverse;
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.alt-band {
-  flex: 1;
-  border-top: 1px solid rgba(29, 22, 64, 0.35);
-}
-
-.alt-mark {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  width: 22px;
-  height: 22px;
-  margin-bottom: -11px;
-  transform: translateX(-50%);
-  border: 3px solid var(--ink);
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fff, var(--zone) 70%);
-  box-shadow: 0 0 10px var(--zone);
-}
-
-.alt-best {
-  position: absolute;
-  left: -5px;
-  right: -5px;
-  height: 4px;
-  margin-bottom: -2px;
-  border-radius: 2px;
-  background: var(--gold);
-  box-shadow: 0 0 0 2px var(--ink);
-}
-
-.alt-info {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-width: 128px;
-}
-
-.alt-read {
+.alt-top {
   display: flex;
   align-items: baseline;
-  font-variant-numeric: tabular-nums;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--display);
 }
 
 #altNum {
-  display: inline-block;
-  min-width: 2.2ch;
-  font-size: 46px;
-  line-height: 0.95;
+  font-size: 26px;
   font-variant-numeric: tabular-nums;
-  text-shadow: var(--stroke);
 }
 
 #alt .unit {
-  margin-left: 3px;
-  font-size: 22px;
-  text-shadow: var(--stroke-thin);
-}
-
-.alt-dir {
-  margin-left: 6px;
-  font-size: 16px;
-  text-shadow: var(--stroke-thin);
-}
-
-.alt-dir[data-dir='up'] {
-  color: #7dff9a;
-}
-
-.alt-dir[data-dir='down'] {
-  color: #ff8a8a;
+  font-size: 18px;
 }
 
 #zone {
-  align-self: flex-start;
-  margin-top: 6px;
-  padding: 3px 9px 2px;
-  border: 3px solid var(--ink);
-  border-radius: 10px;
+  font-size: 13px;
+  color: var(--zone-ink);
+  white-space: nowrap;
+}
+
+.alt-bar {
+  position: relative;
+  height: 8px;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background: #ece6f7;
+  overflow: hidden;
+}
+
+.alt-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
   background: var(--zone);
-  color: var(--ink);
-  font-size: 14px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  box-shadow: 0 2px 0 var(--ink);
-}
-
-#zone.bump {
-  animation: zone-bump 0.45s cubic-bezier(0.3, 1.8, 0.5, 1);
-}
-
-@keyframes zone-bump {
-  0% {
-    transform: scale(0.7);
-  }
-  100% {
-    transform: scale(1);
-  }
+  transition: width 0.1s linear;
 }
 
 #altNext {
-  margin-top: 5px;
   font-family: var(--body);
   font-size: 12px;
-  font-weight: 700;
-  opacity: 0.9;
-}
-
-#best {
-  margin-top: 2px;
-  font-family: var(--body);
-  font-size: 12px;
-  font-weight: 700;
-  color: #ffe58a;
+  font-weight: 600;
+  color: #4a4466;
 }
 
 /* Gems collected this flight, top centre. */
@@ -548,8 +463,7 @@ button.primary,
   background: linear-gradient(90deg, #fff1a8, #ffc21a);
 }
 
-#charge .needle,
-#groundBar .marker {
+#charge .needle {
   position: absolute;
   left: -12px;
   right: -12px;
@@ -568,15 +482,20 @@ button.primary,
   box-shadow: 0 0 16px var(--gold);
 }
 
-/* Centred a little low, so it clears the altitude readout on short screens. */
+/* The parachute gauge: a slim pill riding beside the player (placed each frame in code), sky up top, the gold
+   window and the red crash band at the bottom, the bullseye a single white notch in the window. One marker,
+   and one chip on it that says the thing that matters: the height, then OPEN!, then NOW ×1.5. */
 #groundBar {
   position: absolute;
-  left: 18px;
-  top: calc(50% + 34px);
-  width: 34px;
-  height: min(300px, 40vh);
-  margin-top: calc(min(300px, 40vh) / -2);
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: min(200px, 30vh);
+  margin-top: calc(min(200px, 30vh) / -2);
   display: none;
+  transition:
+    left 0.08s linear,
+    top 0.08s linear;
 }
 
 #groundBar.on {
@@ -584,7 +503,11 @@ button.primary,
 }
 
 #groundBar .track {
-  background: linear-gradient(90deg, #6fe08a, #3ccf5a);
+  border-width: 3px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 3px 0 var(--ink);
+  transition: box-shadow 0.15s;
 }
 
 #groundBar .zone {
@@ -595,24 +518,100 @@ button.primary,
 
 #groundBar .crash {
   bottom: 0;
-  background: linear-gradient(90deg, #ff8a95, #ff4d5e);
+  background: #ff5f6e;
 }
 
 #groundBar .perfect {
-  background: linear-gradient(90deg, #fff1a8, #ffc21a);
+  background: #ffd23f;
 }
 
-#groundBar.danger .marker {
-  background: var(--red);
+#groundBar .bullseye {
+  height: 3px !important;
+  margin-bottom: -1.5px;
+  background: #fff;
 }
 
-#groundBar .label {
+#groundBar.good .track {
+  box-shadow:
+    0 3px 0 var(--ink),
+    0 0 0 3px #ffd23f;
+}
+
+#groundBar.inbull .track {
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 18px 6px #ffd23f;
+}
+
+#groundBar .marker {
   position: absolute;
-  top: calc(100% + 8px);
   left: 50%;
-  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+}
+
+#groundBar .dot {
+  position: absolute;
+  left: -14px;
+  top: -14px;
+  width: 28px;
+  height: 28px;
+  box-sizing: border-box;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 0 var(--ink);
+  transition:
+    background 0.1s,
+    transform 0.1s;
+}
+
+#groundBar .chip {
+  position: absolute;
+  left: 22px;
+  top: 0;
+  transform: translateY(-50%);
+  padding: 3px 9px;
+  border: 3px solid var(--ink);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
   font-family: var(--display);
-  font-size: 13px;
+  font-size: 16px;
+  white-space: nowrap;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+#groundBar.good .dot,
+#groundBar.good .chip {
+  background: #ffd23f;
+}
+
+#groundBar.inbull .dot {
+  transform: scale(1.2);
+  box-shadow: 0 0 14px 4px #ffd23f;
+}
+
+#groundBar.inbull .chip {
+  background: var(--pink);
+  color: #fff;
+  text-shadow: var(--stroke-thin);
+  animation: now-pop 0.3s ease-in-out infinite alternate;
+}
+
+#groundBar.danger .dot,
+#groundBar.danger .chip {
+  background: #ff5f6e;
+  color: #fff;
+}
+
+@keyframes now-pop {
+  from {
+    scale: 1;
+  }
+  to {
+    scale: 1.12;
+  }
 }
 
 #chuteBtn {
@@ -1628,16 +1627,10 @@ button.primary,
   }
 
   #altNum {
-    font-size: 34px;
+    font-size: 22px;
   }
 
-  .alt-gauge {
-    min-height: 80px;
-  }
 
-  .alt-info {
-    min-width: 104px;
-  }
 
   #stack {
     top: calc(max(12px, env(safe-area-inset-top)) + 96px);
@@ -3210,114 +3203,6 @@ body.chute-alarm::after {
   }
 }
 
-/* ---------------------------------------------------------------- the parachute bar, bigger and labelled */
-
-#groundBar {
-  /* Room on its left for the height bubble that rides the marker. */
-  left: calc(max(14px, env(safe-area-inset-left)) + 66px);
-  width: 46px;
-  top: calc(50% - 20px);
-  height: min(380px, 50vh);
-  margin-top: calc(min(380px, 50vh) / -2);
-}
-
-#groundBar .track {
-  border-width: 4px;
-  box-shadow:
-    0 5px 0 var(--ink),
-    0 0 18px rgba(0, 0, 0, 0.35);
-}
-
-#groundBar .title {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: -6px;
-  white-space: nowrap;
-  font-family: var(--display);
-  font-size: 15px;
-  color: #fff;
-}
-
-#groundBar .label {
-  font-size: 15px;
-}
-
-/* The bullseye: a thin bright gold band with a white edge, pulsing. */
-#groundBar .bullseye {
-  background: repeating-linear-gradient(90deg, #fff 0 6px, #ffb000 6px 12px);
-  box-shadow:
-    inset 0 2px 0 #fff,
-    inset 0 -2px 0 #fff,
-    0 0 12px #ffd23f;
-  animation: bull-glow 0.6s ease-in-out infinite alternate;
-}
-
-/* Zone labels to the right of the bar. */
-#groundBar .tag {
-  position: absolute;
-  left: calc(100% + 10px);
-  transform: translateY(50%);
-  white-space: nowrap;
-  font-family: var(--display);
-  font-size: 14px;
-  text-shadow: var(--stroke-thin);
-}
-
-#groundBar .crash-tag {
-  color: #ff6b78;
-}
-
-#groundBar .perfect-tag {
-  color: #ffd84a;
-}
-
-#groundBar .bull-tag {
-  padding: 1px 7px;
-  border: 2px solid var(--ink);
-  border-radius: 8px;
-  background: #ffd23f;
-  color: var(--ink);
-  text-shadow: none;
-  font-size: 15px;
-}
-
-/* The marker: thicker, sticking out on both sides, with the height in a bubble on its left. */
-#groundBar .marker {
-  left: -14px;
-  right: -14px;
-  height: 12px;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.9);
-}
-
-#groundBar .dist {
-  position: absolute;
-  right: calc(100% + 6px);
-  top: 50%;
-  transform: translateY(-50%);
-  padding: 2px 7px;
-  border: 2px solid var(--ink);
-  border-radius: 8px;
-  background: #fff;
-  color: var(--ink);
-  font-family: var(--display);
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-#groundBar.inbull .marker {
-  background: #ffd23f;
-  box-shadow: 0 0 18px 4px #ffd23f;
-}
-
-@keyframes bull-glow {
-  from {
-    filter: brightness(1);
-  }
-  to {
-    filter: brightness(1.35);
-  }
-}
-
 /* ---------------------------------------------------------------- readable hotkey hints on the big buttons */
 
 #launchBtn .key,
@@ -3332,230 +3217,6 @@ body.chute-alarm::after {
 
 #chuteBtn .key {
   font-size: 14px;
-}
-
-/* ---------------------------------------------------------------- the parachute bar rides beside the player */
-
-/* Placed each frame next to the player (left/top set in code), compact and a little see-through so it
-   doesn't cover the view; the marker and its labels stay bold. */
-#groundBar {
-  left: 50%;
-  top: 50%;
-  width: 34px;
-  height: min(220px, 34vh);
-  margin-top: calc(min(220px, 34vh) / -2);
-  opacity: 0.88;
-  transition:
-    left 0.08s linear,
-    top 0.08s linear;
-}
-
-#groundBar .title {
-  font-size: 12px;
-}
-
-#groundBar .label {
-  font-size: 12px;
-}
-
-#groundBar .tag {
-  font-size: 12px;
-}
-
-#groundBar .bull-tag {
-  font-size: 13px;
-}
-
-#groundBar .dist {
-  font-size: 13px;
-}
-
-/* ---------------------------------------------------------------- the parachute bar, final look */
-
-/* A chunky gauge: sky blue up top, the gold Perfect band and the red Crash band at the bottom over a strip of
-   grass, ticks down the side, the part already fallen past dimmed, and a parachute marker riding down with
-   the height in a bubble. In the bullseye it glows gold with NOW! beside it. */
-#groundBar {
-  width: 40px;
-  opacity: 1;
-}
-
-#groundBar .track {
-  border-width: 4px;
-  border-radius: 14px;
-  background: none;
-  box-shadow:
-    0 4px 0 var(--ink),
-    0 0 0 3px rgba(255, 255, 255, 0.55),
-    0 8px 18px rgba(0, 0, 0, 0.3);
-}
-
-#groundBar .sky {
-  position: absolute;
-  inset: 0;
-  background:
-    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0 10px, transparent 10px 20px),
-    linear-gradient(180deg, #8fdcff, #3fb6ff 60%, #2f8cff);
-  background-size:
-    100% 20px,
-    100% 100%;
-  animation: chute-fall 0.5s linear infinite;
-}
-
-@keyframes chute-fall {
-  to {
-    background-position:
-      0 -20px,
-      0 0;
-  }
-}
-
-#groundBar .crash {
-  background:
-    repeating-linear-gradient(135deg, rgba(29, 22, 64, 0.28) 0 6px, transparent 6px 12px),
-    linear-gradient(180deg, #ff7b88, #e8323f);
-  border-top: 3px solid var(--ink);
-}
-
-#groundBar .perfect {
-  background: linear-gradient(180deg, #fff3a6, #ffc21a);
-  border-top: 3px solid var(--ink);
-}
-
-#groundBar .passed {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  background: rgba(29, 22, 64, 0.3);
-}
-
-#groundBar .ticks {
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(180deg, transparent 0 calc(10% - 2px), rgba(29, 22, 64, 0.35) calc(10% - 2px) 10%);
-  -webkit-mask: linear-gradient(90deg, #000 0 30%, transparent 30% 70%, #000 70%);
-  mask: linear-gradient(90deg, #000 0 30%, transparent 30% 70%, #000 70%);
-}
-
-#groundBar .title {
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 2px 8px;
-  border: 3px solid var(--ink);
-  border-radius: 9px;
-  background: var(--pink);
-  text-shadow: var(--stroke-thin);
-  font-size: 12px;
-  box-shadow: 0 3px 0 var(--ink);
-}
-
-#groundBar .label {
-  top: calc(100% + 6px);
-  padding: 2px 8px;
-  border: 3px solid var(--ink);
-  border-radius: 9px;
-  background: linear-gradient(180deg, #7be37b, #3ca94a);
-  color: #fff;
-  text-shadow: var(--stroke-thin);
-  font-size: 11px;
-  box-shadow: 0 3px 0 var(--ink);
-}
-
-/* The marker: a parachute in a white disc on a bar across the gauge, the height in a bubble on its left. */
-#groundBar .marker {
-  left: -10px;
-  right: -10px;
-  height: 8px;
-  margin-bottom: -4px;
-  border-width: 3px;
-  border-radius: 5px;
-  background: #fff;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.9);
-  transition: background 0.1s;
-}
-
-#groundBar .chute-icon {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 34px;
-  height: 34px;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 3px solid var(--ink);
-  border-radius: 50%;
-  background: #fff;
-  font-size: 19px;
-  line-height: 1;
-  box-shadow: 0 3px 0 var(--ink);
-}
-
-#groundBar .dist {
-  right: calc(100% + 14px);
-  border-width: 3px;
-  border-radius: 9px;
-  box-shadow: 0 3px 0 var(--ink);
-}
-
-#groundBar.good .marker,
-#groundBar.good .chute-icon {
-  background: #fff3a6;
-}
-
-#groundBar.danger .marker,
-#groundBar.danger .chute-icon {
-  background: #ff8a95;
-  animation: chute-shake 0.12s linear infinite;
-}
-
-@keyframes chute-shake {
-  50% {
-    translate: 2px 0;
-  }
-}
-
-#groundBar.inbull .marker,
-#groundBar.inbull .chute-icon {
-  background: #ffd23f;
-  box-shadow: 0 0 18px 6px #ffd23f;
-}
-
-#groundBar .now {
-  position: absolute;
-  left: calc(100% + 14px);
-  top: -14px;
-  display: none;
-  font-family: var(--display);
-  font-size: 22px;
-  color: #ffd23f;
-  white-space: nowrap;
-  text-shadow: var(--stroke);
-  animation: now-pop 0.35s ease-in-out infinite alternate;
-}
-
-#groundBar.inbull .now {
-  display: block;
-}
-
-#groundBar.inbull .bull-tag,
-#groundBar.inbull .perfect-tag {
-  visibility: hidden;
-}
-
-@keyframes now-pop {
-  from {
-    transform: scale(1);
-  }
-  to {
-    transform: scale(1.18);
-  }
-}
-
-#groundBar .tag {
-  left: calc(100% + 12px);
 }
 
 /* ---------------------------------------------------------------- profile editor */

@@ -54,18 +54,9 @@ export interface TuningHooks {
 }
 
 /** Each zone's colour on the height meter (brighter than the skies themselves, to read on any of them). */
-const ZONE_CSS = ['#7fd6ff', '#ffb36b', '#b57bff', '#5b7bff', '#ff7ad9'];
-
-/** Where height y sits on the gauge, 0 to 1: each zone gets an equal share, the last one up to 1.5× its start. */
-function gaugeAt(y: number): number {
-  const n = ZONES.length;
-  for (let i = n - 1; i >= 0; i--) {
-    if (y < ZONES[i].from) continue;
-    const top = ZONES[i + 1]?.from ?? ZONES[i].from * 1.5;
-    return Math.min(1, (i + Math.min(1, (y - ZONES[i].from) / (top - ZONES[i].from))) / n);
-  }
-  return 0;
-}
+const ZONE_CSS = ['#3fb6ff', '#ff9a3d', '#a66bff', '#4a6bff', '#ff5fc8'];
+/** Each zone's name colour on the white card (darker, to read on white). */
+const ZONE_INK = ['#1f7fd0', '#c4620f', '#7a4cc9', '#3046c9', '#c2309a'];
 
 export class Hud {
   readonly chuteBtn = byId<HTMLButtonElement>('chuteBtn');
@@ -95,14 +86,10 @@ export class Hud {
   private alt = byId('alt');
   private altNum = byId('altNum');
   private zone = byId('zone');
-  private best = byId('best');
   private altNext = byId('altNext');
-  private altMark = this.alt.querySelector<HTMLElement>('.alt-mark')!;
-  private altBest = this.alt.querySelector<HTMLElement>('.alt-best')!;
-  private altDir = this.alt.querySelector<HTMLElement>('.alt-dir')!;
-  /** The altitude readout's last update (real ms) and height, to throttle it and tell up from down. */
+  private altFill = this.alt.querySelector<HTMLElement>('.alt-fill')!;
+  /** The height readout's last update (real ms), to throttle it. */
   private altAt = 0;
-  private altY = 0;
   private stack = byId('stack');
   /** Shields left this flight, under the run's gems. */
   private shieldsEl = (() => {
@@ -123,11 +110,7 @@ export class Hud {
   private crashZone = this.ground.querySelector<HTMLElement>('.crash')!;
   private perfectZone = this.ground.querySelector<HTMLElement>('.perfect')!;
   private bullZone = this.ground.querySelector<HTMLElement>('.bullseye')!;
-  private crashTag = this.ground.querySelector<HTMLElement>('.crash-tag')!;
-  private perfectTag = this.ground.querySelector<HTMLElement>('.perfect-tag')!;
-  private bullTag = this.ground.querySelector<HTMLElement>('.bull-tag')!;
-  private dist = this.ground.querySelector<HTMLElement>('.dist')!;
-  private passed = this.ground.querySelector<HTMLElement>('.passed')!;
+  private chip = this.ground.querySelector<HTMLElement>('.chip')!;
   private reveal = byId('reveal');
   private revealTitle = byId('revealTitle');
   private cards = byId('cards');
@@ -168,7 +151,6 @@ export class Hud {
 
   constructor() {
     this.bindChat();
-    this.buildGauge();
     for (const id of ['modalBody', 'shopRows', 'cards']) this.dragScroll(byId(id));
     // Modals answer the keyboard and the backdrop too, so there's always a way out. Capture phase and
     // stopImmediatePropagation keep the key from also reaching the game (Space would launch).
@@ -237,64 +219,33 @@ export class Hud {
   }
 
   /**
-   * The height meter: a gauge of the sky's zones (each an equal band) with a marker climbing it and a tick at
-   * your best, beside the height in big digits, the zone's name in its colour and how far the next zone is.
-   * The digits update at most 20 times a second, in fixed-width figures, so they don't shimmer at speed.
+   * The height card: the height and the zone on one line, a thin bar filling toward the next zone in the
+   * zone's colour, and how far that zone is. Fixed-width digits, updated at most 20 times a second, so it
+   * doesn't shimmer at speed. (best is kept in the signature for callers; the card doesn't show it.)
    */
-  setAlt(visible: boolean, y: number, zone: string, best: number): void {
+  setAlt(visible: boolean, y: number, zone: string, _best: number): void {
     this.alt.classList.toggle('hidden-soft', !visible);
     if (!visible) return;
     const now = performance.now();
-    this.altMark.style.bottom = `${gaugeAt(y) * 100}%`;
     if (now - this.altAt < 50) return;
-    const dy = y - this.altY;
     this.altAt = now;
-    this.altY = y;
-    const dir = Math.abs(dy) < 0.05 ? '' : dy > 0 ? 'up' : 'down';
-    if (dir !== this.altDir.dataset.dir) {
-      this.altDir.dataset.dir = dir;
-      this.altDir.textContent = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '';
-    }
     const alt = Math.max(0, Math.round(y));
-    if (alt !== this.last.alt) {
-      this.last.alt = alt;
-      this.altNum.textContent = String(alt);
-      const zi = ZONES.findIndex((z) => z.name === zone);
-      const next = ZONES[zi + 1];
-      this.altNext.textContent = next ? `${next.name} in ${Math.max(0, next.from - alt)} m` : 'The top of the sky!';
-    }
+    if (alt === this.last.alt && zone === this.last.zone) return;
+    this.last.alt = alt;
+    const zi = Math.max(0, ZONES.findIndex((z) => z.name === zone));
+    const here = ZONES[zi];
+    const next = ZONES[zi + 1];
+    this.altNum.textContent = String(alt);
+    this.altFill.style.width = next ? `${Math.min(100, ((alt - here.from) / (next.from - here.from)) * 100)}%` : '100%';
+    this.altNext.textContent = next ? `${next.name} in ${Math.max(0, next.from - alt)} m` : 'The top of the sky!';
     if (zone !== this.last.zone) {
       this.last.zone = zone;
-      this.zone.textContent = zone;
-      const zi = ZONES.findIndex((z) => z.name === zone);
-      this.alt.style.setProperty('--zone', ZONE_CSS[zi] ?? '#ffe58a');
-      // A little bump when a new zone is reached.
-      this.zone.classList.remove('bump');
-      void this.zone.offsetWidth;
-      this.zone.classList.add('bump');
-    }
-    const b = Math.round(best);
-    if (b !== this.last.best) {
-      this.last.best = b;
-      this.best.textContent = b > 0 ? `Best ${b} m` : '';
-      this.altBest.style.bottom = `${gaugeAt(b) * 100}%`;
-      this.altBest.style.display = b > 0 ? '' : 'none';
+      this.zone.textContent = zone.toUpperCase();
+      this.alt.style.setProperty('--zone', ZONE_CSS[zi] ?? '#7fd6ff');
+      this.alt.style.setProperty('--zone-ink', ZONE_INK[zi] ?? '#1d1640');
     }
   }
 
-  /** Builds the gauge's coloured zone bands (once). */
-  private buildGauge(): void {
-    const bands = this.alt.querySelector('.alt-bands')!;
-    bands.replaceChildren(
-      ...ZONES.map((z, i) => {
-        const band = document.createElement('div');
-        band.className = 'alt-band';
-        band.style.background = `linear-gradient(0deg, ${ZONE_CSS[i]}, ${ZONE_CSS[i + 1] ?? ZONE_CSS[i]})`;
-        band.title = `${z.name} from ${z.from} m`;
-        return band;
-      }),
-    );
-  }
 
   /** The gems collected this run, shown at the top during a flight; null hides it. */
   /** Shields left (null hides the counter); a lost one makes it shake. */
@@ -385,22 +336,23 @@ export class Hud {
     this.ground.classList.toggle('on', frac !== null);
     if (frac === null) return;
     const pct = (v: number) => `${v * 100}%`;
+    const f = Math.min(1, Math.max(0, frac));
     this.crashZone.style.height = pct(crash);
     this.perfectZone.style.bottom = pct(crash);
     this.perfectZone.style.height = pct(perfect - crash);
-    this.bullZone.style.bottom = pct(bull[0]);
-    this.bullZone.style.height = pct(bull[1] - bull[0]);
-    this.crashTag.style.bottom = pct(crash / 2);
-    this.perfectTag.style.bottom = pct(Math.max(bull[1] + 0.05, (crash + perfect) / 2 + 0.03));
-    this.bullTag.style.bottom = pct((bull[0] + bull[1]) / 2);
-    this.bullTag.textContent = `×${bonus}`;
-    this.marker.style.bottom = `${Math.min(1, frac) * 100}%`;
-    this.passed.style.height = `${(1 - Math.min(1, frac)) * 100}%`;
-    this.ground.classList.toggle('good', frac >= crash && frac <= perfect);
-    this.dist.textContent = `${Math.max(0, Math.round(meters))} m`;
-    this.ground.classList.toggle('danger', frac < crash);
-    this.ground.classList.toggle('inbull', frac >= bull[0] && frac <= bull[1]);
+    // The bullseye is a single notch at the middle of its window.
+    this.bullZone.style.bottom = pct((bull[0] + bull[1]) / 2);
+    this.marker.style.bottom = pct(f);
+    const inBull = frac >= bull[0] && frac <= bull[1];
+    const good = frac >= crash && frac <= perfect;
+    const danger = frac < crash;
+    this.ground.classList.toggle('danger', danger);
+    this.ground.classList.toggle('good', good && !inBull);
+    this.ground.classList.toggle('inbull', inBull);
+    const text = inBull ? `NOW ×${bonus}` : good ? 'OPEN!' : danger ? 'CRASH!' : `${Math.max(0, Math.round(meters))} m`;
+    if (this.chip.textContent !== text) this.chip.textContent = text;
   }
+
 
   /**
    * Keeps the parachute bar beside the player on screen (x, y in pixels: where the player is), so the eye can
