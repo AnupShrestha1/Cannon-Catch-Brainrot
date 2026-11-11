@@ -3908,3 +3908,67 @@ body:has(#shop:not(.hidden)) #hand {
     transform: none;
   }
 }
+
+/* ---------------------------------------------------------------- timed events */
+
+/* Under the wallet: while an event is coming, a white pill with its colour as the rim, breathing gently;
+   once it's on, the pill fills with the event's colour and shines; in its last ten seconds it blinks. */
+#eventPill {
+  --ev: #3fb6ff;
+  padding: 5px 12px 4px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow:
+    0 3px 0 var(--ink),
+    inset 0 0 0 3px var(--ev);
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: var(--fs-m);
+  white-space: nowrap;
+}
+
+#eventPill.soon {
+  animation: event-breathe 1.6s ease-in-out infinite;
+}
+
+#eventPill.live {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ev) 60%, #fff), var(--ev));
+  box-shadow:
+    0 3px 0 var(--ink),
+    0 0 14px 2px var(--ev);
+  color: #fff;
+  text-shadow: var(--stroke-thin);
+  animation: event-shine 1.2s ease-in-out infinite alternate;
+}
+
+#eventPill.ending {
+  animation: event-blink 0.5s steps(2, start) infinite;
+}
+
+@keyframes event-breathe {
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes event-shine {
+  to {
+    filter: brightness(1.15);
+  }
+}
+
+@keyframes event-blink {
+  to {
+    opacity: 0.45;
+  }
+}
+
+@media (max-width: 640px) {
+  #eventPill {
+    max-width: 46vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--fs-s);
+  }
+}

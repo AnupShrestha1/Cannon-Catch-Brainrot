@@ -222,6 +222,10 @@ export const LINES = {
   emoteCry: ['whats wrong', 'dont cry lol', 'its ok', 'need a hug?'],
   emoteLaugh: ['what so funny', 'lol', 'haha', '😂'],
   emoteClap: ['ty ty', 'clap clap', '👏', 'lol thanks'],
+  /** Timed events. */
+  eventSoon: ['{event} soon!!', 'get ready for {event}', 'ooh {event}', 'saving my gems for this', 'everyone get in position', 'finally an event'],
+  eventStart: ['{event} LETS GO', 'GO GO GO', '{event}!!', 'grind time', 'everyone launch now', 'its starting!!', 'quick quick'],
+  eventEnd: ['that was so good', 'aw its over', 'gg event', 'when is the next one', 'i got so much from that', 'too short 😭'],
 };
 
 export type Topic = keyof typeof LINES;

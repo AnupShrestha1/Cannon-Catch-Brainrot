@@ -549,6 +549,14 @@ export class FakeServer {
     }
   }
 
+  /** A timed event is coming, starting or over: a few people say something about it. */
+  eventNews(stage: 'soon' | 'start' | 'end', name: string): void {
+    const topic: Topic = stage === 'soon' ? 'eventSoon' : stage === 'start' ? 'eventStart' : 'eventEnd';
+    const people = this.bots.filter((b) => !b.afk && !b.leaving).sort(() => Math.random() - 0.5);
+    const n = stage === 'start' ? 2 : 1;
+    people.slice(0, n).forEach((bot, i) => this.talk(bot, topic, { event: name }, rand(1.5, 3.5) + i * rand(1.5, 3), stage === 'start' ? 0.9 : 0.6));
+  }
+
   /** The local player liked one of a bot's brainrots. */
   like(id: number): void {
     const bot = this.bots.find((b) => b.id === id);

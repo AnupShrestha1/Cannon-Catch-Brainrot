@@ -318,6 +318,14 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   huge REBIRTH! banner slams in over turning rays and confetti, the camera tilts up, and a volley of
   fireworks whistles up behind the station and bursts in colour with a crackle. Bots rebirth at the
   station too, with a smaller show.
+- **Timed events** (src/events.ts): every 6–10 minutes of play (the first about 3 minutes in, after the
+  tutorial flights), a short boost for everyone: **Gem Rush** (×2 gems from the sky, 2 min), **Coin Frenzy**
+  (×2 coins from slots, 2 min), **Lucky Spins** (every gacha pull rolls twice and keeps the better, 2 min) or
+  **Bullseye Bonanza** (bullseye pays ×3, 2½ min), never the same one twice in a row. Each is announced 45 s
+  ahead with a toast, a chime, a feed line and a pill under the wallet counting down ("Gem Rush in 0:42"),
+  then starts with a big banner and a fanfare; the pill fills with the event's colour and counts down to the
+  end, blinking in the last 10 s. Tap it for what it does. Other players talk about it as it comes, starts
+  and ends. The dev Tune panel has a "Start an event" button.
 - **Emotes** (the Emote tile in the dock, or hold G): a wheel of six, like a weapon wheel: point at one and
   click, tap it, press 1-6, or let go of G. Wave, Dance, Clap, Flex, Cry and Laugh, each an animation with
   its emoji popping over your head. Moving ends it. Players standing near may join in (a wave back, a

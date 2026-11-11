@@ -2,6 +2,7 @@
 import { CHARGE, RARITIES, UPGRADES, ZONES, launchHeight, type Track } from './config';
 import { formatCoins } from './economy';
 import type { HazardMode, Save } from './store';
+import { clock, type EventPhase } from './events';
 
 const byId = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -51,6 +52,7 @@ export interface TuningHooks {
   addGems(amount: number): void;
   setSpeed(scale: number): void;
   resetAll(): void;
+  startEvent(): void;
 }
 
 /** Each zone's colour on the height meter (brighter than the skies themselves, to read on any of them). */
@@ -706,6 +708,44 @@ export class Hud {
     }
   }
 
+  private eventPill = byId<HTMLButtonElement>('eventPill');
+  private eventKey = '';
+
+  /**
+   * The timed-event pill under the wallet: "Gem Rush in 0:42" while it's coming (gently pulsing), then the
+   * event's name, what it gives and the time left on its colour, blinking in the last ten seconds.
+   */
+  setEvent(phase: EventPhase): void {
+    const pill = this.eventPill;
+    if (phase.kind === 'idle') {
+      if (this.eventKey) {
+        this.eventKey = '';
+        pill.classList.add('hidden');
+      }
+      return;
+    }
+    const e = phase.event;
+    const text = phase.kind === 'soon' ? `${e.icon} ${e.name} in ${clock(phase.left)}` : `${e.icon} ${e.name.toUpperCase()} · ${e.short} · ${clock(phase.left)}`;
+    const key = `${phase.kind}|${text}|${phase.left < 10}`;
+    if (key === this.eventKey) return;
+    this.eventKey = key;
+    pill.classList.remove('hidden');
+    pill.textContent = text;
+    pill.title = e.description;
+    pill.style.setProperty('--ev', e.color);
+    pill.classList.toggle('soon', phase.kind === 'soon');
+    pill.classList.toggle('live', phase.kind === 'live');
+    pill.classList.toggle('ending', phase.kind === 'live' && phase.left < 10);
+  }
+
+  /** Tapping the pill: what the event does. */
+  onEventPill(fn: () => void): void {
+    this.eventPill.addEventListener('click', () => {
+      fn();
+      this.eventPill.blur();
+    });
+  }
+
   /**
    * The town's name and how many plots are taken. The other players are simulated, so this never claims
    * anyone is "online".
@@ -1062,6 +1102,7 @@ export class Hud {
     showTime();
     window.setInterval(showTime, 500);
     // Reset wipes the save, so it takes a second tap within 3 seconds.
+    byId('eventNowBtn').addEventListener('click', () => hooks.startEvent());
     const resetBtn = byId<HTMLButtonElement>('resetBtn');
     let resetTimer = 0;
     resetBtn.addEventListener('click', () => {

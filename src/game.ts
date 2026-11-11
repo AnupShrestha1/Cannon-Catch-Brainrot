@@ -7,6 +7,7 @@ import { Sfx } from './audio';
 import { profileEditor } from './profile';
 import { EmojiPops, applyEmote, type Emote } from './emotes';
 import { EmoteWheel } from './emoteWheel';
+import { EVENT_TIMING, EventClock, type EventId } from './events';
 import { Base, COLLECT_RADIUS_PAD, COLLECT_X, COLLECT_Z, UPGRADE_X, FLOOR_H, PLATFORM_RADIUS, STAIR, bumpSolids, floorWorld, stairHeight, stairSide } from './base';
 import { animateShared } from './characters';
 import { Hub } from './hub';
@@ -275,6 +276,8 @@ export class Game {
   /** The emote wheel, and the emote you're playing (seconds in). */
   private wheel = new EmoteWheel((e) => this.playEmote(e));
   private emote: { e: Emote; t: number } | null = null;
+  /** Timed events (Gem Rush and co.). */
+  private events = new EventClock();
   private streaks: Streaks;
   private input: Input;
   private hud = new Hud();
@@ -602,6 +605,10 @@ export class Game {
     onClick(hud.giftBtn, () => this.claimGift());
     onClick(hud.bookBtn, () => this.openBook());
     onClick(hud.emoteBtn, () => this.wheel.toggle());
+    hud.onEventPill(() => {
+      const p = this.events.phase;
+      if (p.kind !== 'idle') this.hud.toast(`${p.event.icon} ${p.event.description}`, 'small');
+    });
     window.addEventListener('keyup', (e) => {
       if (e.target instanceof HTMLInputElement) return;
       this.wheel.key(e.code, false);
@@ -653,6 +660,7 @@ export class Game {
       setSpeed: (scale) => {
         this.timeScale = scale;
       },
+      startEvent: () => this.events.triggerSoon(),
       resetAll: () => {
         clearSave();
         location.reload();
@@ -787,6 +795,7 @@ export class Game {
     }
     this.hud.showStick(this.state === 'home' && !blocked ? this.input.stick : null);
     this.updateEconomy(realDt);
+    this.updateEvents(realDt);
     this.updateGems(dt);
     this.updateBirds(dt);
     this.base.update(this.save, this.time, realDt);
@@ -1109,7 +1118,7 @@ export class Game {
   private grabGem(g: Gem): void {
     g.state = 'taken';
     g.t = 0;
-    const value = Math.max(1, Math.round(g.value * trackBoost(this.save, 'finder')));
+    const value = Math.max(1, Math.round(g.value * trackBoost(this.save, 'finder') * (this.eventOn('gemRush') ? 2 : 1)));
     this.runGems += value;
     const at = this.tmp.set(g.x, g.y, 0);
     this.fx.burst(at, { count: g.big ? 24 : 8, color: g.color, speed: g.big ? 9 : 6, life: 0.5, size: g.big ? 0.7 : 0.45 });
@@ -1225,7 +1234,7 @@ export class Game {
       (late + CHUTE.perfectSpan) / CHUTE.barSeconds,
       [bullLo / CHUTE.barSeconds, (bullLo + CHUTE.bullseyeWidth) / CHUTE.barSeconds],
       this.py,
-      CHUTE.bullseyeBonus,
+      this.bullseyeBonus(),
     );
     const urgent = tau < 3.2;
     this.hud.showChute(true, urgent);
@@ -1272,7 +1281,7 @@ export class Game {
     this.bullseye = bullseye;
     this.landing = bullseye ? 'Bullseye landing' : perfect ? 'Perfect landing' : 'Safe landing';
     if (bullseye) {
-      this.hud.toast(`BULLSEYE! ×${CHUTE.bullseyeBonus} GEMS`, 'gold big');
+      this.hud.toast(`BULLSEYE! ×${this.bullseyeBonus()} GEMS`, 'gold big');
       this.sfx.sparkle();
       this.slowmo = Math.max(this.slowmo, 0.4);
       this.fx.burst(this.tmp.set(this.px, this.py + 2, this.pz), { count: 40, color: 0xffd84a, speed: 10, life: 0.9, size: 0.6 });
@@ -1353,7 +1362,7 @@ export class Game {
   /** The run's gems go into the wallet with a toast, and the player heads straight home: no result window. */
   private showReveal(): void {
     if (this.bullseye) {
-      this.runGems = Math.round(this.runGems * CHUTE.bullseyeBonus);
+      this.runGems = Math.round(this.runGems * this.bullseyeBonus());
       this.bullseye = false;
     }
     this.save.gems += this.runGems;
@@ -1435,7 +1444,7 @@ export class Game {
     }
     const got: Owned[] = [];
     for (let i = 0; i < count; i++) {
-      const one = pull(s, tier);
+      const one = pull(s, tier, this.eventOn('luckySpins'));
       if (!one) break;
       got.push(one);
     }
@@ -2702,7 +2711,7 @@ export class Game {
     for (const slot of this.save.pads) {
       if (!slot) continue;
       if (ticks > 0) {
-        const income = padIncome(this.save, slot);
+        const income = padIncome(this.save, slot) * (this.eventOn('coinFrenzy') ? 2 : 1);
         slot.cash = Math.min(income * ECONOMY.padCapSeconds, slot.cash + income * ticks);
       }
       if (gainXp(slot, realDt)) this.hud.toast(`${slot.name} can level up!`, 'good small');
@@ -3351,7 +3360,7 @@ export class Game {
     const alt = this.state === 'aim' || this.state === 'charging' ? 0 : Math.max(0, this.py);
     this.hud.setAlt(!atBase && this.state !== 'reveal', alt, ZONES[zoneIndexAt(alt)].name, this.save.best);
     this.hud.setRunGems(inFlight || this.state === 'landed' || this.state === 'aim' || this.state === 'charging' ? this.runGems : null);
-    this.hud.setWallet(this.save.coins, incomePerSecond(this.save), this.save.gems);
+    this.hud.setWallet(this.save.coins, incomePerSecond(this.save) * (this.eventOn('coinFrenzy') ? 2 : 1), this.save.gems);
     this.hud.setBackpack(this.save.inventory.length);
     const canShop = this.state === 'home' || this.state === 'aim';
     const upgradeHint = this.wantsUpgradeHint();
@@ -3507,6 +3516,41 @@ export class Game {
     this.fx.burst(at, { count: 26, color: 0xffd23f, speed: 6, life: 0.8, size: 0.5, up: 3 });
     this.sfx.ding();
     this.sfx.sparkle();
+  }
+
+  private eventOn(id: EventId): boolean {
+    return this.events.active(id);
+  }
+
+  /** The bullseye's pay: ×1.5, or ×3 during Bullseye Bonanza. */
+  private bullseyeBonus(): number {
+    return this.eventOn('bullseyeBonanza') ? 3 : CHUTE.bullseyeBonus;
+  }
+
+  /**
+   * The timed-event clock: announced 45 s ahead (a toast and a chime), started with a big banner and a
+   * fanfare, ended with a toast. The pill under the wallet counts down throughout, and the server's players
+   * talk about it.
+   */
+  private updateEvents(realDt: number): void {
+    const ev = this.events;
+    const what = ev.tick(realDt, this.save.flightNo >= EVENT_TIMING.fromFlight);
+    const phase = ev.phase;
+    if (what === 'soon' && phase.kind === 'soon') {
+      this.hud.toast(`${phase.event.icon} ${phase.event.name} starts in ${Math.ceil(phase.left)} s!`, 'gold');
+      this.hud.feed('Event', `${phase.event.name} starts soon: ${phase.event.description.toLowerCase()}`, 'news', phase.event.color);
+      this.sfx.unlockChime();
+      this.server.eventNews('soon', phase.event.name);
+    } else if (what === 'start' && phase.kind === 'live') {
+      const mins = phase.event.length / 60;
+      this.hud.grandBanner(`${phase.event.name.toUpperCase()}!`, `${phase.event.description} for ${mins % 1 ? mins.toFixed(1) : mins} minutes`);
+      this.sfx.fanfare(4);
+      this.server.eventNews('start', phase.event.name);
+    } else if (what === 'end') {
+      this.hud.toast('The event is over. Another one soon!', 'small');
+      this.server.eventNews('end', '');
+    }
+    this.hud.setEvent(phase);
   }
 
   /** Plays an emote: at the base, standing still. Its emoji pops over your head and people nearby may join in. */

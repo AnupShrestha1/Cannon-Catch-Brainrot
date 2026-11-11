@@ -233,10 +233,11 @@ export function tierUnlocked(save: Save, tier: GachaTier): boolean {
  * Spends the gems and rolls a brainrot into the backpack, or returns null if the player can't afford it.
  * Hidden pity raises the roll when a tier's counter for a rarity is due, then the counters update.
  */
-export function pull(save: Save, tier: GachaTier): Owned | null {
+export function pull(save: Save, tier: GachaTier, lucky = false): Owned | null {
   if (save.gems < tier.cost || !tierUnlocked(save, tier)) return null;
   save.gems -= tier.cost;
-  let rarity = rollTier(tier);
+  // Lucky Spins (a timed event): roll twice, keep the better.
+  let rarity = lucky ? Math.max(rollTier(tier), rollTier(tier)) : rollTier(tier);
   // The scripted start (first 10 pulls), then the normal odds and pity.
   rarity = Math.max(rarity, STARTER_PULLS[save.pulls + 1] ?? 0);
   const counters = (save.pity[tier.id] ??= {});
