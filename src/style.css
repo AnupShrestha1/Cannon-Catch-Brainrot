@@ -3370,6 +3370,194 @@ body.chute-alarm::after {
   font-size: 13px;
 }
 
+/* ---------------------------------------------------------------- the parachute bar, final look */
+
+/* A chunky gauge: sky blue up top, the gold Perfect band and the red Crash band at the bottom over a strip of
+   grass, ticks down the side, the part already fallen past dimmed, and a parachute marker riding down with
+   the height in a bubble. In the bullseye it glows gold with NOW! beside it. */
+#groundBar {
+  width: 40px;
+  opacity: 1;
+}
+
+#groundBar .track {
+  border-width: 4px;
+  border-radius: 14px;
+  background: none;
+  box-shadow:
+    0 4px 0 var(--ink),
+    0 0 0 3px rgba(255, 255, 255, 0.55),
+    0 8px 18px rgba(0, 0, 0, 0.3);
+}
+
+#groundBar .sky {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0 10px, transparent 10px 20px),
+    linear-gradient(180deg, #8fdcff, #3fb6ff 60%, #2f8cff);
+  background-size:
+    100% 20px,
+    100% 100%;
+  animation: chute-fall 0.5s linear infinite;
+}
+
+@keyframes chute-fall {
+  to {
+    background-position:
+      0 -20px,
+      0 0;
+  }
+}
+
+#groundBar .crash {
+  background:
+    repeating-linear-gradient(135deg, rgba(29, 22, 64, 0.28) 0 6px, transparent 6px 12px),
+    linear-gradient(180deg, #ff7b88, #e8323f);
+  border-top: 3px solid var(--ink);
+}
+
+#groundBar .perfect {
+  background: linear-gradient(180deg, #fff3a6, #ffc21a);
+  border-top: 3px solid var(--ink);
+}
+
+#groundBar .passed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(29, 22, 64, 0.3);
+}
+
+#groundBar .ticks {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(180deg, transparent 0 calc(10% - 2px), rgba(29, 22, 64, 0.35) calc(10% - 2px) 10%);
+  -webkit-mask: linear-gradient(90deg, #000 0 30%, transparent 30% 70%, #000 70%);
+  mask: linear-gradient(90deg, #000 0 30%, transparent 30% 70%, #000 70%);
+}
+
+#groundBar .title {
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border: 3px solid var(--ink);
+  border-radius: 9px;
+  background: var(--pink);
+  text-shadow: var(--stroke-thin);
+  font-size: 12px;
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+#groundBar .label {
+  top: calc(100% + 6px);
+  padding: 2px 8px;
+  border: 3px solid var(--ink);
+  border-radius: 9px;
+  background: linear-gradient(180deg, #7be37b, #3ca94a);
+  color: #fff;
+  text-shadow: var(--stroke-thin);
+  font-size: 11px;
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+/* The marker: a parachute in a white disc on a bar across the gauge, the height in a bubble on its left. */
+#groundBar .marker {
+  left: -10px;
+  right: -10px;
+  height: 8px;
+  margin-bottom: -4px;
+  border-width: 3px;
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.9);
+  transition: background 0.1s;
+}
+
+#groundBar .chute-icon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: #fff;
+  font-size: 19px;
+  line-height: 1;
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+#groundBar .dist {
+  right: calc(100% + 14px);
+  border-width: 3px;
+  border-radius: 9px;
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+#groundBar.good .marker,
+#groundBar.good .chute-icon {
+  background: #fff3a6;
+}
+
+#groundBar.danger .marker,
+#groundBar.danger .chute-icon {
+  background: #ff8a95;
+  animation: chute-shake 0.12s linear infinite;
+}
+
+@keyframes chute-shake {
+  50% {
+    translate: 2px 0;
+  }
+}
+
+#groundBar.inbull .marker,
+#groundBar.inbull .chute-icon {
+  background: #ffd23f;
+  box-shadow: 0 0 18px 6px #ffd23f;
+}
+
+#groundBar .now {
+  position: absolute;
+  left: calc(100% + 14px);
+  top: -14px;
+  display: none;
+  font-family: var(--display);
+  font-size: 22px;
+  color: #ffd23f;
+  white-space: nowrap;
+  text-shadow: var(--stroke);
+  animation: now-pop 0.35s ease-in-out infinite alternate;
+}
+
+#groundBar.inbull .now {
+  display: block;
+}
+
+#groundBar.inbull .bull-tag,
+#groundBar.inbull .perfect-tag {
+  visibility: hidden;
+}
+
+@keyframes now-pop {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.18);
+  }
+}
+
+#groundBar .tag {
+  left: calc(100% + 12px);
+}
+
 /* ---------------------------------------------------------------- profile editor */
 
 .panel:has(.profile) {

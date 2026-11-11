@@ -127,6 +127,7 @@ export class Hud {
   private perfectTag = this.ground.querySelector<HTMLElement>('.perfect-tag')!;
   private bullTag = this.ground.querySelector<HTMLElement>('.bull-tag')!;
   private dist = this.ground.querySelector<HTMLElement>('.dist')!;
+  private passed = this.ground.querySelector<HTMLElement>('.passed')!;
   private reveal = byId('reveal');
   private revealTitle = byId('revealTitle');
   private cards = byId('cards');
@@ -393,7 +394,9 @@ export class Hud {
     this.perfectTag.style.bottom = pct(Math.max(bull[1] + 0.05, (crash + perfect) / 2 + 0.03));
     this.bullTag.style.bottom = pct((bull[0] + bull[1]) / 2);
     this.bullTag.textContent = `×${bonus}`;
-    this.marker.style.bottom = `calc(${frac * 100}% - 6px)`;
+    this.marker.style.bottom = `${Math.min(1, frac) * 100}%`;
+    this.passed.style.height = `${(1 - Math.min(1, frac)) * 100}%`;
+    this.ground.classList.toggle('good', frac >= crash && frac <= perfect);
     this.dist.textContent = `${Math.max(0, Math.round(meters))} m`;
     this.ground.classList.toggle('danger', frac < crash);
     this.ground.classList.toggle('inbull', frac >= bull[0] && frac <= bull[1]);

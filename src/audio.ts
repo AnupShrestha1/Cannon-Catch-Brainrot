@@ -175,6 +175,49 @@ export class Sfx {
     for (let t = 0; t < seconds; t += 0.11) this.tone('square', 260 + Math.random() * 40, 200, 0.03, 0.025, t);
   }
 
+  /**
+   * A gacha machine spinning: a coin clunks in, the crank ratchets faster and faster then slows (a prize
+   * wheel's clicks), capsules rattle and tumble inside over a rising whirr, and a ka-chunk drops the capsule
+   * at the end. A big prize (Epic or better) adds a rising shimmer to tease it. `vol` scales it for someone
+   * else's machine across town.
+   */
+  gachaSpin(seconds: number, ten = false, big = false, vol = 1): void {
+    if (!this.ctx || vol <= 0.02) return;
+    // The coin going in.
+    this.tone('triangle', 1900, 1500, 0.08, 0.14 * vol);
+    this.tone('triangle', 2400, 2000, 0.1, 0.1 * vol, 0.06);
+    this.noiseBurst(0.06, 'bandpass', 3200, 0.12 * vol, undefined, 0.02);
+    // Ratchet clicks: gaps shrink to the middle of the spin, then stretch out again as it slows.
+    let t = 0.14;
+    while (t < seconds) {
+      const u = t / seconds;
+      const gap = 0.035 + 0.13 * Math.pow(Math.abs(u - 0.45) * 1.8, 1.6);
+      this.tone('square', 1100 + Math.random() * 300, 700, 0.025, 0.05 * vol, t);
+      this.noiseBurst(0.02, 'highpass', 4000, 0.05 * vol, undefined, t);
+      t += gap;
+    }
+    // Capsules tumbling inside: knocks at random pitches.
+    const knocks = ten ? 22 : 12;
+    for (let i = 0; i < knocks; i++) {
+      const at = 0.2 + Math.random() * (seconds - 0.4);
+      this.tone('sine', 300 + Math.random() * 500, 180, 0.07, 0.07 * vol, at);
+    }
+    // The motor's whirr rising and falling with the crank.
+    this.tone('sawtooth', 70, 160, seconds * 0.55, 0.035 * vol, 0.1);
+    this.tone('sawtooth', 160, 80, seconds * 0.45, 0.03 * vol, 0.1 + seconds * 0.55);
+    // Ka-chunk: the capsule drops out.
+    this.tone('sine', 180, 60, 0.18, 0.35 * vol, seconds);
+    this.noiseBurst(0.12, 'lowpass', 1200, 0.25 * vol, 300, seconds);
+    this.tone('triangle', 600, 900, 0.08, 0.1 * vol, seconds + 0.12);
+    if (big) {
+      // A rising shimmer: something good is coming.
+      for (let i = 0; i < 6; i++) {
+        const f = 880 * Math.pow(2, i / 4);
+        this.tone('sine', f, f * 1.02, 0.25, 0.05 * vol, seconds * 0.5 + i * (seconds * 0.08));
+      }
+    }
+  }
+
   /** A card flipping over. */
   flip(): void {
     this.noiseBurst(0.12, 'bandpass', 1800, 0.18, 3500);

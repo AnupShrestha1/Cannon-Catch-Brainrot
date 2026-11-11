@@ -325,6 +325,13 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   a hyped kid in caps, a chill one-word typer, a Gen X parent, a tryhard), with the odd typo or stretched
   word. Chat comes in bursts and lulls, some of it noise ("wooooo"), and about half the questions get no
   answer. Nobody talks more than once every 12 seconds.
+- **Gacha spin sound**: a coin clunks in, the crank ratchets faster then slows like a prize wheel, capsules
+  rattle inside over a motor whirr, and a ka-chunk drops the capsule; a big prize adds a rising shimmer.
+  Other players' pulls are heard nearby, quieter with distance.
+- **Parachute meter**: a sky gauge with stripes streaming up as you fall, the gold Perfect band and the
+  hatched red Crash band over a grass strip, ticks, the part already fallen past dimmed, and a 🪂 marker
+  with the height beside it. It turns gold in Perfect, shakes red in Crash, and glows with NOW! in the
+  bullseye.
 - **Height meter**: a gauge of the sky's zones with a marker climbing it and a gold tick at your best, the
   height in fixed-width digits (no shimmer at speed), the zone in its colour, and how far the next zone is.
 - **Climbing**: anyone's base can be climbed, not just your own; their brainrots upstairs can be viewed and

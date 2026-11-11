@@ -1445,7 +1445,7 @@ export class Game {
     // Epic or better), and the big sound comes when the capsule pops open.
     const best = got.reduce((a, b) => (b.rarity > a.rarity ? b : a));
     this.pulling = this.hub.spin(index, count, RARITIES[best.rarity].color, best.rarity >= 3);
-    this.sfx.crank(this.pulling * 0.5);
+    this.sfx.gachaSpin(count > 1 ? 1.9 : 1.5, count > 1, best.rarity >= 3);
     this.pendingPull = { got, index, isNew };
   }
 
@@ -2140,6 +2140,11 @@ export class Game {
       if (this.state !== 'aim' && this.state !== 'charging') this.recoil = Math.max(this.recoil, 0.8);
     } else if (act === 'spin') {
       this.hub.spin(tier, count);
+      // Someone else's pull: heard nearby, quieter with distance.
+      if (this.state === 'home') {
+        const p = pullPad(tier, false);
+        this.sfx.gachaSpin(count > 1 ? 1.9 : 1.5, count > 1, false, clamp(1 - Math.hypot(this.px - p.x, this.pz - p.z) / 30, 0, 1) * 0.5);
+      }
     } else if (act === 'stir') {
       this.hub.stir();
     }
