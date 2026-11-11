@@ -111,6 +111,7 @@ export class Hud {
   private perfectZone = this.ground.querySelector<HTMLElement>('.perfect')!;
   private bullZone = this.ground.querySelector<HTMLElement>('.bullseye')!;
   private chip = this.ground.querySelector<HTMLElement>('.chip')!;
+  private bullTag = this.ground.querySelector<HTMLElement>('.bull-tag')!;
   private reveal = byId('reveal');
   private revealTitle = byId('revealTitle');
   private cards = byId('cards');
@@ -340,8 +341,10 @@ export class Hud {
     this.crashZone.style.height = pct(crash);
     this.perfectZone.style.bottom = pct(crash);
     this.perfectZone.style.height = pct(perfect - crash);
-    // The bullseye is a single notch at the middle of its window.
-    this.bullZone.style.bottom = pct((bull[0] + bull[1]) / 2);
+    this.bullZone.style.bottom = pct(bull[0]);
+    this.bullZone.style.height = pct(bull[1] - bull[0]);
+    this.bullTag.style.bottom = pct((bull[0] + bull[1]) / 2);
+    this.bullTag.textContent = `×${bonus}`;
     this.marker.style.bottom = pct(f);
     const inBull = frac >= bull[0] && frac <= bull[1];
     const good = frac >= crash && frac <= perfect;
@@ -355,16 +358,13 @@ export class Hud {
 
 
   /**
-   * Keeps the parachute bar beside the player on screen (x, y in pixels: where the player is), so the eye can
-   * watch both the player and the bar at once. It sits a little to their right, kept inside the screen.
+   * Once kept the parachute bar beside the player; it now has a fixed place above the PARACHUTE button,
+   * where it can't run off screen or vanish against the sky.
    */
-  placeGround(x: number, y: number): void {
-    const h = this.ground.offsetHeight || 200;
-    const left = Math.min(window.innerWidth - 130, Math.max(80, x + 95));
-    const top = Math.min(window.innerHeight - h / 2 - 40, Math.max(h / 2 + 40, y));
-    this.ground.style.left = `${Math.round(left)}px`;
-    this.ground.style.top = `${Math.round(top)}px`;
+  placeGround(_x: number, _y: number): void {
+    // The gauge has a fixed place now, above the PARACHUTE button (kept for callers).
   }
+
 
   showChute(on: boolean, pulse = false): void {
     this.chuteBtn.classList.toggle('on', on);

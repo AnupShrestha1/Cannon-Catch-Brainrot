@@ -252,14 +252,15 @@ export const CHUTE = {
   tutorialLate: 0.3,
   /** Opening within this many seconds after `late` is a Perfect landing. */
   perfectSpan: 0.7,
-  /** Seconds to impact the ground bar shows at its top. */
-  barSeconds: 4,
+  /** Seconds to impact the ground bar shows at its top (3: the zones fill more of it). */
+  barSeconds: 3,
   /**
    * The bullseye: a narrow window inside the gold zone (centred this many seconds above the crash zone, this
-   * wide) where opening pays the run's gems ×bullseyeBonus. About 80% of the way down the gold zone.
+   * wide) where opening pays the run's gems ×bullseyeBonus. Widened after playtests: most of the gold zone's
+   * upper part.
    */
-  bullseyeAt: 0.14,
-  bullseyeWidth: 0.24,
+  bullseyeAt: 0.25,
+  bullseyeWidth: 0.4,
   bullseyeBonus: 1.5,
 };
 

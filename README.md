@@ -328,9 +328,14 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - **Gacha spin sound**: a coin clunks in, the crank ratchets faster then slows like a prize wheel, capsules
   rattle inside over a motor whirr, and a ka-chunk drops the capsule; a big prize adds a rising shimmer.
   Other players' pulls are heard nearby, quieter with distance.
-- **Parachute meter**: a slim pill beside the player: sky above, the gold window and the red crash band at
-  the bottom, the bullseye a single white notch. One marker with one chip on it: the height while falling,
-  OPEN! in the window, a pulsing pink NOW ×1.5 on the bullseye, CRASH! too late.
+- **Parachute meter**: a fixed column right above the PARACHUTE button, on a dark track with a white rim so
+  it reads on any sky: the red crash band at the bottom, the gold window, and the bullseye as a wide white
+  band marked ×1.5 (widened to 0.4 s; the bar now shows the last 3 s, so the zones fill more of it). One
+  marker with one chip: the height, OPEN!, a pulsing pink NOW ×1.5, or CRASH!.
+- **Screen sizes**: short screens (phones on their side) shrink the HUD corners, dock and big buttons together;
+  1080p and up enlarge them a little; tablets put the action button on its own row above the dock. Reveal
+  cards size themselves from the screen. Text is never under 12 px (11 px on cards), Lilita One is only
+  used from 16 px up, and body text is Fredoka 500. The design guide lists the type scale and components.
 - **Height card** (top left, in flight): the height and the zone on one line, a thin bar filling toward the
   next zone in the zone's colour, and how far that zone is. Fixed-width digits, so it doesn't shimmer.
 - **Climbing**: anyone's base can be climbed, not just your own; their brainrots upstairs can be viewed and

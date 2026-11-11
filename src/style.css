@@ -15,6 +15,14 @@
   --paper: #fffdf6;
   --display: 'Lilita One', 'Arial Rounded MT Bold', 'Trebuchet MS', system-ui, sans-serif;
   --body: 'Fredoka', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* The type scale (see the UI guide). Lilita One (display) only from 16px up; smaller text is Fredoka. */
+  --fs-xs: 12px;
+  --fs-s: 14px;
+  --fs-m: 16px;
+  --fs-l: 20px;
+  --fs-xl: 28px;
+  --fs-2xl: 40px;
+  --fs-3xl: 64px;
   /* The outline every bit of display text wears. */
   --stroke:
     3px 0 0 var(--ink), -3px 0 0 var(--ink), 0 3px 0 var(--ink), 0 -3px 0 var(--ink), 2px 2px 0 var(--ink),
@@ -37,7 +45,7 @@ body {
   background: #8fd3ff;
   color: #fff;
   font-family: var(--body);
-  font-weight: 600;
+  font-weight: 500;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -482,20 +490,18 @@ button.primary,
   box-shadow: 0 0 16px var(--gold);
 }
 
-/* The parachute gauge: a slim pill riding beside the player (placed each frame in code), sky up top, the gold
-   window and the red crash band at the bottom, the bullseye a single white notch in the window. One marker,
-   and one chip on it that says the thing that matters: the height, then OPEN!, then NOW ×1.5. */
+/* The parachute gauge: a fixed column right above the PARACHUTE button (the eye goes there to press it anyway),
+   on a dark glass track with a white rim so it reads on any sky. The ground is at the bottom: the red crash band,
+   the gold window, and inside it the bullseye, a wide white band marked ×1.5. One marker crosses the track, with
+   one chip on its left saying the thing that matters: the height, then OPEN!, then NOW ×1.5. */
 #groundBar {
+  --gb-bottom: calc(max(22px, env(safe-area-inset-bottom)) + 124px + 26px);
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 16px;
-  height: min(200px, 30vh);
-  margin-top: calc(min(200px, 30vh) / -2);
+  right: calc(max(18px, env(safe-area-inset-right)) + 62px - 17px);
+  bottom: var(--gb-bottom);
+  width: 34px;
+  height: clamp(150px, calc(100vh - var(--gb-bottom) - 150px), 340px);
   display: none;
-  transition:
-    left 0.08s linear,
-    top 0.08s linear;
 }
 
 #groundBar.on {
@@ -503,10 +509,12 @@ button.primary,
 }
 
 #groundBar .track {
-  border-width: 3px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.45);
-  box-shadow: 0 3px 0 var(--ink);
+  border: 4px solid var(--ink);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(29, 22, 64, 0.35), rgba(29, 22, 64, 0.6));
+  box-shadow:
+    0 0 0 3px #fff,
+    0 4px 0 3px var(--ink);
   transition: box-shadow 0.15s;
 }
 
@@ -518,77 +526,102 @@ button.primary,
 
 #groundBar .crash {
   bottom: 0;
-  background: #ff5f6e;
+  background: #ff4d5e;
 }
 
 #groundBar .perfect {
-  background: #ffd23f;
+  background: #ffc21a;
+  border-top: 3px solid var(--ink);
 }
 
+/* The bullseye: a wide white band inside the window, with ×1.5 beside it. */
 #groundBar .bullseye {
-  height: 3px !important;
-  margin-bottom: -1.5px;
   background: #fff;
+  border-top: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+
+#groundBar .bull-tag {
+  position: absolute;
+  right: calc(100% + 10px);
+  transform: translateY(50%);
+  padding: 1px 6px;
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+#groundBar .ground {
+  position: absolute;
+  left: -8px;
+  right: -8px;
+  bottom: -14px;
+  height: 10px;
+  border: 3px solid var(--ink);
+  border-radius: 6px;
+  background: #3ccf5a;
 }
 
 #groundBar.good .track {
   box-shadow:
-    0 3px 0 var(--ink),
-    0 0 0 3px #ffd23f;
+    0 0 0 3px #ffc21a,
+    0 4px 0 3px var(--ink);
 }
 
 #groundBar.inbull .track {
   box-shadow:
     0 0 0 3px #fff,
-    0 0 18px 6px #ffd23f;
+    0 0 22px 8px #ffd23f;
 }
 
 #groundBar .marker {
   position: absolute;
-  left: 50%;
-  width: 0;
+  left: -10px;
+  right: -10px;
   height: 0;
 }
 
+/* The marker: a bar across the track with a round knob. */
 #groundBar .dot {
   position: absolute;
-  left: -14px;
-  top: -14px;
-  width: 28px;
-  height: 28px;
+  left: 0;
+  right: 0;
+  top: -6px;
+  height: 12px;
   box-sizing: border-box;
   border: 3px solid var(--ink);
-  border-radius: 50%;
+  border-radius: 6px;
   background: #fff;
   box-shadow: 0 2px 0 var(--ink);
-  transition:
-    background 0.1s,
-    transform 0.1s;
 }
 
 #groundBar .chip {
   position: absolute;
-  left: 22px;
+  right: calc(100% + 8px);
   top: 0;
   transform: translateY(-50%);
-  padding: 3px 9px;
+  padding: 4px 10px;
   border: 3px solid var(--ink);
   border-radius: 10px;
   background: #fff;
   color: var(--ink);
   font-family: var(--display);
-  font-size: 16px;
+  font-size: 18px;
   white-space: nowrap;
-  box-shadow: 0 2px 0 var(--ink);
+  box-shadow: 0 3px 0 var(--ink);
 }
 
 #groundBar.good .dot,
 #groundBar.good .chip {
-  background: #ffd23f;
+  background: #ffc21a;
 }
 
 #groundBar.inbull .dot {
-  transform: scale(1.2);
+  background: #fff;
   box-shadow: 0 0 14px 4px #ffd23f;
 }
 
@@ -599,9 +632,13 @@ button.primary,
   animation: now-pop 0.3s ease-in-out infinite alternate;
 }
 
+#groundBar.inbull .bull-tag {
+  visibility: hidden;
+}
+
 #groundBar.danger .dot,
 #groundBar.danger .chip {
-  background: #ff5f6e;
+  background: #ff4d5e;
   color: #fff;
 }
 
@@ -1202,7 +1239,7 @@ button.primary,
 
 .result-cards .where {
   margin-top: 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: #1f6fd6;
 }
@@ -1607,7 +1644,7 @@ button.primary,
 
 #tune .sub {
   margin: 4px 0 0;
-  font-size: 11px;
+  font-size: 12px;
   opacity: 0.7;
 }
 
@@ -1662,7 +1699,7 @@ button.primary,
     width: 58px;
     height: 62px;
     border-radius: 16px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .tile svg {
@@ -3161,7 +3198,7 @@ body.chute-alarm::after {
 #exitBtn .key {
   display: block;
   font-family: var(--body);
-  font-size: 11px;
+  font-size: 12px;
   opacity: 0.9;
 }
 
@@ -3487,5 +3524,214 @@ body.chute-alarm::after {
     right: 12px;
     transform: none;
     font-size: 24px;
+  }
+}
+
+/* ---------------------------------------------------------------- design pass: consistency fixes */
+
+/* Small display text: Lilita One below 16px turns into blobs under the ink outline, so small labels use
+   Fredoka bold instead. */
+.card .rarity,
+#flightNo,
+.merge-card .count,
+#tune button,
+.inv-head button,
+.inv-actions button,
+.profile .chip-btn {
+  font-family: var(--body);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+/* The tutorial banner and the prompt: one size down, so they stop shouting over the scene. */
+#coach {
+  font-size: var(--fs-l);
+}
+
+#prompt {
+  font-size: var(--fs-m);
+}
+
+@media (max-width: 640px) {
+  #coach {
+    font-size: var(--fs-m);
+  }
+
+  #prompt {
+    font-size: var(--fs-s);
+  }
+}
+
+/* Nothing from the play HUD peeks through a full-screen panel. */
+body:has(#cardReveal:not(.hidden)) #prompt,
+body:has(#cardReveal:not(.hidden)) #coach,
+body:has(#cardReveal:not(.hidden)) #hand,
+body:has(#modal:not(.hidden)) #prompt,
+body:has(#modal:not(.hidden)) #coach,
+body:has(#modal:not(.hidden)) #hand,
+body:has(#shop:not(.hidden)) #prompt,
+body:has(#shop:not(.hidden)) #coach,
+body:has(#shop:not(.hidden)) #hand {
+  visibility: hidden;
+}
+
+/* Reveal cards: sized from the screen (both ways), so ten fit on a 720 px laptop and a phone alike, and
+   their text never drops below 11 px. */
+.tcards {
+  --w: min(168px, calc((100vh - 230px) / 1.4));
+}
+
+#cardReveal.many .tcards {
+  --w: min(150px, calc((100vh - 250px) / 2.8), calc((100vw - 80px) / 5));
+}
+
+.tc-top {
+  font-size: max(11px, calc(var(--w) * 0.08));
+}
+
+.tc-type {
+  font-size: max(11px, calc(var(--w) * 0.08));
+}
+
+.tc-note {
+  font-size: max(11px, calc(var(--w) * 0.07));
+}
+
+@media (max-width: 640px) {
+  #cardReveal.many .tcards {
+    --w: min(108px, calc((100vw - 48px) / 3), calc((100vh - 260px) / 5.6));
+  }
+}
+
+@media (max-height: 480px) {
+  /* Phones on their side: five across, two rows. The heading and button shrink, and each card drops its
+     "In backpack" line so the picture keeps its room. */
+  #cardReveal {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  #revealHead {
+    font-size: 22px;
+  }
+
+  .reveal-btns button {
+    padding: 6px 20px 5px;
+    font-size: 16px;
+  }
+
+  #cardReveal.many .tcards {
+    --w: min(120px, calc((100vh - 96px) / 2.8));
+    gap: 8px;
+    max-width: calc(var(--w) * 5 + 8px * 4);
+  }
+
+  .tcards {
+    --w: min(150px, calc((100vh - 96px) / 1.4));
+  }
+
+  .tc-note {
+    display: none;
+  }
+
+  .tc-top {
+    font-size: 10px;
+    padding: 2px 4px;
+  }
+
+  .tc-type {
+    font-size: 10px;
+    padding: 1px 4px;
+  }
+}
+
+/* ---------------------------------------------------------------- screen sizes */
+
+/* Tablets and narrow windows: the dock (four tiles) and the Launch button leave no room between them, so the
+   action button sits on a row of its own just above. */
+@media (min-width: 641px) and (max-width: 1100px) {
+  #actionBtn {
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 96px);
+    font-size: 18px;
+    padding: 10px 20px;
+  }
+
+  #coach,
+  #prompt {
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 156px);
+  }
+}
+
+/* Short screens (phones on their side, small laptop windows): the HUD's corners, the dock and the big buttons
+   shrink together, so they keep their spacing instead of piling into each other. The play view stays full
+   size. (Things placed in code at screen points, like the slot buttons and the tutorial hand, aren't
+   zoomed.) */
+@media (max-height: 500px) {
+  #topLeft,
+  #corner,
+  #dock,
+  #launchBtn,
+  #actionBtn,
+  #exitBtn,
+  #chuteBtn,
+  #chat,
+  #feed,
+  #coach,
+  #prompt,
+  #stack,
+  #toasts,
+  #flightNo,
+  #groundBar {
+    zoom: 0.68;
+  }
+
+  .panel {
+    zoom: 0.8;
+  }
+}
+
+@media (max-height: 380px) {
+  #topLeft,
+  #corner,
+  #dock,
+  #launchBtn,
+  #actionBtn,
+  #exitBtn,
+  #chuteBtn,
+  #chat,
+  #feed,
+  #coach,
+  #prompt,
+  #stack,
+  #toasts,
+  #flightNo,
+  #groundBar {
+    zoom: 0.6;
+  }
+
+  .panel {
+    zoom: 0.72;
+  }
+}
+
+/* Big screens (1080p and up): a touch larger, so the HUD isn't lost in the corners. */
+@media (min-width: 1700px) and (min-height: 950px) {
+  #topLeft,
+  #corner,
+  #dock,
+  #launchBtn,
+  #actionBtn,
+  #exitBtn,
+  #chuteBtn,
+  #chat,
+  #feed,
+  #coach,
+  #prompt,
+  #stack,
+  #toasts,
+  #flightNo,
+  #groundBar,
+  .panel {
+    zoom: 1.18;
   }
 }

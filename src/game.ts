@@ -828,6 +828,7 @@ export class Game {
   }
 
   private launch(): void {
+    this.hud.prompt('');
     const m = this.charge;
     const perfect = m >= CHARGE.perfect[0] && m <= CHARGE.perfect[1];
     const green = m >= CHARGE.green[0] && m <= CHARGE.green[1];
