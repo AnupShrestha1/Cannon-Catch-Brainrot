@@ -318,10 +318,11 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   huge REBIRTH! banner slams in over turning rays and confetti, the camera tilts up, and a volley of
   fireworks whistles up behind the station and bursts in colour with a crackle. Bots rebirth at the
   station too, with a smaller show.
-- **Mouse-look on PC**: at the base, one click on the game captures the mouse (browsers need that click),
-  then moving the mouse turns the camera like a third-person game, no button held. Esc frees the mouse;
-  getting in the cannon, opening any panel, the emote wheel or the chat frees it too (the cannon and the
-  flight steer with the cursor). Phones keep drag-to-look.
+- **Free look on PC**: at the base the camera follows the mouse's sideways movement, no click and no
+  captured cursor, so every button stays clickable: over a button or panel the camera holds still. Resting
+  the cursor at the left or right edge keeps turning (a full look round); the scroll wheel tilts the view
+  up and down; dragging still works too. Off in the cannon and in flight (they steer with the cursor) and
+  while anything is open. Phones keep drag-to-look.
 - **Timed events** (src/events.ts): every 6–10 minutes of play (the first about 3 minutes in, after the
   tutorial flights), a short boost for everyone: **Gem Rush** (×2 gems from the sky, 2 min), **Coin Frenzy**
   (×2 coins from slots, 2 min), **Lucky Spins** (every gacha pull rolls twice and keeps the better, 2 min) or

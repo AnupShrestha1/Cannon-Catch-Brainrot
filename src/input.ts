@@ -46,40 +46,49 @@ export class Input {
   /** Keys pressed since last consumed, for one-shot actions. */
   private taps = new Set<string>();
 
-  /** Mouse-look sensitivity: camera pixels per pixel of mouse movement while the pointer is locked. */
-  lookSpeed = 0.9;
+  /**
+   * Free look (PC): set by the game while it's on (at the base, nothing open). The cursor stays free: its
+   * sideways movement turns the camera, except over buttons and panels, so they can still be clicked.
+   */
+  freeLook = false;
+  /** Free-look sensitivity: camera pixels per pixel the mouse moves sideways. */
+  lookSpeed = 0.7;
+  /** -1 or 1 while the cursor rests at the left or right edge of the game (keeps turning), else 0. */
+  lookEdge = 0;
+  /** Scroll-wheel tilt since last read (pixels, down positive). */
+  private wheelDy = 0;
 
-  /** Whether the mouse is captured for mouse-look (PC, at the base). */
-  get looking(): boolean {
-    return document.pointerLockElement === this.surface;
-  }
-
-  /** Captures the mouse for mouse-look (needs a click: browsers only allow it from one). */
-  lockMouse(): void {
-    if (this.isTouch || this.looking || !this.surface.requestPointerLock) return;
-    try {
-      const p = this.surface.requestPointerLock() as unknown as Promise<void> | undefined;
-      p?.catch?.(() => {});
-    } catch {
-      // Some browsers refuse (e.g. inside an iframe without permission); the drag still works.
-    }
-  }
-
-  unlockMouse(): void {
-    if (this.looking) document.exitPointerLock();
-  }
-
-  constructor(private surface: HTMLElement) {
-    // Mouse-look: while the pointer is locked, every mouse movement turns the camera, no button held.
+  constructor(surface: HTMLElement) {
+    // Free look: the mouse's sideways movement over the game (not over the HUD's buttons and panels).
+    const overUi = (t: EventTarget | null) =>
+      t instanceof Element && !!t.closest('button, input, select, a, .panel, #modal, #shop, #cardReveal, #emoteWheel, #chat, #tune, #dock, #corner, #topLeft');
     document.addEventListener('mousemove', (e) => {
-      if (!this.looking) return;
+      if (!this.freeLook || this.isTouch || e.buttons) {
+        this.lookEdge = 0;
+        return;
+      }
+      if (overUi(e.target)) {
+        this.lookEdge = 0;
+        return;
+      }
       this.orbitDx += e.movementX * this.lookSpeed;
-      this.orbitDy += e.movementY * this.lookSpeed;
+      const edge = Math.max(24, window.innerWidth * 0.035);
+      this.lookEdge = window.innerWidth < 200 ? 0 : e.clientX < edge ? -1 : e.clientX > window.innerWidth - edge ? 1 : 0;
     });
+    document.documentElement.addEventListener('mouseleave', () => (this.lookEdge = 0));
+    window.addEventListener('blur', () => (this.lookEdge = 0));
+    // The wheel tilts the view up and down.
+    surface.addEventListener(
+      'wheel',
+      (e) => {
+        if (this.isTouch) return;
+        e.preventDefault();
+        this.wheelDy += Math.max(-80, Math.min(80, e.deltaY)) * 0.5;
+      },
+      { passive: false },
+    );
     surface.addEventListener('pointerdown', (e) => {
       this.onGesture();
-      // A click while the mouse is captured is just a click: no drag, no tap-to-walk.
-      if (this.looking) return;
       const touch = e.pointerType === 'touch';
       if (touch) {
         this.isTouch = true;
@@ -97,7 +106,6 @@ export class Input {
       this.pressed = true;
     });
     window.addEventListener('pointermove', (e) => {
-      if (this.looking) return;
       if (e.pointerType === 'touch') {
         if (e.pointerId === this.touchId) {
           this.touchDx += e.clientX - this.lastTouchX;
@@ -249,8 +257,9 @@ export class Input {
   /** Horizontal pixels dragged to turn the base camera since last read. */
   /** Vertical camera drag since the last call, in pixels (down is positive). */
   consumeOrbitDy(): number {
-    const v = this.orbitDy;
+    const v = this.orbitDy + this.wheelDy;
     this.orbitDy = 0;
+    this.wheelDy = 0;
     return v;
   }
 

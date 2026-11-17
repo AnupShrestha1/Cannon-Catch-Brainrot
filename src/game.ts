@@ -320,8 +320,7 @@ export class Game {
   private stepping = false;
   /** Walking forward (W or tap-to-walk), which swings the base camera round behind the player. */
   private followCam = false;
-  /** Whether the mouse-look hint has been shown this session. */
-  private lookHinted = false;
+
   /** Base camera heading: it looks along (-sin, -cos) of this, from behind the player. */
   private camYaw = 0;
   /** How far the base camera is tilted up from its usual view (radians; negative looks further down). */
@@ -466,18 +465,7 @@ export class Game {
     this.streaks = new Streaks(this.scene);
     this.input = new Input(canvas);
     this.input.onGesture = () => this.sfx.unlock();
-    // PC mouse-look: a click on the game at the base captures the mouse (browsers need that one click), then
-    // moving the mouse turns the camera like a third-person game. Esc frees it; panels and the cannon free it too.
-    canvas.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'mouse' && this.mouseLookAllowed()) {
-        const first = !this.input.looking && !this.lookHinted;
-        this.input.lockMouse();
-        if (first) {
-          this.lookHinted = true;
-          this.hud.toast('Move the mouse to look around · Esc frees the mouse', 'small', undefined, 2600);
-        }
-      }
-    });
+
     this.applyMute();
 
     const bar = new THREE.Mesh(
@@ -808,8 +796,8 @@ export class Game {
       this.input.consumeOrbitDy();
     }
     this.hud.showStick(this.state === 'home' && !blocked ? this.input.stick : null);
-    // Leaving the base or opening anything hands the mouse back.
-    if (this.input.looking && !this.mouseLookAllowed()) this.input.unlockMouse();
+    // Free look (PC): on at the base with nothing open; the cannon and flight use the cursor to steer.
+    this.input.freeLook = this.mouseLookAllowed();
     this.updateEconomy(realDt);
     this.updateEvents(realDt);
     this.updateGems(dt);
@@ -2082,6 +2070,8 @@ export class Game {
       return;
     }
     this.camYaw -= this.input.consumeOrbitDx() * ORBIT_SPEED;
+    // The cursor resting at the left or right edge keeps turning, for a full look round.
+    if (this.input.freeLook && this.input.lookEdge) this.camYaw -= this.input.lookEdge * 2.4 * dt;
     // Dragging up looks up (into the sky, to watch people fly), down looks down a little.
     this.camPitch = clamp(this.camPitch - this.input.consumeOrbitDy() * ORBIT_SPEED, PITCH_MIN, PITCH_MAX);
     const stick = this.input.stick;
@@ -3569,7 +3559,7 @@ export class Game {
     this.hud.setEvent(phase);
   }
 
-  /** Mouse-look only at the base with nothing open (the cannon and flight steer with the cursor). */
+  /** Free look only at the base with nothing open (the cannon and flight steer with the cursor). */
   private mouseLookAllowed(): boolean {
     return (
       this.state === 'home' &&
