@@ -320,6 +320,8 @@ export class Game {
   private stepping = false;
   /** Walking forward (W or tap-to-walk), which swings the base camera round behind the player. */
   private followCam = false;
+  /** When the camera was last turned by hand (a drag), so the follow camera waits a moment after. */
+  private lastOrbitAt = -99;
   /** Base camera heading: it looks along (-sin, -cos) of this, from behind the player. */
   private camYaw = 0;
   /** How far the base camera is tilted up from its usual view (radians; negative looks further down). */
@@ -2065,7 +2067,9 @@ export class Game {
       this.walkVel.set(0, 0);
       return;
     }
-    this.camYaw -= this.input.consumeOrbitDx() * ORBIT_SPEED;
+    const orbitDx = this.input.consumeOrbitDx();
+    if (orbitDx) this.lastOrbitAt = this.time;
+    this.camYaw -= orbitDx * ORBIT_SPEED;
     // Dragging up looks up (into the sky, to watch people fly), down looks down a little.
     this.camPitch = clamp(this.camPitch - this.input.consumeOrbitDy() * ORBIT_SPEED, PITCH_MIN, PITCH_MAX);
     const stick = this.input.stick;
@@ -3830,8 +3834,17 @@ export class Game {
         }
         // Third person: behind and above the player, swinging round behind them as they walk forward.
         const moving = this.walking || this.stepping;
-        // Only a tap-to-walk swings the camera round; with keys or the stick, the player owns it.
-        if (moving && this.followCam) this.camYaw = lerpAngle(this.camYaw, this.facing, damp(1.5, realDt));
+        // The camera eases round behind the way the player walks, so there's less dragging to do. Not while
+        // they back up toward it (it would spin round), and not for a moment after they turn it by hand.
+        if (moving) {
+          const off = Math.abs(Math.atan2(Math.sin(this.facing - this.camYaw), Math.cos(this.facing - this.camYaw)));
+          const handsOff = this.time - this.lastOrbitAt > 1.2;
+          if (this.followCam) this.camYaw = lerpAngle(this.camYaw, this.facing, damp(1.5, realDt));
+          else if (handsOff && off < 2.3) {
+            const pace = Math.min(1, this.walkVel.length() / WALK_SPEED);
+            this.camYaw = lerpAngle(this.camYaw, this.facing, damp(0.55 * pace, realDt));
+          }
+        }
         // The camera orbits a point at head height. Tilting up drops it low and pulls it in close behind the
         // player, turning the view skyward with their head still at the bottom of the screen; tilting down
         // raises it.

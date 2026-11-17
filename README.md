@@ -318,6 +318,9 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   huge REBIRTH! banner slams in over turning rays and confetti, the camera tilts up, and a volley of
   fireworks whistles up behind the station and bursts in colour with a crackle. Bots rebirth at the
   station too, with a smaller show.
+- **Follow camera**: walking with the keys or the stick, the camera eases round behind the way you're going
+  (about 45° a second when walking sideways, so a turn becomes a gentle arc), so you rarely need to drag.
+  It leaves you alone while you back up toward it, and for a moment after you turn it by hand.
 - **Timed events** (src/events.ts): every 6–10 minutes of play (the first about 3 minutes in, after the
   tutorial flights), a short boost for everyone: **Gem Rush** (×2 gems from the sky, 2 min), **Coin Frenzy**
   (×2 coins from slots, 2 min), **Lucky Spins** (every gacha pull rolls twice and keeps the better, 2 min) or
