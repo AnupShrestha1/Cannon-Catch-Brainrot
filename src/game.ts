@@ -320,6 +320,8 @@ export class Game {
   private stepping = false;
   /** Walking forward (W or tap-to-walk), which swings the base camera round behind the player. */
   private followCam = false;
+  /** Whether the mouse-look hint has been shown this session. */
+  private lookHinted = false;
   /** Base camera heading: it looks along (-sin, -cos) of this, from behind the player. */
   private camYaw = 0;
   /** How far the base camera is tilted up from its usual view (radians; negative looks further down). */
@@ -464,6 +466,18 @@ export class Game {
     this.streaks = new Streaks(this.scene);
     this.input = new Input(canvas);
     this.input.onGesture = () => this.sfx.unlock();
+    // PC mouse-look: a click on the game at the base captures the mouse (browsers need that one click), then
+    // moving the mouse turns the camera like a third-person game. Esc frees it; panels and the cannon free it too.
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && this.mouseLookAllowed()) {
+        const first = !this.input.looking && !this.lookHinted;
+        this.input.lockMouse();
+        if (first) {
+          this.lookHinted = true;
+          this.hud.toast('Move the mouse to look around · Esc frees the mouse', 'small', undefined, 2600);
+        }
+      }
+    });
     this.applyMute();
 
     const bar = new THREE.Mesh(
@@ -794,6 +808,8 @@ export class Game {
       this.input.consumeOrbitDy();
     }
     this.hud.showStick(this.state === 'home' && !blocked ? this.input.stick : null);
+    // Leaving the base or opening anything hands the mouse back.
+    if (this.input.looking && !this.mouseLookAllowed()) this.input.unlockMouse();
     this.updateEconomy(realDt);
     this.updateEvents(realDt);
     this.updateGems(dt);
@@ -3551,6 +3567,18 @@ export class Game {
       this.server.eventNews('end', '');
     }
     this.hud.setEvent(phase);
+  }
+
+  /** Mouse-look only at the base with nothing open (the cannon and flight steer with the cursor). */
+  private mouseLookAllowed(): boolean {
+    return (
+      this.state === 'home' &&
+      !this.input.isTouch &&
+      !this.hud.modalOpen &&
+      !this.hud.shopOpen &&
+      !this.wheel.open &&
+      !document.getElementById('chat')?.classList.contains('open')
+    );
   }
 
   /** Plays an emote: at the base, standing still. Its emoji pops over your head and people nearby may join in. */

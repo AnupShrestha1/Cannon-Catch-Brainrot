@@ -46,9 +46,40 @@ export class Input {
   /** Keys pressed since last consumed, for one-shot actions. */
   private taps = new Set<string>();
 
-  constructor(surface: HTMLElement) {
+  /** Mouse-look sensitivity: camera pixels per pixel of mouse movement while the pointer is locked. */
+  lookSpeed = 0.9;
+
+  /** Whether the mouse is captured for mouse-look (PC, at the base). */
+  get looking(): boolean {
+    return document.pointerLockElement === this.surface;
+  }
+
+  /** Captures the mouse for mouse-look (needs a click: browsers only allow it from one). */
+  lockMouse(): void {
+    if (this.isTouch || this.looking || !this.surface.requestPointerLock) return;
+    try {
+      const p = this.surface.requestPointerLock() as unknown as Promise<void> | undefined;
+      p?.catch?.(() => {});
+    } catch {
+      // Some browsers refuse (e.g. inside an iframe without permission); the drag still works.
+    }
+  }
+
+  unlockMouse(): void {
+    if (this.looking) document.exitPointerLock();
+  }
+
+  constructor(private surface: HTMLElement) {
+    // Mouse-look: while the pointer is locked, every mouse movement turns the camera, no button held.
+    document.addEventListener('mousemove', (e) => {
+      if (!this.looking) return;
+      this.orbitDx += e.movementX * this.lookSpeed;
+      this.orbitDy += e.movementY * this.lookSpeed;
+    });
     surface.addEventListener('pointerdown', (e) => {
       this.onGesture();
+      // A click while the mouse is captured is just a click: no drag, no tap-to-walk.
+      if (this.looking) return;
       const touch = e.pointerType === 'touch';
       if (touch) {
         this.isTouch = true;
@@ -66,6 +97,7 @@ export class Input {
       this.pressed = true;
     });
     window.addEventListener('pointermove', (e) => {
+      if (this.looking) return;
       if (e.pointerType === 'touch') {
         if (e.pointerId === this.touchId) {
           this.touchDx += e.clientX - this.lastTouchX;
