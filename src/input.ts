@@ -46,47 +46,7 @@ export class Input {
   /** Keys pressed since last consumed, for one-shot actions. */
   private taps = new Set<string>();
 
-  /**
-   * Free look (PC): set by the game while it's on (at the base, nothing open). The cursor stays free: its
-   * sideways movement turns the camera, except over buttons and panels, so they can still be clicked.
-   */
-  freeLook = false;
-  /** Free-look sensitivity: camera pixels per pixel the mouse moves sideways. */
-  lookSpeed = 0.7;
-  /** -1 or 1 while the cursor rests at the left or right edge of the game (keeps turning), else 0. */
-  lookEdge = 0;
-  /** Scroll-wheel tilt since last read (pixels, down positive). */
-  private wheelDy = 0;
-
   constructor(surface: HTMLElement) {
-    // Free look: the mouse's sideways movement over the game (not over the HUD's buttons and panels).
-    const overUi = (t: EventTarget | null) =>
-      t instanceof Element && !!t.closest('button, input, select, a, .panel, #modal, #shop, #cardReveal, #emoteWheel, #chat, #tune, #dock, #corner, #topLeft');
-    document.addEventListener('mousemove', (e) => {
-      if (!this.freeLook || this.isTouch || e.buttons) {
-        this.lookEdge = 0;
-        return;
-      }
-      if (overUi(e.target)) {
-        this.lookEdge = 0;
-        return;
-      }
-      this.orbitDx += e.movementX * this.lookSpeed;
-      const edge = Math.max(24, window.innerWidth * 0.035);
-      this.lookEdge = window.innerWidth < 200 ? 0 : e.clientX < edge ? -1 : e.clientX > window.innerWidth - edge ? 1 : 0;
-    });
-    document.documentElement.addEventListener('mouseleave', () => (this.lookEdge = 0));
-    window.addEventListener('blur', () => (this.lookEdge = 0));
-    // The wheel tilts the view up and down.
-    surface.addEventListener(
-      'wheel',
-      (e) => {
-        if (this.isTouch) return;
-        e.preventDefault();
-        this.wheelDy += Math.max(-80, Math.min(80, e.deltaY)) * 0.5;
-      },
-      { passive: false },
-    );
     surface.addEventListener('pointerdown', (e) => {
       this.onGesture();
       const touch = e.pointerType === 'touch';
@@ -257,9 +217,8 @@ export class Input {
   /** Horizontal pixels dragged to turn the base camera since last read. */
   /** Vertical camera drag since the last call, in pixels (down is positive). */
   consumeOrbitDy(): number {
-    const v = this.orbitDy + this.wheelDy;
+    const v = this.orbitDy;
     this.orbitDy = 0;
-    this.wheelDy = 0;
     return v;
   }
 
