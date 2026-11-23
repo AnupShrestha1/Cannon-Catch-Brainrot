@@ -1038,6 +1038,27 @@ export class Hud {
   }
 
   /** The dev tuning panel. It edits the save directly, so it can skip past upgrade costs. */
+  /**
+   * The next zone's heads-up at the top of a flight: a card high on the screen (clear of the height number
+   * in the middle), with the zone's name and what it takes to get there, held long enough to read.
+   */
+  goalCard(title: string, sub: string, color: string): void {
+    document.querySelector('.goal-card')?.remove();
+    const card = document.createElement('div');
+    card.className = 'goal-card';
+    card.style.setProperty('--gc', color);
+    const h = document.createElement('div');
+    h.className = 'goal-title';
+    h.textContent = title;
+    const p = document.createElement('div');
+    p.className = 'goal-sub';
+    p.textContent = sub;
+    card.append(h, p);
+    byId('hud').append(card);
+    setTimeout(() => card.classList.add('out'), 4200);
+    setTimeout(() => card.remove(), 4700);
+  }
+
   /** Release builds: the Tune button and panel are taken out of the page. */
   removeTuning(): void {
     this.tuneBtn.remove();

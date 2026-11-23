@@ -3972,3 +3972,73 @@ body:has(#shop:not(.hidden)) #hand {
     font-size: var(--fs-s);
   }
 }
+
+/* ---------------------------------------------------------------- next-zone heads-up at the apex */
+
+/* High on the screen, clear of the height number in the middle; slides in, holds about four seconds. */
+.goal-card {
+  --gc: #ffe58a;
+  position: absolute;
+  top: calc(max(12px, env(safe-area-inset-top)) + 70px);
+  left: 50%;
+  max-width: min(92vw, 520px);
+  padding: 10px 20px 11px;
+  border: 4px solid var(--ink);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(29, 22, 64, 0.92), rgba(29, 22, 64, 0.82));
+  box-shadow:
+    0 5px 0 var(--ink),
+    inset 0 0 0 3px var(--gc);
+  text-align: center;
+  transform: translateX(-50%);
+  animation: goal-in 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+  transition:
+    opacity 0.4s,
+    transform 0.4s;
+}
+
+.goal-card.out {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-16px);
+}
+
+.goal-title {
+  font-family: var(--display);
+  font-size: var(--fs-2xl);
+  color: var(--gc);
+  text-shadow: var(--stroke-thin);
+}
+
+.goal-sub {
+  margin-top: 2px;
+  font-size: var(--fs-m);
+  font-weight: 700;
+  color: #fff;
+}
+
+@keyframes goal-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-24px) scale(0.85);
+  }
+}
+
+@media (max-width: 640px) {
+  .goal-card {
+    top: calc(max(12px, env(safe-area-inset-top)) + 160px);
+  }
+
+  .goal-title {
+    font-size: var(--fs-xl);
+  }
+
+  .goal-sub {
+    font-size: var(--fs-s);
+  }
+}
+
+@media (max-height: 500px) {
+  .goal-card {
+    zoom: 0.75;
+  }
+}

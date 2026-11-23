@@ -1204,11 +1204,14 @@ export class Game {
     const gem = makeGem(zone.gemColor, true);
     gem.group.scale.setScalar(3.2);
     this.goalGem.add(gem.group);
-    this.goalLabel.set(
-      closed ? `${zone.name}: rebirth to break through!` : `${zone.name}: ${zone.gems}× gems · Cannon Lv ${level}`,
-      '#ffe58a',
+    // In the sky, just the zone's name over its gem; the details go in a heads-up card that stays readable.
+    this.goalLabel.set(zone.name, '#ffe58a');
+    const color = `#${zone.gemColor.toString(16).padStart(6, '0')}`;
+    this.hud.goalCard(
+      `Next: ${zone.name}`,
+      closed ? 'Rebirth to break through!' : `${zone.gems}× gems up there · needs Cannon Lv ${level}`,
+      color,
     );
-    if (closed) this.hud.toast(`Rebirth to break through to the ${zone.name}!`, 'small');
     return true;
   }
 
