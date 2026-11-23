@@ -4042,3 +4042,67 @@ body:has(#shop:not(.hidden)) #hand {
     zoom: 0.75;
   }
 }
+
+/* ---------------------------------------------------------------- bag cards and the profile button */
+
+/* Bag: wider cards so the Display and Sell buttons fit inside them, side by side and equal. */
+.inv-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+}
+
+.inv-card {
+  width: auto;
+  min-width: 0;
+  height: auto;
+}
+
+.inv-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 0 6px 6px;
+}
+
+.inv-actions button {
+  min-width: 0;
+  padding: 6px 4px;
+  font-size: var(--fs-s);
+  line-height: 1.1;
+}
+
+@media (max-width: 640px) {
+  .inv-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+}
+
+/* Profile: a round pink avatar button with a face, standing out from the plain white settings buttons. */
+#profileBtn {
+  --c: #ff5fa2;
+  --hi: #ffb1d1;
+  --lo: #e0307d;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 6px;
+  color: #fff;
+  text-shadow: var(--stroke-thin);
+}
+
+#profileBtn::before {
+  content: '';
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 42%, var(--ink) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 65% 42%, var(--ink) 0 2px, transparent 2.5px),
+    radial-gradient(ellipse 30% 14% at 50% 68%, var(--ink) 0 99%, transparent 100%),
+    #ffe0c2;
+  box-sizing: border-box;
+}
