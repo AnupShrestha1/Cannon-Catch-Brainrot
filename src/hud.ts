@@ -424,11 +424,13 @@ export class Hud {
   }
 
   setSound(on: boolean): void {
-    this.soundBtn.textContent = on ? 'Sound on' : 'Sound off';
+    this.soundBtn.innerHTML = `<span class="ic">${on ? '🔊' : '🔇'}</span><span class="lb">${on ? 'Sound on' : 'Sound off'}</span>`;
+    this.soundBtn.setAttribute('aria-label', on ? 'Sound on' : 'Sound off');
   }
 
   setMusic(on: boolean): void {
-    this.musicBtn.textContent = on ? 'Music on' : 'Music off';
+    this.musicBtn.innerHTML = `<span class="ic">${on ? '🎵' : '🔕'}</span><span class="lb">${on ? 'Music on' : 'Music off'}</span>`;
+    this.musicBtn.setAttribute('aria-label', on ? 'Music on' : 'Music off');
   }
 
   /** After landing: the gems this run brought home, and the new total. */

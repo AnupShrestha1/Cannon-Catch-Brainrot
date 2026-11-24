@@ -3352,7 +3352,9 @@ export class Game {
     this.bubble.sprite.visible = this.bubbleT > 0;
 
     const free = this.state === 'home' && !this.walking && this.pulling <= 0 && !this.hud.modalOpen;
-    this.hud.showAction(free ? this.actionLabel() : null);
+    const action = free ? this.actionLabel() : null;
+    // On phones LAUNCH already takes you to the cannon and in, so the same thing doesn't get a second button.
+    this.hud.showAction(this.input.isTouch && action === 'Get in the cannon' ? null : action);
     this.updateGuide();
     this.updateCoach();
     this.updateMusic();

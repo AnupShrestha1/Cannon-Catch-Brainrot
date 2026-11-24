@@ -4106,3 +4106,64 @@ body:has(#shop:not(.hidden)) #hand {
     #ffe0c2;
   box-sizing: border-box;
 }
+
+/* ---------------------------------------------------------------- phones: compact top bar */
+
+/* Corner buttons show an icon on desktop beside their label; on phones only the icon, as round buttons. */
+#corner button .ic {
+  margin-right: 4px;
+}
+
+#corner button {
+  display: inline-flex;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  #corner button .lb {
+    display: none;
+  }
+
+  #corner button .ic {
+    margin: 0;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  #corner .corner-row button {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  #profileBtn {
+    gap: 0;
+    padding-left: 0;
+  }
+
+  #profileBtn::before {
+    width: 26px;
+    height: 26px;
+  }
+
+  /* The wallet stacks its income under the coins, so it stays narrow and clear of the buttons. */
+  #wallet {
+    display: grid;
+    grid-template-columns: auto auto;
+    column-gap: 8px;
+    row-gap: 0;
+    align-items: center;
+  }
+
+  #wallet .coin {
+    grid-row: span 2;
+  }
+
+  #income {
+    margin-top: -3px;
+    font-size: var(--fs-xs);
+    line-height: 1;
+  }
+}
