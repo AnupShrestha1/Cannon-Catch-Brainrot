@@ -591,6 +591,10 @@ export class Game {
   private frame = (now: number) => {
     const dt = this.lastFrame ? Math.min(0.05, (now - this.lastFrame) / 1000) : 1 / 60;
     this.lastFrame = now;
+    // Mobile browsers don't always send a resize after rotating or when their toolbars slide, so the size is
+    // checked every frame (two cheap reads) and the picture redrawn to fit when it changes.
+    const el = this.renderer.domElement;
+    if (el.clientWidth && (el.clientWidth !== this.drawnW || el.clientHeight !== this.drawnH)) this.resize();
     // Back from a pause (another window, a background tab): catch up first; otherwise one normal step.
     if (this.lastUpdate && now - this.lastUpdate > 250) this.catchUp(now);
     else {
@@ -753,10 +757,19 @@ export class Game {
     writeSave(this.save);
   }
 
+  /** The canvas size the picture was last drawn for. */
+  private drawnW = 0;
+  private drawnH = 0;
+
   private resize(): void {
-    // A hidden or collapsed frame reports 0 × 0; a 0/0 aspect would poison the camera with NaN.
-    const w = Math.max(1, window.innerWidth);
-    const h = Math.max(1, window.innerHeight);
+    // The canvas's own on-screen box, not the window: on iPhones the window size lags behind a rotation and
+    // can include the notch margins, which drew the picture squashed. A hidden or collapsed frame reports
+    // 0 × 0; a 0/0 aspect would poison the camera with NaN.
+    const el = this.renderer.domElement;
+    const w = Math.max(1, el.clientWidth || window.innerWidth);
+    const h = Math.max(1, el.clientHeight || window.innerHeight);
+    this.drawnW = w;
+    this.drawnH = h;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();

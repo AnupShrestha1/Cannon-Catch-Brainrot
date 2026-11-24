@@ -19,8 +19,16 @@ function step(pct: number, text: string): void {
   if (status) status.textContent = text;
 }
 
-/** Lets the browser paint the loading screen before the next heavy step. */
-const paint = () => new Promise<void>((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+/**
+ * Lets the browser paint the loading screen before the next heavy step. Background tabs get no animation
+ * frames, so a short timer stands in and loading carries on there too.
+ */
+const paint = () =>
+  new Promise<void>((r) => {
+    const go = () => setTimeout(r, 0);
+    requestAnimationFrame(go);
+    setTimeout(go, 120);
+  }).then(() => undefined);
 
 /** Waits for the game's fonts, but never long: the fallback fonts are fine. */
 function fonts(): Promise<unknown> {
@@ -54,7 +62,7 @@ async function boot(): Promise<void> {
   game.start();
   if (import.meta.env.DEV) (window as unknown as { game: Game }).game = game;
   // Two frames so the first picture is on screen before the loading screen fades.
-  requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(hideLoader, 250)));
+  void paint().then(paint).then(() => setTimeout(hideLoader, 250));
 }
 
 boot().catch((err) => {
