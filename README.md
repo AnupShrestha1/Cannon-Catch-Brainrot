@@ -5,6 +5,9 @@ Back at the base, spend gems on the gacha machine for brainrots, put them on dis
 where they earn coins, and spend coins on upgrades. Extra brainrots can be sold or merged into rarer ones.
 It covers Low Sky, Cloud Kingdom and the Storm Layer with 10 characters, and adds rebirth.
 
+**Play it online:** https://anupshrestha1.github.io/Cannon-Catch-Brainrot/ (GitHub Pages, rebuilt on every
+push to main by `.github/workflows/deploy.yml`; one-time setup: Settings > Pages > Source: GitHub Actions).
+
 Still to come: final art and recorded voice lines (music is generated for now). Those need assets from outside this repo.
 
 Design doc: https://claude.ai/artifact/EMeouczHhzvifYLtwFvrqL (it still describes catching brainrots in
