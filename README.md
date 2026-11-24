@@ -428,6 +428,8 @@ Not in this build: fusion of named characters, sky events, the rival, the spin w
 - Progress saves through the SDK Data module, so turn on **Progress Save** in the submission form.
 - A signed-in CrazyGames player who hasn't chosen a name uses their CrazyGames username.
 - No ads, no external links, no login, no fullscreen button.
+- Cover images for the submission are in `store/covers/` (1920×1080, 800×1200, 800×800; title only). They were
+  rendered from the game itself, with extra brainrots placed in front of the cannon and labels and markers hidden.
 
 ## Look
 
