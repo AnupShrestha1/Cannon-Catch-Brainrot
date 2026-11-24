@@ -55,6 +55,8 @@ body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+  /* No long-press menus or text magnifier on phones. */
+  -webkit-touch-callout: none;
 }
 
 #game {

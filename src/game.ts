@@ -3466,16 +3466,16 @@ export class Game {
       return;
     }
     if (this.state === 'aim' && s.flightNo < 2) {
-      hud.coach(s.flightNo === 0 ? 'Hold to charge, let go to FIRE!' : 'Again! Hold, then let go', { mode: 'hold', x: 0.5, y: 0.66 });
+      hud.coach(s.flightNo === 0 ? 'Hold to charge, let go to FIRE!' : 'Again! Hold, then let go', { mode: 'hold', x: 0.5, y: 0.42 });
       return;
     }
     if (this.state === 'charging' && s.flightNo < 2) {
-      hud.coach('Let go when the needle is in the GREEN!', { mode: 'hold', x: 0.5, y: 0.66 });
+      hud.coach('Let go when the needle is in the GREEN!', { mode: 'hold', x: 0.5, y: 0.42 });
       return;
     }
     if (this.state === 'ascent' && newbie && this.time - this.launchT < 4) {
       if (s.flightNo <= 1) hud.coach('Fly through the gems!');
-      else hud.coach(touch ? 'Drag left and right to steer!' : 'Move the mouse to steer into gems!', { mode: 'swipe', x: 0.5, y: 0.62 });
+      else hud.coach(touch ? 'Slide your finger to steer!' : 'Move the mouse to steer into gems!', { mode: 'swipe', x: 0.5, y: 0.45 });
       return;
     }
     if (this.state === 'fall' && this.chute === 'closed' && this.secondsToImpact() < (newbie ? 3.4 : this.chuteWarnAt())) {
