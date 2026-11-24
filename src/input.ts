@@ -42,6 +42,11 @@ export class Input {
   private touchId = -1;
   /** Where the steering finger is across the screen (0 left, 1 right), and whether it's down. */
   touchX = 0.5;
+  /** Where the steering finger first touched down (pixels): the centre of the floating flight joystick. */
+  touchOriginX = 0;
+  touchOriginY = 0;
+  /** Where the steering finger is now (pixels). */
+  touchPx = 0;
   get touchHeld(): boolean {
     return this.touchId >= 0;
   }
@@ -62,6 +67,8 @@ export class Input {
           this.touchId = e.pointerId;
           this.lastTouchX = e.clientX;
           this.touchX = e.clientX / window.innerWidth;
+          this.touchOriginX = this.touchPx = e.clientX;
+          this.touchOriginY = e.clientY;
         }
       } else {
         this.mouseX = e.clientX / window.innerWidth;
@@ -77,6 +84,7 @@ export class Input {
           this.touchDx += e.clientX - this.lastTouchX;
           this.lastTouchX = e.clientX;
           this.touchX = e.clientX / window.innerWidth;
+          this.touchPx = e.clientX;
         }
       } else {
         this.mouseX = e.clientX / window.innerWidth;

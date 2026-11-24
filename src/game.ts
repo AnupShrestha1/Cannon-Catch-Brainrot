@@ -119,6 +119,9 @@ import {
   type PlayerRig,
 } from './world';
 
+/** The floating flight joystick (touch): pixels of drag for full tilt, and the dead zone around the centre. */
+const FLIGHT_STICK = { radius: 60, dead: 6 };
+
 type State = 'aim' | 'charging' | 'ascent' | 'fall' | 'landed' | 'reveal' | 'home' | 'boarding';
 type Chute = 'closed' | 'open' | 'tangled';
 
@@ -757,6 +760,9 @@ export class Game {
     writeSave(this.save);
   }
 
+  /** What the flight joystick ring shows (it only moves sideways). */
+  private flightStick = { active: true, originX: 0, originY: 0, x: 0, y: 0 };
+
   /** The canvas size the picture was last drawn for. */
   private drawnW = 0;
   private drawnH = 0;
@@ -851,7 +857,14 @@ export class Game {
       this.input.consumeOrbitDx();
       this.input.consumeOrbitDy();
     }
-    this.hud.showStick(this.state === 'home' && !blocked ? this.input.stick : null);
+    // The joystick ring: the walking stick at the base, and the floating steering stick during a flight.
+    const flying = this.state === 'ascent' || this.state === 'fall';
+    if (flying && this.input.mode === 'touch' && this.input.touchHeld) {
+      this.flightStick.originX = this.input.touchOriginX;
+      this.flightStick.originY = this.input.touchOriginY;
+      this.flightStick.x = this.flightStickAxis();
+      this.hud.showStick(this.flightStick);
+    } else this.hud.showStick(this.state === 'home' && !blocked ? this.input.stick : null);
     this.updateEconomy(realDt);
     this.updateEvents(realDt);
     this.updateGems(dt);
@@ -1121,6 +1134,17 @@ export class Game {
     }
   }
 
+  /**
+   * The flight joystick's tilt, -1 (full left) to 1 (full right): the finger's distance from where it first
+   * touched, with a small dead zone so a resting thumb doesn't drift.
+   */
+  private flightStickAxis(): number {
+    const dx = this.input.touchPx - this.input.touchOriginX;
+    const dead = FLIGHT_STICK.dead;
+    if (Math.abs(dx) < dead) return 0;
+    return clamp((dx - Math.sign(dx) * dead) / (FLIGHT_STICK.radius - dead), -1, 1);
+  }
+
   private steer(dt: number): void {
     const lane = this.lane;
     const maxSpeed =
@@ -1133,10 +1157,11 @@ export class Game {
           this.targetX = (this.input.mouseX * 2 - 1) * lane * 1.15;
           break;
         case 'touch':
-          // The flyer follows the finger across the screen: hold anywhere and slide, no swiping again and
-          // again. The middle 80% of the screen spans the whole lane. Let go and they keep their line.
+          // A floating joystick: wherever the finger first touches is the centre, and dragging left or right
+          // of it steers that way, harder the further it goes (like A/D, but analog). Let go and they keep
+          // their line.
           this.input.consumeTouchDx();
-          if (this.input.touchHeld) this.targetX = (this.input.touchX * 2 - 1) * lane * 1.25;
+          if (this.input.touchHeld) this.targetX = this.px + this.flightStickAxis() * lane;
           break;
         case 'keys':
           this.targetX = this.px + this.input.axis * lane;
@@ -3519,7 +3544,7 @@ export class Game {
     }
     if (this.state === 'ascent' && newbie && this.time - this.launchT < 4) {
       if (s.flightNo <= 1) hud.coach('Fly through the gems!');
-      else hud.coach(touch ? 'Slide your finger to steer!' : 'Move the mouse to steer into gems!', { mode: 'swipe', x: 0.5, y: 0.45 });
+      else hud.coach(touch ? 'Hold and drag left or right to steer!' : 'Move the mouse to steer into gems!', { mode: 'swipe', x: 0.5, y: 0.45 });
       return;
     }
     if (this.state === 'fall' && this.chute === 'closed' && this.secondsToImpact() < (newbie ? 3.4 : this.chuteWarnAt())) {
