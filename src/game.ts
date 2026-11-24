@@ -435,13 +435,25 @@ export class Game {
   timeScale = 1;
 
   constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Phones and tablets draw lighter: at most 1.5× resolution, no antialiasing on dense screens, plain
+    // (not soft) shadows from a smaller shadow map. Desktop keeps the full look.
+    const mobile = matchMedia('(pointer: coarse)').matches;
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: !mobile || window.devicePixelRatio < 2,
+      powerPreference: 'high-performance',
+    });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.5 : 2));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = mobile ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
     this.scene.background = this.sky;
     this.scene.fog = new THREE.Fog(0x8fd3ff, 90, 420);
     this.env = buildEnv(this.scene);
+    if (mobile) {
+      this.scene.traverse((o) => {
+        if (o instanceof THREE.DirectionalLight && o.castShadow) o.shadow.mapSize.set(1024, 1024);
+      });
+    }
     this.base = new Base(this.scene, OWN);
     this.hub = new Hub(this.scene);
     this.hub.onUnlock = (i) => this.onMachineUnlock(i);
@@ -1077,7 +1089,10 @@ export class Game {
           this.targetX = (this.input.mouseX * 2 - 1) * lane * 1.15;
           break;
         case 'touch':
-          this.targetX += this.input.consumeTouchDx() * ((lane * 2.4) / window.innerWidth);
+          // The flyer follows the finger across the screen: hold anywhere and slide, no swiping again and
+          // again. The middle 80% of the screen spans the whole lane. Let go and they keep their line.
+          this.input.consumeTouchDx();
+          if (this.input.touchHeld) this.targetX = (this.input.touchX * 2 - 1) * lane * 1.25;
           break;
         case 'keys':
           this.targetX = this.px + this.input.axis * lane;

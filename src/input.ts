@@ -40,6 +40,11 @@ export class Input {
   private orbitDx = 0;
   private orbitDy = 0;
   private touchId = -1;
+  /** Where the steering finger is across the screen (0 left, 1 right), and whether it's down. */
+  touchX = 0.5;
+  get touchHeld(): boolean {
+    return this.touchId >= 0;
+  }
   private lastTouchX = 0;
   private gestures = new Map<number, Gesture>();
   private keys = new Set<string>();
@@ -56,6 +61,7 @@ export class Input {
         if (this.touchId < 0) {
           this.touchId = e.pointerId;
           this.lastTouchX = e.clientX;
+          this.touchX = e.clientX / window.innerWidth;
         }
       } else {
         this.mouseX = e.clientX / window.innerWidth;
@@ -70,6 +76,7 @@ export class Input {
         if (e.pointerId === this.touchId) {
           this.touchDx += e.clientX - this.lastTouchX;
           this.lastTouchX = e.clientX;
+          this.touchX = e.clientX / window.innerWidth;
         }
       } else {
         this.mouseX = e.clientX / window.innerWidth;

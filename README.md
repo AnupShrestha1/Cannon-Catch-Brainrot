@@ -318,6 +318,10 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   huge REBIRTH! banner slams in over turning rays and confetti, the camera tilts up, and a volley of
   fireworks whistles up behind the station and bursts in colour with a crackle. Bots rebirth at the
   station too, with a smaller show.
+- **Phones**: in flight the flyer follows your finger across the screen (hold anywhere and slide; the
+  middle 80% of the screen spans the whole lane), instead of swiping again and again. Phones and tablets
+  also draw lighter: at most 1.5× resolution, no antialiasing on dense screens, and plain shadows from a
+  1024 px shadow map (desktop keeps soft 2048 px shadows).
 - **Follow camera**: walking with the keys or the stick, the camera eases round behind the way you're going
   (about 45° a second when walking sideways, so a turn becomes a gentle arc), so you rarely need to drag.
   It leaves you alone while you back up toward it, and for a moment after you turn it by hand.
