@@ -8,8 +8,9 @@ import { OWN_SLOT, SLOTS, fromPlot, plotAt } from './layout';
 import type { FakeServer, RemotePlayer } from './net';
 import { makeLabel, makePlayer, type Label, type PlayerRig } from './world';
 
-/** Other players' brainrots are only drawn when the local player is in their plot or this close to its middle. */
-const DETAIL_RANGE = 26;
+/** Other bases show their brainrots within this many metres of their centre: the bases either side of yours and
+ * the ones across the lane (24 and 40 m centre to centre), not the far end of the street. */
+const DETAIL_RANGE = 52;
 
 interface Avatar {
   rig: PlayerRig;
