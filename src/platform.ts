@@ -19,6 +19,10 @@ interface CrazySdk {
     addSettingsChangeListener(listener: (settings: CrazySettings) => void): void;
   };
   data: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+  user?: {
+    getUser(): Promise<{ username: string } | null>;
+    systemInfo?: { device?: { type?: 'desktop' | 'tablet' | 'mobile' } };
+  };
 }
 
 declare global {
@@ -83,6 +87,31 @@ export const platform = {
   /** A celebration moment; CrazyGames asks for it to be rare. */
   happytime(): void {
     call((s) => s.game.happytime());
+  },
+
+  /**
+   * Whether this is a phone or tablet. CrazyGames asks games to use its system info for this rather than
+   * touch detection; outside CrazyGames a coarse pointer (a finger) stands in.
+   */
+  get isMobile(): boolean {
+    const type = sdk?.user?.systemInfo?.device?.type;
+    if (type) return type !== 'desktop';
+    return matchMedia('(pointer: coarse)').matches;
+  },
+
+  /** The signed-in CrazyGames username, or null for guests and outside CrazyGames. */
+  async username(): Promise<string | null> {
+    if (!sdk?.user) return null;
+    try {
+      return (await sdk.user.getUser())?.username || null;
+    } catch {
+      return null;
+    }
+  },
+
+  /** CrazyGames' chat setting: true means the game's chat must be off. */
+  get chatDisabled(): boolean {
+    return sdk?.game.settings.disableChat ?? false;
   },
 
   /** CrazyGames' mute setting, which overrides the game's own. */

@@ -418,10 +418,21 @@ slots move their extra brainrots to the backpack.
 
 Not in this build: fusion of named characters, sky events, the rival, the spin wheel, and ads.
 
+## CrazyGames requirements
+
+- Only the CrazyGames SDK loads from outside the game; fonts and everything else ship in `dist` with relative paths.
+- SDK: `loadingStart`/`loadingStop` around the loading screen, `gameplayStart`/`gameplayStop` on breaks (shop,
+  popups, reveals) but not on focus loss, `happytime` for rare highlights, the mute setting overrides the game's
+  sound, and the chat setting hides the chat box.
+- Phone or desktop comes from the SDK's system info (a coarse pointer outside CrazyGames).
+- Progress saves through the SDK Data module, so turn on **Progress Save** in the submission form.
+- A signed-in CrazyGames player who hasn't chosen a name uses their CrazyGames username.
+- No ads, no external links, no login, no fullscreen button.
+
 ## Look
 
 - **UI**: chunky candy-coloured cartoon style. Lilita One for titles and numbers and Fredoka for text
-  (from Google Fonts, with system fallbacks), glossy 3D buttons with thick ink outlines that press down,
+  (bundled with the game from @fontsource, Latin files only, with system fallbacks), glossy 3D buttons with thick ink outlines that press down,
   currency pills, a dock of icon tiles (Upgrades, Bag, Book), a prompt banner, and panels
   that open with a coloured ribbon.
 - **Loading screen**: shown the moment the page opens (inline in `index.html`). It has the stacked title, a

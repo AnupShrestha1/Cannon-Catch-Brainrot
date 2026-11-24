@@ -437,7 +437,7 @@ export class Game {
   constructor(canvas: HTMLCanvasElement) {
     // Phones and tablets draw lighter: at most 1.5× resolution, no antialiasing on dense screens, plain
     // (not soft) shadows from a smaller shadow map. Desktop keeps the full look.
-    const mobile = matchMedia('(pointer: coarse)').matches;
+    const mobile = platform.isMobile;
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: !mobile || window.devicePixelRatio < 2,
@@ -502,7 +502,18 @@ export class Game {
     this.scene.add(this.guide.marker, this.guide.ground);
 
     this.paintCannon();
-    platform.onSettingsChange(() => this.applyMute());
+    platform.onSettingsChange(() => {
+      this.applyMute();
+      this.applyChatSetting();
+    });
+    this.applyChatSetting();
+    // A signed-in CrazyGames player who hasn't picked a name goes by their CrazyGames username.
+    void platform.username().then((name) => {
+      if (!name || this.save.profile.name) return;
+      this.save.profile.name = name.slice(0, 16);
+      writeSave(this.save);
+      this.applyProfile();
+    });
     this.bindUi();
     window.addEventListener('resize', () => this.resize());
     this.resize();
@@ -703,6 +714,13 @@ export class Game {
     this.server.localChat(text);
     this.bubble.draw(text);
     this.bubbleT = 5;
+  }
+
+  /** CrazyGames can turn chat off (its chat setting): the chat box and button go away. */
+  private applyChatSetting(): void {
+    const off = platform.chatDisabled;
+    document.getElementById('chat')?.classList.toggle('hidden', off);
+    if (off && this.hud.chatting) this.hud.closeChat();
   }
 
   /** The game's own mute, overridden by CrazyGames' mute setting. */

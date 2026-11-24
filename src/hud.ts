@@ -529,6 +529,8 @@ export class Hud {
 
   /** Opens the chat box and puts the cursor in it. */
   openChat(): void {
+    // CrazyGames' chat setting can switch chat off (the form is hidden then).
+    if (this.chatForm.classList.contains('hidden')) return;
     this.chatForm.classList.add('open');
     this.chatInput.focus();
   }

@@ -1,3 +1,8 @@
+// The fonts ship with the game (no requests to Google): only the Latin files load, as text needs them.
+import '@fontsource/fredoka/latin-500.css';
+import '@fontsource/fredoka/latin-600.css';
+import '@fontsource/fredoka/latin-700.css';
+import '@fontsource/lilita-one/latin-400.css';
 import './style.css';
 import { Game } from './game';
 import { platform } from './platform';
