@@ -424,6 +424,10 @@ Not in this build: fusion of named characters, sky events, the rival, the spin w
   (from Google Fonts, with system fallbacks), glossy 3D buttons with thick ink outlines that press down,
   currency pills, a dock of icon tiles (Upgrades, Bag, Book), a prompt banner, and panels
   that open with a coloured ribbon.
+- **Loading screen**: shown the moment the page opens (inline in `index.html`). It has the stacked title, a
+  little cannon lobbing a ball at a gem, a striped progress bar with what's loading, and rotating tips. It
+  waits for the fonts (2.5 s at most), builds the world, compiles the shaders, then fades into the first
+  frame. If the game can't start, it says so and offers Try again.
 - **Cannon, machines, cauldron, stall and fountain**: smooth and glossy. The cannon is a turned barrel with
   brass bands, trunnions and a muzzle ring, on a carriage with spoked wheels over a round stone base; the
   cauldron has a rounded belly on three legs over a crackling fire, a gold rim and handles, and a bubbling,

@@ -13,8 +13,141 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Lilita+One&display=swap" rel="stylesheet" />
     <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+    <style>
+      /* The loading screen: inline so it shows the moment the page opens, before the game's code arrives. */
+      #loader {
+        position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center;
+        justify-content: center; gap: 22px; padding: 24px 16px; overflow: hidden; color: #1d1640;
+        background: radial-gradient(120% 80% at 50% 110%, #ffe7a3 0%, rgba(255, 231, 163, 0) 55%),
+          linear-gradient(180deg, #2f8cff 0%, #3fb6ff 45%, #8fdcff 100%);
+        font-family: 'Fredoka', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        transition: opacity 0.5s ease, transform 0.5s ease; user-select: none; -webkit-user-select: none;
+      }
+      #loader.done { opacity: 0; transform: scale(1.04); pointer-events: none; }
+      #loader .cloud {
+        position: absolute; height: 46px; border-radius: 999px; background: rgba(255, 255, 255, 0.85);
+        box-shadow: 30px -18px 0 4px rgba(255, 255, 255, 0.85), 70px -6px 0 -2px rgba(255, 255, 255, 0.85);
+        animation: ld-drift linear infinite;
+      }
+      #loader .c1 { width: 130px; top: 14%; animation-duration: 38s; animation-delay: -6s; }
+      #loader .c2 { width: 100px; top: 32%; animation-duration: 52s; animation-delay: -30s; opacity: 0.7; }
+      #loader .c3 { width: 160px; top: 72%; animation-duration: 44s; animation-delay: -18s; opacity: 0.8; }
+      @keyframes ld-drift { from { left: -260px; } to { left: 110%; } }
+      #loader h1 {
+        position: relative; margin: 0; text-align: center; line-height: 0.92; color: #fff; letter-spacing: 1px;
+        font: 400 clamp(40px, 9vw, 80px) / 0.92 'Lilita One', 'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif;
+        text-shadow: 4px 0 0 #1d1640, -4px 0 0 #1d1640, 0 4px 0 #1d1640, 0 -4px 0 #1d1640, 3px 3px 0 #1d1640,
+          -3px 3px 0 #1d1640, 3px -3px 0 #1d1640, -3px -3px 0 #1d1640, 0 9px 0 #1d1640;
+        animation: ld-bob 2.4s ease-in-out infinite;
+      }
+      #loader h1 span { display: block; color: #ffc21a; font-size: 0.78em; }
+      #loader h1 span + span { color: #ff5fa2; font-size: 1em; }
+      @keyframes ld-bob { 50% { transform: translateY(-6px) rotate(-1deg); } }
+      /* A little cannon lobbing a ball over and over. */
+      #loader .scene { position: relative; width: 240px; height: 120px; }
+      #loader .barrel {
+        position: absolute; left: 12px; bottom: 22px; width: 64px; height: 30px; border-radius: 10px 15px 15px 10px;
+        background: #1d1640; transform: rotate(-32deg); transform-origin: 18px 50%;
+        animation: ld-kick 1.6s ease-out infinite;
+      }
+      #loader .wheel {
+        position: absolute; left: 14px; bottom: 6px; width: 30px; height: 30px; border-radius: 50%;
+        background: #ffc21a; border: 4px solid #1d1640; box-sizing: border-box;
+      }
+      #loader .fly { position: absolute; left: 60px; bottom: 50px; animation: ld-x 1.6s linear infinite; }
+      #loader .ball {
+        width: 22px; height: 22px; border-radius: 50%; background: #ff5fa2; border: 3px solid #1d1640;
+        box-sizing: border-box; animation: ld-y 1.6s linear infinite;
+      }
+      #loader .catch {
+        position: absolute; right: 6px; bottom: 6px; font-size: 30px; line-height: 1;
+        animation: ld-catch 1.6s ease-out infinite;
+      }
+      @keyframes ld-kick { 0% { transform: rotate(-32deg) translateX(-6px); } 12%, 100% { transform: rotate(-32deg); } }
+      @keyframes ld-x { 0% { transform: translateX(0); opacity: 1; } 78% { transform: translateX(146px); opacity: 1; }
+        80%, 100% { transform: translateX(146px); opacity: 0; } }
+      @keyframes ld-y {
+        0% { transform: translateY(0); animation-timing-function: cubic-bezier(0.3, 0.6, 0.6, 1); }
+        39% { transform: translateY(-58px); animation-timing-function: cubic-bezier(0.4, 0, 0.7, 0.4); }
+        78%, 100% { transform: translateY(26px); }
+      }
+      @keyframes ld-catch { 0%, 74% { transform: scale(1); } 84% { transform: scale(1.3) rotate(-8deg); } 100% { transform: scale(1); } }
+      #loader .bar {
+        position: relative; width: min(360px, 82vw); height: 26px; border-radius: 999px; background: #fffdf6;
+        border: 4px solid #1d1640; box-shadow: 0 5px 0 #1d1640; overflow: hidden; box-sizing: border-box;
+      }
+      #loader .fill {
+        height: 100%; width: 0%; border-radius: 999px; transition: width 0.35s ease;
+        background: repeating-linear-gradient(-45deg, #ffc21a 0 12px, #ffd85a 12px 24px);
+        background-size: 34px 34px; animation: ld-stripes 0.8s linear infinite;
+      }
+      @keyframes ld-stripes { to { background-position: 34px 0; } }
+      #loader .status { margin-top: -8px; font-size: 16px; font-weight: 700; color: #1d1640; min-height: 1.2em; }
+      #loader > :not(.cloud) { position: relative; z-index: 1; }
+      #loader .tip {
+        max-width: min(420px, 88vw); padding: 10px 16px; border-radius: 14px; background: rgba(255, 253, 246, 0.92);
+        border: 3px solid #1d1640; font-size: 15px; font-weight: 500; text-align: center; line-height: 1.35;
+        transition: opacity 0.3s ease;
+      }
+      #loader .tip b { color: #8a5cff; font-weight: 700; }
+      #loader .tip.fade { opacity: 0; }
+      #loader.failed .scene, #loader.failed .bar { display: none; }
+      #loader .retry {
+        display: none; font: 400 20px 'Lilita One', 'Trebuchet MS', sans-serif; color: #fff; background: #3ccf5a;
+        border: 4px solid #1d1640; border-radius: 14px; padding: 8px 22px; box-shadow: 0 5px 0 #1d1640; cursor: pointer;
+      }
+      #loader.failed .retry { display: block; }
+      @media (max-height: 500px) {
+        #loader { gap: 12px; }
+        #loader h1 { font-size: clamp(32px, 7vh, 48px); }
+        #loader .scene { transform: scale(0.75); margin: -12px 0; }
+        #loader .tip { display: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #loader *, #loader { animation: none !important; }
+      }
+    </style>
   </head>
   <body>
+    <div id="loader" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="5">
+      <div class="cloud c1"></div><div class="cloud c2"></div><div class="cloud c3"></div>
+      <h1><span>Cannon</span>Catch<span>Brainrot</span></h1>
+      <div class="scene" aria-hidden="true">
+        <div class="barrel"></div><div class="wheel"></div>
+        <div class="fly"><div class="ball"></div></div>
+        <div class="catch">💎</div>
+      </div>
+      <div class="bar"><div class="fill" style="width: 5%"></div></div>
+      <div class="status">Loading…</div>
+      <div class="tip"></div>
+      <button class="retry" type="button" onclick="location.reload()">Try again</button>
+    </div>
+    <script>
+      // Tips rotate while the game loads (plain script, so they start before the game's code arrives).
+      (function () {
+        var tips = [
+          'Open your parachute in the <b>bullseye</b> for a bonus landing.',
+          'Gems are worth more the <b>higher</b> you fly.',
+          'Pull brainrots at the <b>gacha</b>, then merge the same rarity into a rarer one.',
+          'Your brainrots earn coins even while you\u2019re <b>away</b>.',
+          'Ready to <b>rebirth</b>? It boosts income and how long away earnings build up.',
+          'Watch for <b>timed events</b>: Gem Rush, Coin Frenzy and more.',
+          'Climb the stairs of <b>anyone\u2019s base</b> and like their brainrots.',
+          'Press <b>G</b> (or the emote button) to show off an emote.',
+        ];
+        var el = document.querySelector('#loader .tip');
+        var i = Math.floor(Math.random() * tips.length);
+        el.innerHTML = tips[i];
+        window.__loaderTips = setInterval(function () {
+          el.classList.add('fade');
+          setTimeout(function () {
+            i = (i + 1) % tips.length;
+            el.innerHTML = tips[i];
+            el.classList.remove('fade');
+          }, 300);
+        }, 3800);
+      })();
+    </script>
     <canvas id="game"></canvas>
 
     <div id="hud">

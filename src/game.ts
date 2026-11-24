@@ -522,6 +522,19 @@ export class Game {
     this.welcome();
   }
 
+  /**
+   * Prepares every shader the opening view needs (so the first seconds don't stutter) and draws one frame
+   * behind the loading screen.
+   */
+  async warmUp(): Promise<void> {
+    try {
+      await this.renderer.compileAsync(this.scene, this.camera);
+    } catch {
+      // Older browsers without parallel shader compiling: the first frame compiles them instead.
+    }
+    this.renderer.render(this.scene, this.camera);
+  }
+
   start(): void {
     requestAnimationFrame(this.frame);
     // Browsers stop animation frames for a window that's hidden or behind another one, so a plain timer keeps
