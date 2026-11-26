@@ -327,6 +327,9 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   keeps its line. Phones and tablets
   also draw lighter: at most 1.5× resolution, no antialiasing on dense screens, and plain shadows from a
   1024 px shadow map (desktop keeps soft 2048 px shadows).
+- **Landing camera**: in flight and on landing the camera sits well behind the player. When that would put it
+  inside your showcase (below the top deck), its target comes in closer, stopping in front of the building, so a
+  landing is never seen from under a floor (`Base.decks()` and `entryAlong` in `game.ts`).
 - **Follow camera**: walking with the keys or the stick, the camera eases round behind the way you're going
   (about 45° a second when walking sideways, so a turn becomes a gentle arc), so you rarely need to drag.
   It leaves you alone while you back up toward it, and for a moment after you turn it by hand.
@@ -433,6 +436,8 @@ Not in this build: fusion of named characters, sky events, the rival, the spin w
 - Cover images for the submission are in `store/covers/` (1920×1080, 800×1200, 800×800). They come from AI key art
   (`store/covers/source/`), with the real title added in the game's font and outline; `alt-closeup-1920x1080.png`
   is a close-up variant for A/B testing, and `ingame/` has backup covers rendered from the game itself.
+- Preview videos (about 18 s, silent, 1920×1080 and 1080×1620) are kept out of git in `store/videos/`. They were
+  recorded from the game canvas only (no HUD, cursor or browser), opening on the cover art.
 
 ## Look
 

@@ -423,6 +423,28 @@ export class Base {
     return this.floorGroups.length;
   }
 
+  private deckBoxFloors = -1;
+  private deckBox = new THREE.Box3();
+
+  /**
+   * The space the raised decks take up (world coordinates), or null with only the ground floor. The flight
+   * camera keeps above it, so a landing near the base never looks out from inside the showcase.
+   */
+  decks(): THREE.Box3 | null {
+    if (this.floorGroups.length < 2) return null;
+    if (this.deckBoxFloors !== this.floorGroups.length) {
+      this.deckBoxFloors = this.floorGroups.length;
+      this.group.updateMatrixWorld(true);
+      this.deckBox.makeEmpty();
+      for (const g of this.floorGroups.slice(1)) this.deckBox.expandByObject(g);
+      // From the ground (pillars and stairs count too) to just over the top deck's railing; the brainrots'
+      // light beams reach much higher and don't block a view.
+      this.deckBox.min.y = this.group.position.y;
+      this.deckBox.max.y = this.group.position.y + (this.floorGroups.length - 1) * FLOOR_H + 1.6;
+    }
+    return this.deckBox;
+  }
+
   /**
    * Builds floors up to `n`: each one above the ground is a deck on pillars with a railing, and once there's
    * more than one floor every floor gets a lift pad at the back of the aisle.

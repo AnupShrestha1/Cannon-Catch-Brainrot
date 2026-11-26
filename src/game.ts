@@ -3870,6 +3870,36 @@ export class Game {
    * Each state wants the camera at some position and looking at some point. The camera eases toward
    * them as offsets from the player rather than as absolute positions, so a fast flight doesn't lag.
    */
+  /**
+   * How far along the ground from (x, z) towards (x + dx, z + dz) a box (grown by `pad`) starts, from 0 to 1;
+   * 1 when the way is clear or the start is already inside it.
+   */
+  private entryAlong(x: number, z: number, dx: number, dz: number, box: THREE.Box3, pad: number): number {
+    const x0 = box.min.x - pad;
+    const x1 = box.max.x + pad;
+    const z0 = box.min.z - pad;
+    const z1 = box.max.z + pad;
+    if (x > x0 && x < x1 && z > z0 && z < z1) return 1;
+    let tMin = 0;
+    let tMax = 1;
+    for (const [p, d, lo, hi] of [
+      [x, dx, x0, x1],
+      [z, dz, z0, z1],
+    ] as const) {
+      if (Math.abs(d) < 1e-6) {
+        if (p < lo || p > hi) return 1;
+        continue;
+      }
+      let a = (lo - p) / d;
+      let b = (hi - p) / d;
+      if (a > b) [a, b] = [b, a];
+      tMin = Math.max(tMin, a);
+      tMax = Math.min(tMax, b);
+      if (tMin > tMax) return 1;
+    }
+    return tMin;
+  }
+
   private updateCamera(realDt: number): void {
     // 0 in landscape, up to 1 on a tall phone screen.
     const portrait = clamp((1 - this.camera.aspect) * 2, 0, 1);
@@ -3959,6 +3989,22 @@ export class Game {
       this.camLook.set(0, 1, 0);
     }
     if (!Number.isFinite(this.camera.fov)) this.camera.fov = 60;
+    // In flight and on landing the camera sits well behind the player, which near the base can be inside the
+    // showcase, looking out from under a deck. Below the top deck, its target comes in closer instead,
+    // stopping in front of the building (same direction, nothing in the way); the usual easing smooths it.
+    if (this.state === 'ascent' || this.state === 'fall' || this.state === 'landed' || this.state === 'reveal') {
+      const box = this.base.decks();
+      if (box && pos.y < box.max.y + 1) {
+        const dx = pos.x - player.x;
+        const dz = pos.z - player.z;
+        const t = this.entryAlong(player.x, player.z, dx, dz, box, 1.2);
+        if (t < 1) {
+          const keep = Math.max(0.3, t);
+          pos.x = player.x + dx * keep;
+          pos.z = player.z + dz * keep;
+        }
+      }
+    }
     const k = this.camSnap ? 1 : damp(rate, realDt);
     this.camSnap = false;
     this.camOff.lerp(pos.sub(player), k);
