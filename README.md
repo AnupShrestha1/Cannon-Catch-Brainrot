@@ -439,10 +439,11 @@ Not in this build: fusion of named characters, sky events, the rival, the spin w
   size) and portrait the cannon scene. All three share one logo: gradient letters, a thick ink outline, an extruded
   edge, a gloss and a soft dark halo, placed clear of CrazyGames' top-left label zone. `alt-scene-1920x1080.png` is
   an A/B alternative, and `ingame/` has backups rendered from the game itself.
-- Preview videos (about 18 s, silent, 1920×1080 and 1080×1620) are kept out of git in `store/videos/`. They were
-  recorded from the game canvas only (no HUD, cursor or browser), opening on the cover art. A dev-only autopilot
-  flew them: it steers for the best gem cluster it can reach, swerves round hazards and opens the parachute in the
-  bullseye (no hits, about 100–150 gems per take).
+- Preview videos (about 19.7 s, silent, 1920×1080 and 1080×1620) are kept out of git in `store/videos/`. Each is
+  one full cycle at real speed: the cover, the cannon charging (released in the perfect band), PERFECT LAUNCH,
+  gems and big gems, Cloud Kingdom, two near misses with birds, the parachute in the bullseye, touchdown and the
+  landing result. They were recorded from the game canvas with the HUD (charge meter, gem counter, toasts,
+  parachute gauge) redrawn on top from the game's own HUD calls, and flown by a dev-only autopilot (no hits).
 
 ## Look
 
