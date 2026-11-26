@@ -327,9 +327,10 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   keeps its line. Phones and tablets
   also draw lighter: at most 1.5× resolution, no antialiasing on dense screens, and plain shadows from a
   1024 px shadow map (desktop keeps soft 2048 px shadows).
-- **Landing camera**: in flight and on landing the camera sits well behind the player. When that would put it
-  inside your showcase (below the top deck), its target comes in closer, stopping in front of the building, so a
-  landing is never seen from under a floor (`Base.decks()` and `entryAlong` in `game.ts`).
+- **Camera keeps out of the showcase**: aiming, in flight and on landing the camera sits well behind the player,
+  which near your base can be inside the showcase (decks, railings and stairs). When it gets within 6 m of the
+  top deck's height there, its target comes in closer, stopping in front of the building, so nothing is ever seen
+  from under a floor or through the stairs (`Base.decks()` and `entryAlong` in `game.ts`).
 - **Follow camera**: walking with the keys or the stick, the camera eases round behind the way you're going
   (about 45° a second when walking sideways, so a turn becomes a gentle arc), so you rarely need to drag.
   It leaves you alone while you back up toward it, and for a moment after you turn it by hand.
@@ -439,7 +440,9 @@ Not in this build: fusion of named characters, sky events, the rival, the spin w
   edge, a gloss and a soft dark halo, placed clear of CrazyGames' top-left label zone. `alt-scene-1920x1080.png` is
   an A/B alternative, and `ingame/` has backups rendered from the game itself.
 - Preview videos (about 18 s, silent, 1920×1080 and 1080×1620) are kept out of git in `store/videos/`. They were
-  recorded from the game canvas only (no HUD, cursor or browser), opening on the cover art.
+  recorded from the game canvas only (no HUD, cursor or browser), opening on the cover art. A dev-only autopilot
+  flew them: it steers for the best gem cluster it can reach, swerves round hazards and opens the parachute in the
+  bullseye (no hits, about 100–150 gems per take).
 
 ## Look
 

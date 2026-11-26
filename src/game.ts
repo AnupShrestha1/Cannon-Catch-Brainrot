@@ -3990,11 +3990,12 @@ export class Game {
     }
     if (!Number.isFinite(this.camera.fov)) this.camera.fov = 60;
     // In flight and on landing the camera sits well behind the player, which near the base can be inside the
-    // showcase, looking out from under a deck. Below the top deck, its target comes in closer instead,
+    // showcase, looking out from under a deck. Approaching the top deck, its target comes in closer instead,
     // stopping in front of the building (same direction, nothing in the way); the usual easing smooths it.
-    if (this.state === 'ascent' || this.state === 'fall' || this.state === 'landed' || this.state === 'reveal') {
+    // (Aiming too: on a tall phone screen the cannon camera sits far enough back to be under the front stairs.)
+    if (['aim', 'charging', 'ascent', 'fall', 'landed', 'reveal'].includes(this.state)) {
       const box = this.base.decks();
-      if (box && pos.y < box.max.y + 1) {
+      if (box && pos.y < box.max.y + 6) {
         const dx = pos.x - player.x;
         const dz = pos.z - player.z;
         const t = this.entryAlong(player.x, player.z, dx, dz, box, 1.2);

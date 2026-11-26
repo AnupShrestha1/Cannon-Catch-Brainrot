@@ -425,9 +425,11 @@ export class Base {
 
   private deckBoxFloors = -1;
   private deckBox = new THREE.Box3();
+  /** The flights of stairs, which stand outside the decks' footprint. */
+  private stairGroups: THREE.Group[] = [];
 
   /**
-   * The space the raised decks take up (world coordinates), or null with only the ground floor. The flight
+   * The space the raised decks and their stairs take up (world coordinates), or null with only the ground floor. The flight
    * camera keeps above it, so a landing near the base never looks out from inside the showcase.
    */
   decks(): THREE.Box3 | null {
@@ -437,6 +439,7 @@ export class Base {
       this.group.updateMatrixWorld(true);
       this.deckBox.makeEmpty();
       for (const g of this.floorGroups.slice(1)) this.deckBox.expandByObject(g);
+      for (const g of this.stairGroups) this.deckBox.expandByObject(g);
       // From the ground (pillars and stairs count too) to just over the top deck's railing; the brainrots'
       // light beams reach much higher and don't block a view.
       this.deckBox.min.y = this.group.position.y;
@@ -529,6 +532,7 @@ export class Base {
       g.add(post);
     }
     this.group.add(g);
+    this.stairGroups.push(g);
   }
 
   /**
