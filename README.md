@@ -433,9 +433,11 @@ Not in this build: fusion of named characters, sky events, the rival, the spin w
 - Progress saves through the SDK Data module, so turn on **Progress Save** in the submission form.
 - A signed-in CrazyGames player who hasn't chosen a name uses their CrazyGames username.
 - No ads, no external links, no login, no fullscreen button.
-- Cover images for the submission are in `store/covers/` (1920×1080, 800×1200, 800×800). They come from AI key art
-  (`store/covers/source/`), with the real title added in the game's font and outline; `alt-closeup-1920x1080.png`
-  is a close-up variant for A/B testing, and `ingame/` has backup covers rendered from the game itself.
+- Cover images for the submission are in `store/covers/` (1920×1080, 800×1200, 800×800), made from the AI key art
+  in `store/covers/source/`. Landscape and square use the close-up (big face and gem, which read at thumbnail
+  size) and portrait the cannon scene. All three share one logo: gradient letters, a thick ink outline, an extruded
+  edge, a gloss and a soft dark halo, placed clear of CrazyGames' top-left label zone. `alt-scene-1920x1080.png` is
+  an A/B alternative, and `ingame/` has backups rendered from the game itself.
 - Preview videos (about 18 s, silent, 1920×1080 and 1080×1620) are kept out of git in `store/videos/`. They were
   recorded from the game canvas only (no HUD, cursor or browser), opening on the cover art.
 
