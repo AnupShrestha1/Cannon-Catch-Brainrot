@@ -23,7 +23,9 @@ npm run dev
 Open http://localhost:5173. To test on a phone on the same Wi-Fi, run `npm run dev -- --host` and open
 the Network URL it prints.
 
-`npm run build` writes a static build to `dist/` (3 files).
+`npm run build` writes the CrazyGames build to `dist/`, and `npm run build:poki` the Poki build to
+`dist-poki/` (same game, the other portal's SDK). `npm run dev:poki` runs the Poki version locally; the Poki
+SDK logs every call to the console there.
 
 ## Controls
 
@@ -48,6 +50,7 @@ the Network URL it prints.
 | At the base: store or sell the brainrot you're next to | E | The action button |
 | Backpack | Bag in the dock, or B | Bag in the dock |
 | Landing menu (returning players) | PLAY, Space or Enter | Tap PLAY |
+| Pause / resume | Esc or P (or the Pause button) / Esc, P, Space or RESUME | Pause button / RESUME |
 | Scroll a panel (book, backpack, shop) | Drag it, or the mouse wheel | Drag it |
 
 Release the charge in the green band for +15% height, or the gold band for +30%.
@@ -384,6 +387,10 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - Daily rewards: a 7-day login streak (coins, a Rare on day 3, an Epic on day 7, both to the backpack).
 - Collection book: every character as a silhouette until pulled, with a one-time reward per completed
   page (500, 5,000 and 50,000 coins). Drag it (or any panel) up and down to scroll, with a little glide.
+- **Pause**: Esc, P or the Pause button (top right) stops everything (flights, bots, income) under a pause
+  screen with RESUME, sound and music switches and the controls for the device. Esc first closes the shop or a
+  popup if one is open. Not during the landing (that's already a break). The narrowest phones (under 360 px) drop
+  the on-screen button to keep the corner on one row.
 - **Landing menu**: returning players open on the game's logo over their live town (the camera sways
   behind the player's showcase), "Welcome back" with their best height, brainrots, income and rebirth level,
   sound and music toggles, and one big PLAY (Space or Enter on a keyboard). New players never see it: they
@@ -498,8 +505,56 @@ On localhost the SDK runs in its local mode and logs every call to the console.
 npm run build
 ```
 
-Then zip the contents of `dist/` (not the folder itself) and upload the zip in the CrazyGames developer
-portal.
+Then drag the files inside `dist/` (not the folder, and not a zip: the portal doesn't take archives) into the
+upload zone in the CrazyGames developer portal.
+
+## Poki
+
+`npm run build:poki` makes the Poki build in `dist-poki/`: the same game with the Poki SDK v2 script in place of
+CrazyGames' (the build mode swaps it in `index.html`, and `PORTAL` in `src/platform.ts` picks the calls). Checked
+against Poki's requirements (developers.poki.com, read in full on 27 Nov 2026):
+
+- **SDK events.** `gameLoadingFinished` when loading is done. `gameplayStart` only on the player's first input,
+  never on load. `gameplayStop` on every interruption: the landing menu, pause, the shop and popups, and the
+  landing at the end of each flight. Never the same event twice in a row, and nothing at all while an ad plays.
+- **Ads.** `commercialBreak` only when heading back into play from a break, in Poki's order (gameplayStop →
+  commercialBreak → gameplayStart): after each landing, before the player is back home, and when leaving the pause
+  screen. Poki's own timer decides whether an ad really plays; the game has no ad timer. While the break is pending
+  the game holds still and takes no keys; if an ad plays, all sound is muted until it ends. Gems from the flight
+  are banked before the break. No rewarded ads, no purchases, no other ad systems.
+- **Pause** on Esc (and P), as Poki asks for keyboard games, with the matching SDK events.
+- **No page scrolling.** Arrow keys and Space never scroll the page round the game, and the mouse wheel only
+  scrolls a panel that can scroll (the backpack, the shop, the book).
+- **The pill.** Poki lays a small button over the left edge, 24 px down by default, right on the coins. The game
+  moves it (`movePill`) just below the coins, gems and altitude panel, measured for each screen size.
+- **Ad blockers and incognito.** Without the SDK (blocked) or when its init fails, the game runs normally with no
+  ad breaks and no messages. Saves are in localStorage behind try/catch (Poki syncs it for logged-in players).
+- **No external requests** besides the SDK: fonts, models and sounds are all in the build. No chat, no external
+  links, no login, no tracking. The tuning panel isn't in either build.
+- **Screens.** No overlaps or anything off-screen at Poki's 640×360, 836×470 and 1031×580, phones upright and on
+  their side (320 to 412 px wide), and tablets, at the base, aiming, charging and in flight.
+- **Single-player** with 🤖-tagged bots, original characters (no meme IP), and new players land straight in the
+  tutorial (returning players get a one-click landing menu).
+
+### Poki assets
+
+In `store/poki/`:
+
+- `thumbnail-941x941.png`: the static thumbnail. Full-bleed square, no text (Poki asks for at least 628×628,
+  no titles), from the close-up key art.
+- `screenshot-1-flight.jpg`, `screenshot-2-bullseye.jpg`, `screenshot-3-base.jpg`: three 1920×1080 gameplay
+  screenshots (a new zone with gems and a hazard, a bullseye parachute landing, a base full of brainrots).
+- Poki also wants an animated thumbnail (1080×1080 or more, 4 to 6 s, 50 fps+, muted mp4) before global release;
+  it isn't needed to apply or to playtest.
+
+### Upload
+
+```bash
+npm run build:poki
+```
+
+Upload the `dist-poki/` folder (or a zip of its contents) as a new version in Poki for Developers, or drag the
+folder into the Poki Inspector (inspector.poki.dev) first to check the SDK event log.
 
 ## Economy simulator
 
@@ -563,7 +618,8 @@ All first-pass numbers live in `src/config.ts`.
 | `src/game.ts` | The state machine: run, landing, base, gacha, merging, backpack, level-up buttons, shop, tutorial arrows, camera |
 | `src/economy.ts` | Upgrade costs, income, slots, pulls with hidden pity, merging and selling |
 | `src/meta.ts` | Offline earnings, the daily streak, and collection book pages |
-| `src/platform.ts` | The CrazyGames SDK wrapper |
+| `src/platform.ts` | The portal SDK wrapper: CrazyGames or Poki by build mode, events, ad breaks, the pill |
+| `src/pause.ts` | The pause screen: RESUME, sound and music, the controls |
 | `src/base.ts` | A plot's showcase (floor, name board, pedestals, brainrots, coins), and what's solid and how high the floor is, town-wide |
 | `src/hub.ts` | The shared hub: paving, the cauldron, the shop stall and keeper, the five gacha machines with their pads and locks, the fountain |
 | `src/tiles.ts` | The Lego-style tile texture for paving and plot floors |

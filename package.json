@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "dev:poki": "vite --mode poki",
+    "build:poki": "tsc --noEmit && vite build --mode poki",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "sim": "esbuild scripts/sim.ts --bundle --platform=node --format=esm --define:import.meta.env.DEV=false --log-level=warning --outfile=node_modules/.cache/sim.mjs && node node_modules/.cache/sim.mjs"

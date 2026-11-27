@@ -66,6 +66,7 @@ export class Hud {
   readonly soundBtn = byId<HTMLButtonElement>('soundBtn');
   readonly musicBtn = byId<HTMLButtonElement>('musicBtn');
   readonly tuneBtn = byId<HTMLButtonElement>('tuneBtn');
+  readonly pauseBtn = byId<HTMLButtonElement>('pauseBtn');
   readonly profileBtn = byId<HTMLButtonElement>('profileBtn');
   readonly upgradesBtn = byId<HTMLButtonElement>('upgradesBtn');
   readonly bookBtn = byId<HTMLButtonElement>('bookBtn');
@@ -1020,8 +1021,9 @@ export class Hud {
 
   /** Release builds: the Tune button and panel are taken out of the page. */
   removeTuning(): void {
-    this.tuneBtn.remove();
-    this.tunePanel.remove();
+    // Release builds don't ship the markup at all; this covers a build made without that step.
+    this.tuneBtn?.remove();
+    this.tunePanel?.remove();
   }
 
   bindTuning(save: Save, hooks: TuningHooks): void {

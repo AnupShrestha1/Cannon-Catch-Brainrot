@@ -166,7 +166,8 @@
           <button id="profileBtn" type="button" aria-label="Profile"><span class="lb">Profile</span></button>
           <button id="soundBtn" type="button">Sound on</button>
           <button id="musicBtn" type="button">Music on</button>
-          <button id="tuneBtn" type="button" aria-label="Tune"><span class="ic">⚙️</span><span class="lb">Tune</span></button>
+          <button id="pauseBtn" type="button" aria-label="Pause" title="Pause (Esc or P)"><span class="ic">⏸️</span><span class="lb">Pause</span></button>
+          <!-- dev-only --><button id="tuneBtn" type="button" aria-label="Tune"><span class="ic">⚙️</span><span class="lb">Tune</span></button><!-- /dev-only -->
         </div>
         <button id="giftBtn" type="button" disabled></button>
       </div>
@@ -252,6 +253,7 @@
       </div>
     </div>
 
+    <!-- dev-only -->
     <div id="tune" class="hidden">
       <h3>Tuning</h3>
       <label>Cannon level <b id="levelVal"></b><input id="levelIn" type="range" min="1" max="20" step="1" /></label>
@@ -281,6 +283,7 @@
       <button id="resetBtn" type="button">Reset everything</button>
       <p class="sub">T toggles this panel. M mutes.</p>
     </div>
+    <!-- /dev-only -->
 
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -126,7 +126,7 @@ export const CAPACITY = SLOTS.length;
 const NAMES = [
   'Mia', 'Leo_77', 'PastaKing', 'Zoe', 'BrainrotBob', 'Luca', 'NinaNoodle', 'Kai', 'SkyDiver99', 'Ari',
   'Gigi', 'Tito_Toast', 'MoonMax', 'Pip', 'CannonCarla', 'Remy', 'Juno', 'Ollie_Op', 'Sunny', 'Vito',
-  'xXSkyLordXx', 'bean', 'Noodle_Ninja', 'tungtung', 'Lily.exe', 'GelatoGuy', 'FrostyFox', 'zappy', 'Benji',
+  'xXSkyLordXx', 'bean', 'Noodle_Ninja', 'Bongo', 'Lily.exe', 'GelatoGuy', 'FrostyFox', 'zappy', 'Benji',
   'cocoa_puff', 'MaxPower', 'IvyLeaf', 'DinoDan', 'pixel_pam',
 ];
 const OUTFITS: Outfit[] = [

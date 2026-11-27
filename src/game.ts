@@ -94,8 +94,9 @@ import { Particles, Sparks, Streaks } from './fx';
 import { Hud, type PadButton, type RevealItem, type ShopItem, type ShopRow } from './hud';
 import { Input } from './input';
 import { Menu } from './menu';
+import { PauseMenu } from './pause';
 import { BOOK_ZONES, DAILY, bookEntries, dailyCoins, dailyStatus, dayKey, OFFLINE, offlineCapHours, offlineEarnings, zoneComplete } from './meta';
-import { platform } from './platform';
+import { PORTAL, platform } from './platform';
 import { clearSave, loadSave, writeSave, type Owned, type PadSlot, type Save } from './store';
 import {
   BARREL_Y,
@@ -598,7 +599,7 @@ export class Game {
   private catchUp(now: number): void {
     const gap = this.lastUpdate ? (now - this.lastUpdate) / 1000 : 0;
     this.lastUpdate = now;
-    if (this.debugPaused || gap <= 0) return;
+    if (this.frozen || gap <= 0) return;
     const scaled = gap * this.timeScale;
     let steps = Math.min(scaled, 20);
     while (steps > 0) {
@@ -633,7 +634,7 @@ export class Game {
     if (this.lastUpdate && now - this.lastUpdate > 250) this.catchUp(now);
     else {
       this.lastUpdate = now;
-      if (!this.debugPaused) {
+      if (!this.frozen) {
         // Sped up for playtests: several normal-sized steps per frame.
         let left = dt * this.timeScale;
         while (left > 1e-6) {
@@ -697,6 +698,11 @@ export class Game {
     window.addEventListener('keydown', (e) => {
       // Typing in a text field (the name box, the tuning panel) isn't a shortcut.
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) {
+        if (hud.shopOpen) hud.closeShop();
+        else this.pause();
+        return;
+      }
       if (e.code === 'KeyT' && import.meta.env.DEV) hud.tunePanel.classList.toggle('hidden');
       const atBase = !hud.modalOpen && (this.state === 'home' || this.state === 'aim');
       if (this.wheel.key(e.code, true)) {
@@ -709,8 +715,18 @@ export class Game {
       }
       if (e.code === 'KeyB' && atBase) this.openBackpack();
       if (e.code === 'KeyM') this.toggleMute();
-      if (e.code === 'Escape') hud.closeShop();
     });
+    // During an ad break the game takes no keys at all (capture phase, ahead of everything else).
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        if (!this.breakPending) return;
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      },
+      true,
+    );
+    onClick(hud.pauseBtn, () => this.pause());
     if (import.meta.env.DEV) hud.bindTuning(this.save, {
       changed: () => {
         writeSave(this.save);
@@ -743,7 +759,57 @@ export class Game {
 
   /** The game's own mute, overridden by CrazyGames' mute setting. */
   private applyMute(): void {
-    this.sfx.setMuted(this.save.muted || platform.muted);
+    this.sfx.setMuted(this.save.muted || platform.muted || this.adMute);
+  }
+
+  // ---------------------------------------------------------------- pause and breaks
+
+  /** Esc, P or the Pause button: everything stops under the pause screen. Not over a menu, panel or the landing. */
+  private pause(): void {
+    if (this.paused || this.breakPending || this.menu || this.hud.modalOpen || this.hud.shopOpen || this.state === 'landed') return;
+    this.paused = true;
+    this.input.reset();
+    this.wheel.close();
+    this.sfx.wind(0);
+    platform.setPlaying(false);
+    new PauseMenu(
+      { mobile: platform.isMobile, sound: !this.save.muted, music: !this.save.musicOff },
+      {
+        // Back into play: a natural break first, where Poki may show an ad.
+        resume: () => this.naturalBreak(() => (this.paused = false)),
+        sound: () => {
+          this.toggleMute();
+          return !this.save.muted;
+        },
+        music: () => {
+          this.toggleMusic();
+          return !this.save.musicOff;
+        },
+      },
+    );
+  }
+
+  /**
+   * A natural break heading back into play (the end of a flight, leaving the pause screen). The game holds still and
+   * takes no keys while the portal decides on an ad (Poki may show one; elsewhere it's instant), goes quiet if one
+   * plays, then carries on with `then` without catching up the time the ad took.
+   */
+  private naturalBreak(then: () => void): void {
+    this.breakPending = true;
+    this.input.reset();
+    void platform
+      .commercialBreak(() => {
+        this.adMute = true;
+        this.applyMute();
+      })
+      .then(() => {
+        this.adMute = false;
+        this.applyMute();
+        this.input.reset();
+        this.lastUpdate = performance.now();
+        this.breakPending = false;
+        then();
+      });
   }
 
   private toggleMusic(): void {
@@ -773,6 +839,16 @@ export class Game {
 
   /** The landing menu, while it's up (returning players only). */
   private menu: Menu | null = null;
+  /** Paused (the pause screen is up), and a break between flights or after a pause, when an ad may play. */
+  private paused = false;
+  private breakPending = false;
+  /** Everything goes quiet while an ad plays. */
+  private adMute = false;
+
+  /** The game doesn't run: paused, in an ad break, or stopped by a test. Time doesn't catch up afterwards. */
+  private get frozen(): boolean {
+    return this.debugPaused || this.paused || this.breakPending;
+  }
 
   /** What the flight joystick ring shows (it only moves sideways). */
   private flightStick = { active: true, originX: 0, originY: 0, x: 0, y: 0 };
@@ -793,6 +869,30 @@ export class Game {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.placePill(true);
+  }
+
+  /**
+   * Poki lays its pill (a small button) over the game's left edge, 24 px down by default: right on the coins. It
+   * goes just below the top-left stack instead (coins, gems and the flight's altitude panel), measured with the
+   * altitude panel showing. A new screen size places it afresh; otherwise it only ever moves down (once, when the
+   * panel first fills in at the cannon), never during a flight.
+   */
+  private pillTop = 0;
+  private placePill(fresh: boolean): void {
+    if (PORTAL !== 'poki') return;
+    if (fresh) this.pillTop = 0;
+    const stack = document.getElementById('topLeft');
+    const alt = document.getElementById('alt');
+    if (!stack) return;
+    const hidden = alt?.classList.contains('hidden-soft') ?? false;
+    if (hidden) alt!.classList.remove('hidden-soft');
+    const bottom = stack.getBoundingClientRect().bottom;
+    if (hidden) alt!.classList.add('hidden-soft');
+    const top = Math.round(bottom + 10);
+    if (top <= this.pillTop) return;
+    this.pillTop = top;
+    platform.movePill(0, top);
   }
 
   private hasHint(id: string): boolean {
@@ -903,7 +1003,10 @@ export class Game {
     this.updateFireworks(realDt);
     this.updateVisuals(realDt, dt);
     // The reveal screen and the shop are breaks in play.
-    platform.setPlaying(!this.menu && this.state !== 'reveal' && !this.hud.shopOpen && !this.hud.modalOpen);
+    // The landing is the end of a level: play stops until the player is home again.
+    platform.setPlaying(
+      !this.menu && !this.paused && this.state !== 'landed' && this.state !== 'reveal' && !this.hud.shopOpen && !this.hud.modalOpen,
+    );
     this.input.endFrame();
   }
 
@@ -1459,7 +1562,7 @@ export class Game {
       }
     }
     this.landedT -= dt;
-    if (this.landedT <= 0) this.showReveal();
+    if (this.landedT <= 0 && !this.breakPending) this.showReveal();
   }
 
   /** The run's gems go into the wallet with a toast, and the player heads straight home: no result window. */
@@ -1470,13 +1573,17 @@ export class Game {
     }
     this.save.gems += this.runGems;
     writeSave(this.save);
-    if (this.runGems > 0) {
-      this.hud.toast(`+${formatCoins(this.runGems)} gems`, 'gold big');
-      this.sfx.coin();
-    } else {
-      this.hud.toast('No gems this run', 'small');
-    }
-    this.goHome();
+    // Banked before the break, so nothing is lost if the player leaves during an ad.
+    const gems = this.runGems;
+    this.naturalBreak(() => {
+      if (gems > 0) {
+        this.hud.toast(`+${formatCoins(gems)} gems`, 'gold big');
+        this.sfx.coin();
+      } else {
+        this.hud.toast('No gems this run', 'small');
+      }
+      this.goHome();
+    });
   }
 
   private clearRun(): void {
@@ -2796,6 +2903,8 @@ export class Game {
     this.player.body.rotation.set(0, 0, 0);
     this.player.body.position.y = 0.9;
     this.state = 'aim';
+    // The altitude panel is filled in now: the pill's spot below it is final.
+    requestAnimationFrame(() => this.placePill(false));
     this.hud.showCharge(null);
     this.hud.showGround(null);
     this.hud.showChute(false);

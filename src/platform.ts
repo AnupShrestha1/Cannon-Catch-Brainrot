@@ -1,5 +1,8 @@
-// CrazyGames HTML5 SDK v3, behind a wrapper that does nothing when the SDK is missing (blocked script,
-// offline) or disabled (any domain other than localhost or CrazyGames). Docs: https://docs.crazygames.com/sdk/intro/
+// The game portal's SDK, behind one wrapper. `npm run build` makes the CrazyGames build (CrazyGames HTML5 SDK v3)
+// and `npm run build:poki` the Poki build (Poki SDK v2); the build mode picks the SDK script in index.html too.
+// Either way the wrapper does nothing when the SDK is missing (blocked script, offline, ad blocker) or disabled,
+// so the game always stays playable.
+// Docs: https://docs.crazygames.com/sdk/intro/ and https://developers.poki.com/guide/sdk-html5
 
 interface CrazySettings {
   muteAudio: boolean;
@@ -24,85 +27,158 @@ interface CrazySdk {
   };
 }
 
+interface PokiSdk {
+  init(): Promise<void>;
+  gameLoadingFinished(): void;
+  gameplayStart(): void;
+  gameplayStop(): void;
+  commercialBreak(onStart?: () => void): Promise<void>;
+  movePill?(topPercent: number, topPx: number): void;
+}
+
 declare global {
   interface Window {
     CrazyGames?: { SDK: CrazySdk };
+    PokiSDK?: PokiSdk;
   }
 }
 
-let sdk: CrazySdk | null = null;
-let playing = false;
+/** Which portal this build is for. */
+export const PORTAL: 'crazygames' | 'poki' = import.meta.env.MODE === 'poki' ? 'poki' : 'crazygames';
 
-function call(fn: (s: CrazySdk) => void): void {
-  if (!sdk) return;
+let crazy: CrazySdk | null = null;
+let poki: PokiSdk | null = null;
+/** Poki's init failed (usually an ad blocker): the game runs on, with no ad breaks. */
+let pokiAds = false;
+
+/** What the game says (playing or on a break), what the SDK was last told, and whether an ad is showing. */
+let wantPlaying = false;
+let playing = false;
+let inBreak = false;
+/** Poki: gameplay can only start on the player's first input, never on load. */
+let interacted = PORTAL !== 'poki';
+
+function safely(what: string, fn: () => void): void {
   try {
-    fn(sdk);
+    fn();
   } catch (err) {
-    console.warn('CrazyGames SDK call failed', err);
+    console.warn(`${what} SDK call failed`, err);
   }
+}
+
+/**
+ * Sends gameplayStart / gameplayStop when the state really changes: never the same event twice in a row, nothing
+ * during an ad, and (on Poki) no start before the player's first input.
+ */
+function sync(): void {
+  const next = wantPlaying && interacted && !inBreak;
+  if (next === playing) return;
+  playing = next;
+  if (crazy) safely('CrazyGames', () => (next ? crazy!.game.gameplayStart() : crazy!.game.gameplayStop()));
+  if (poki) safely('Poki', () => (next ? poki!.gameplayStart() : poki!.gameplayStop()));
+}
+
+/** Waits for a promise, but never longer than `ms`. */
+function capped<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([promise, new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timed out')), ms))]);
 }
 
 export const platform = {
   /** Waits for the SDK, but never more than 4 seconds, so a slow or blocked script can't stall the game. */
   async init(): Promise<void> {
+    if (PORTAL === 'poki') {
+      const candidate = window.PokiSDK;
+      if (!candidate) return;
+      poki = candidate;
+      try {
+        await capped(candidate.init(), 4000);
+        pokiAds = true;
+      } catch (err) {
+        // Poki's advice: load the game anyway.
+        console.warn('Poki SDK init failed', err);
+      }
+      const first = () => {
+        interacted = true;
+        sync();
+        for (const type of ['pointerdown', 'keydown', 'touchstart'] as const) window.removeEventListener(type, first, true);
+      };
+      for (const type of ['pointerdown', 'keydown', 'touchstart'] as const) window.addEventListener(type, first, true);
+      return;
+    }
     const candidate = window.CrazyGames?.SDK;
     if (!candidate) return;
     try {
-      await Promise.race([
-        candidate.init(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('SDK init timed out')), 4000)),
-      ]);
+      await capped(candidate.init(), 4000);
     } catch (err) {
       console.warn('CrazyGames SDK unavailable', err);
       return;
     }
-    if (candidate.environment !== 'disabled') sdk = candidate;
+    if (candidate.environment !== 'disabled') crazy = candidate;
   },
 
-  /** The SDK's cross-device save, which falls back to localStorage for guests. Null without the SDK. */
+  /** CrazyGames' cross-device save (localStorage for guests). Null elsewhere: the game uses localStorage. */
   get storage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null {
-    return sdk ? sdk.data : null;
+    return crazy ? crazy.data : null;
   },
 
   loadingStart(): void {
-    call((s) => s.game.loadingStart());
+    if (crazy) safely('CrazyGames', () => crazy!.game.loadingStart());
   },
 
+  /** Loading is done (CrazyGames' loadingStop, Poki's gameLoadingFinished). */
   loadingStop(): void {
-    call((s) => s.game.loadingStop());
+    if (crazy) safely('CrazyGames', () => crazy!.game.loadingStop());
+    if (poki) safely('Poki', () => poki!.gameLoadingFinished());
   },
 
   /**
-   * Tells CrazyGames whether the player is in play or on a break (shop, reveal screen). Safe to call
-   * every frame: it only sends changes. The first `true` is the gameplay-start event that CrazyGames
-   * measures the initial download against.
+   * Whether the player is in play or on a break (menu, pause, shop, popup, the end of a flight). Safe to call every
+   * frame: only changes are sent.
    */
   setPlaying(on: boolean): void {
-    if (on === playing) return;
-    playing = on;
-    call((s) => (on ? s.game.gameplayStart() : s.game.gameplayStop()));
+    wantPlaying = on;
+    sync();
+  },
+
+  /**
+   * A natural break heading back into play (the end of a flight, leaving the pause screen): on Poki an ad may show
+   * here. Gameplay stops first; `onAdStart` runs if an ad really starts (mute everything then). Resolves when play can
+   * go on; the game's next setPlaying(true) is the gameplayStart that follows. Elsewhere it resolves at once.
+   */
+  async commercialBreak(onAdStart: () => void): Promise<void> {
+    if (!poki || !pokiAds) return;
+    wantPlaying = false;
+    sync();
+    inBreak = true;
+    try {
+      await poki.commercialBreak(onAdStart);
+    } catch (err) {
+      console.warn('Poki commercialBreak failed', err);
+    } finally {
+      inBreak = false;
+    }
   },
 
   /** A celebration moment; CrazyGames asks for it to be rare. */
   happytime(): void {
-    call((s) => s.game.happytime());
+    if (crazy) safely('CrazyGames', () => crazy!.game.happytime());
   },
 
   /**
-   * Whether this is a phone or tablet. CrazyGames asks games to use its system info for this rather than
-   * touch detection; outside CrazyGames a coarse pointer (a finger) stands in.
+   * Whether this is a phone or tablet (tablets get the touch controls too). CrazyGames asks games to use its system
+   * info for this rather than touch detection; elsewhere a coarse pointer (a finger) stands in.
    */
   get isMobile(): boolean {
-    const type = sdk?.user?.systemInfo?.device?.type;
+    const type = crazy?.user?.systemInfo?.device?.type;
     if (type) return type !== 'desktop';
     return matchMedia('(pointer: coarse)').matches;
   },
 
-  /** The signed-in CrazyGames username, or null for guests and outside CrazyGames. */
+  /** The signed-in CrazyGames username, or null for guests and elsewhere. */
   async username(): Promise<string | null> {
-    if (!sdk?.user) return null;
+    if (!crazy?.user) return null;
     try {
-      return (await sdk.user.getUser())?.username || null;
+      return (await crazy.user.getUser())?.username || null;
     } catch {
       return null;
     }
@@ -110,10 +186,15 @@ export const platform = {
 
   /** CrazyGames' mute setting, which overrides the game's own. */
   get muted(): boolean {
-    return sdk?.game.settings.muteAudio ?? false;
+    return crazy?.game.settings.muteAudio ?? false;
   },
 
   onSettingsChange(listener: () => void): void {
-    call((s) => s.game.addSettingsChangeListener(listener));
+    if (crazy) safely('CrazyGames', () => crazy!.game.addSettingsChangeListener(listener));
+  },
+
+  /** Poki's pill on phones: moves it down the game area (topPercent 0-50, then topPx). */
+  movePill(topPercent: number, topPx: number): void {
+    if (poki?.movePill) safely('Poki', () => poki!.movePill!(topPercent, topPx));
   },
 };

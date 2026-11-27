@@ -7,6 +7,16 @@
 
 export type SteerMode = 'mouse' | 'keys' | 'touch';
 
+/** Whether a wheel turn over `target` scrolls a panel under it (one with room to scroll in that direction). */
+function scrollsInside(target: EventTarget | null, deltaY: number): boolean {
+  for (let el = target instanceof Element ? target : null; el && el !== document.body; el = el.parentElement) {
+    const style = getComputedStyle(el);
+    if (!/(auto|scroll)/.test(style.overflowY) || el.scrollHeight <= el.clientHeight) continue;
+    if (deltaY < 0 ? el.scrollTop > 0 : el.scrollTop + el.clientHeight < el.scrollHeight - 1) return true;
+  }
+  return false;
+}
+
 /** A press on the game surface, followed until release to tell taps from drags. */
 interface Gesture {
   touch: boolean;
@@ -135,12 +145,28 @@ export class Input {
       }
       this.keys.delete(e.code);
     });
-    window.addEventListener('blur', () => {
-      this.keys.clear();
-      this.gestures.clear();
-      this.stick.active = false;
-      this.actionDown = false;
-    });
+    window.addEventListener('blur', () => this.reset());
+    // The mouse wheel never scrolls the page round the game (a portal's page, when it's in an iframe); it only
+    // scrolls a panel that can scroll that way.
+    window.addEventListener(
+      'wheel',
+      (e) => {
+        if (!scrollsInside(e.target, e.deltaY)) e.preventDefault();
+      },
+      { passive: false },
+    );
+  }
+
+  /** Lets go of everything held or pressed (pausing, an ad break, the window losing focus). */
+  reset(): void {
+    this.keys.clear();
+    this.gestures.clear();
+    this.taps.clear();
+    this.stick.active = false;
+    this.actionDown = false;
+    this.pressed = false;
+    this.spacePressed = false;
+    this.chute = false;
   }
 
   /** Once a press moves past TAP_SLOP it becomes a drag: a joystick on the left half for touch, else the camera. */
