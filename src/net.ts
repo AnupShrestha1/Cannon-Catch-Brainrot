@@ -351,6 +351,12 @@ function sessionLength(): number {
   return rand(1200, 3600);
 }
 
+/** Where a bot waits for the cannon: off to one side of it, level with the barrel, out of the aiming view. */
+function queueSpot(): [number, number] {
+  const side = Math.random() < 0.5 ? -1 : 1;
+  return [side * rand(4.2, 5.6), rand(-1.2, 1.2)];
+}
+
 /** "a RARE", "an EPIC". */
 function withArticle(rarity: number): string {
   const name = RARITIES[rarity].name;
@@ -858,8 +864,14 @@ export class FakeServer {
     });
   }
 
-  /** Down the lane to the cannon; if it's taken, wait nearby and try again. */
+  /** Down the lane to the cannon; if it's taken, wait beside it and try again. */
   private goLaunch(bot: Bot): void {
+    // While the player is in the cannon, its front is the view they aim along: go straight to the queue beside it.
+    if (this.cannonBusy) {
+      const [x, z] = queueSpot();
+      this.go(bot, this.route(bot, x, z), () => this.tryCannon(bot, 1));
+      return;
+    }
     const x = CANNON_FOOT.x + rand(-0.5, 0.5);
     const z = CANNON_FOOT.z + rand(0, 0.6);
     this.go(bot, this.route(bot, x, z), () => this.tryCannon(bot, 0));
@@ -875,10 +887,9 @@ export class FakeServer {
       this.goHome(bot);
       return;
     }
-    // Queue just behind the cannon, shuffling about.
+    // Queue beside the cannon, shuffling about: never in front, where the aiming player's camera looks.
     if (tries === 0) {
-      const a = rand(-0.9, 0.9);
-      this.go(bot, [[Math.sin(a) * rand(3.5, 5), CANNON_FOOT.z + Math.cos(a) * rand(1.5, 3)]], () => this.tryCannon(bot, 1));
+      this.go(bot, [queueSpot()], () => this.tryCannon(bot, 1));
       return;
     }
     bot.wait = rand(0.6, 1.4);

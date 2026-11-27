@@ -63,9 +63,12 @@ export class RemoteView {
 
   /** Where the camera is: anyone standing right in front of the lens is left out of the shot. */
   private eye = new THREE.Vector3(0, -99, 0);
+  /** The player is aiming from the cannon: nobody stands in the strip between the camera and the barrel. */
+  private aiming = false;
 
-  update(time: number, dt: number, viewerX: number, viewerZ: number, eye?: THREE.Vector3): void {
+  update(time: number, dt: number, viewerX: number, viewerZ: number, eye?: THREE.Vector3, aiming = false): void {
     if (eye) this.eye.copy(eye);
+    this.aiming = aiming;
     const players = this.server.players();
     this.syncPlots(players, time, dt, viewerX, viewerZ);
     const seen = new Set<number>();
@@ -125,7 +128,9 @@ export class RemoteView {
     rig.group.position.set(p.x, p.y, p.z);
     // Someone walking up to the camera would fill the screen with their back: they step out of the shot.
     const lens = Math.hypot(p.x - this.eye.x, p.y + 1 - this.eye.y, p.z - this.eye.z) < 1.8;
-    rig.group.visible = p.pose !== 'hidden' && !lens;
+    // While aiming, the camera sits in front of the cannon looking back at it: anyone in between is left out.
+    const inShot = this.aiming && Math.abs(p.x - this.eye.x) < 2.6 && p.z > 1 && p.z < this.eye.z + 1;
+    rig.group.visible = p.pose !== 'hidden' && !lens && !inShot;
     rig.group.rotation.y = p.pose === 'walk' || p.pose === 'idle' || p.pose === 'dive' ? p.facing : 0;
     // The helmet goes on for the cannon and the flight.
     const flying = p.pose !== 'walk' && p.pose !== 'idle';

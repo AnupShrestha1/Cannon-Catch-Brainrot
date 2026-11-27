@@ -99,8 +99,9 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     a little ahead along their route), turn at a limited rate and weave slightly on long runs. Each has
     its own running speed. They jump a lot while running, look around when they stop, spin now and then,
     give each other room, and sidestep or give up on a waypoint when they get stuck.
-  - **They're busy.** They share the hub with you: they queue for the cannon (and wait while you're in
-    it), dive in and get fired off with a boom you hear across town, often heading straight back for
+  - **They're busy.** They share the hub with you: they queue for the cannon (and wait beside it while you're
+    in it, never in front, where your camera looks while you aim; anyone who wanders between the camera and the
+    cannon then is left out of the shot), dive in and get fired off with a boom you hear across town, often heading straight back for
     another go; they stand on the machines' pads and spin them, stir the cauldron, and walk to the shop
     stall to buy upgrades. In 10 simulated minutes, seven bots fire about 75 shots and spin about 60
     pulls.
@@ -529,7 +530,8 @@ against Poki's requirements (developers.poki.com, read in full on 27 Nov 2026):
 - **The pill.** Poki lays a small button over the left edge, 24 px down by default, right on the coins. The game
   moves it (`movePill`) just below the coins, gems and altitude panel, measured for each screen size.
 - **Ad blockers and incognito.** Without the SDK (blocked) or when its init fails, the game runs normally with no
-  ad breaks and no messages. Saves are in localStorage behind try/catch (Poki syncs it for logged-in players).
+  ad breaks and no messages. Both cases were played through (load, flight, landing, pause) with the SDK script
+  blocked and with an SDK whose init fails. Saves are in localStorage behind try/catch (Poki syncs it for logged-in players).
 - **No external requests** besides the SDK: fonts, models and sounds are all in the build. No chat, no external
   links, no login, no tracking. The tuning panel isn't in either build.
 - **Screens.** No overlaps or anything off-screen at Poki's 640×360, 836×470 and 1031×580, phones upright and on

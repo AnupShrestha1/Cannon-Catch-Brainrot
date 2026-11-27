@@ -2327,7 +2327,7 @@ export class Game {
   private updateServer(realDt: number): void {
     this.server.setLocal({ name: this.save.profile.name || 'You', income: incomePerSecond(this.save), best: this.save.best });
     this.server.update(realDt);
-    this.remote.update(this.time, realDt, this.px, this.pz, this.camera.position);
+    this.remote.update(this.time, realDt, this.px, this.pz, this.camera.position, this.state === 'aim' || this.state === 'charging');
     for (const e of this.server.drain()) {
       if (e.kind === 'act') {
         this.onRemoteAct(e.act, e.tier ?? 0, e.count ?? 1);
