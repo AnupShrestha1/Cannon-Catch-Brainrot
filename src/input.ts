@@ -108,7 +108,7 @@ export class Input {
     window.addEventListener('pointercancel', release);
 
     window.addEventListener('keydown', (e) => {
-      // Typing in the chat (or any text field) never moves, fires or uses anything.
+      // Typing in a text field never moves, fires or uses anything.
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.code === 'Space') {
         e.preventDefault();

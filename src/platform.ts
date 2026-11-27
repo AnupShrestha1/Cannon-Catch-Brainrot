@@ -3,7 +3,6 @@
 
 interface CrazySettings {
   muteAudio: boolean;
-  disableChat: boolean;
 }
 
 interface CrazySdk {
@@ -107,11 +106,6 @@ export const platform = {
     } catch {
       return null;
     }
-  },
-
-  /** CrazyGames' chat setting: true means the game's chat must be off. */
-  get chatDisabled(): boolean {
-    return sdk?.game.settings.disableChat ?? false;
   },
 
   /** CrazyGames' mute setting, which overrides the game's own. */

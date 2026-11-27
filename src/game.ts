@@ -32,7 +32,7 @@ import {
   type PlotSlot,
 } from './layout';
 import { CAPACITY, FakeServer, describePad } from './net';
-import { RemoteView, makeBubble } from './remote';
+import { RemoteView } from './remote';
 import {
   CHARGE,
   CHUTE,
@@ -93,6 +93,7 @@ import {
 import { Particles, Sparks, Streaks } from './fx';
 import { Hud, type PadButton, type RevealItem, type ShopItem, type ShopRow } from './hud';
 import { Input } from './input';
+import { Menu } from './menu';
 import { BOOK_ZONES, DAILY, bookEntries, dailyCoins, dailyStatus, dayKey, OFFLINE, offlineCapHours, offlineEarnings, zoneComplete } from './meta';
 import { platform } from './platform';
 import { clearSave, loadSave, writeSave, type Owned, type PadSlot, type Save } from './store';
@@ -390,9 +391,6 @@ export class Game {
   private camSnap = false;
   /** When the parachute alarm last beeped. */
   private beepAt = 0;
-  /** The player's speech bubble, and how long it stays up. */
-  private bubble = makeBubble();
-  private bubbleT = 0;
   private screen = new THREE.Vector3();
   /** What to do when the current walk arrives. */
   private arrive: (() => void) | null = null;
@@ -441,6 +439,8 @@ export class Game {
     // Phones and tablets draw lighter: at most 1.5× resolution, no antialiasing on dense screens, plain
     // (not soft) shadows from a smaller shadow map. Desktop keeps the full look.
     const mobile = platform.isMobile;
+    // The device type (from CrazyGames' system info, not touch detection) picks the phone layout's key hints.
+    document.body.classList.toggle('mobile', mobile);
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: !mobile || window.devicePixelRatio < 2,
@@ -473,7 +473,6 @@ export class Game {
     });
     this.scene.add(this.player.group);
     this.applyProfile();
-    this.player.group.add(this.bubble.sprite);
     this.shieldBubble = makeShieldBubble();
     this.player.group.add(this.shieldBubble);
     this.fx = new Particles(this.scene);
@@ -507,9 +506,7 @@ export class Game {
     this.paintCannon();
     platform.onSettingsChange(() => {
       this.applyMute();
-      this.applyChatSetting();
     });
-    this.applyChatSetting();
     // A signed-in CrazyGames player who hasn't picked a name goes by their CrazyGames username.
     void platform.username().then((name) => {
       if (!name || this.save.profile.name) return;
@@ -533,7 +530,41 @@ export class Game {
     } else {
       this.boardCannon();
     }
-    this.welcome();
+    // Returning players get the landing menu first (one click to play); new players land straight in the
+    // tutorial, as CrazyGames asks.
+    if (this.save.flightNo > 0) this.openMenu();
+    else this.welcome();
+  }
+
+  /** The landing menu over the live town; PLAY closes it and the welcome-back rewards follow. */
+  private openMenu(): void {
+    const s = this.save;
+    this.menu = new Menu(
+      {
+        name: s.profile.name,
+        best: `${Math.round(s.best)} m`,
+        income: formatCoins(incomePerSecond(s)),
+        brainrots: s.pads.filter(Boolean).length + s.inventory.length,
+        rebirths: s.rebirths,
+        sound: !s.muted,
+        music: !s.musicOff,
+      },
+      {
+        play: () => {
+          this.menu = null;
+          this.sfx.unlock();
+          this.welcome();
+        },
+        sound: () => {
+          this.toggleMute();
+          return !this.save.muted;
+        },
+        music: () => {
+          this.toggleMusic();
+          return !this.save.musicOff;
+        },
+      },
+    );
   }
 
   /**
@@ -663,15 +694,9 @@ export class Game {
     hud.onBuy = (item) => this.buy(item);
     hud.onAction = () => this.useHere();
     hud.onPadButton = (i) => (i >= this.save.pads.length ? this.expandBase() : this.levelUp(i));
-    hud.onChat = (text) => this.sayLocal(text);
     window.addEventListener('keydown', (e) => {
-      // Typing in the chat or the tuning panel isn't a shortcut.
+      // Typing in a text field (the name box, the tuning panel) isn't a shortcut.
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.code === 'Enter' && !hud.modalOpen && !hud.shopOpen) {
-        e.preventDefault();
-        hud.openChat();
-        return;
-      }
       if (e.code === 'KeyT' && import.meta.env.DEV) hud.tunePanel.classList.toggle('hidden');
       const atBase = !hud.modalOpen && (this.state === 'home' || this.state === 'aim');
       if (this.wheel.key(e.code, true)) {
@@ -716,20 +741,6 @@ export class Game {
     this.sfx.setMusic(!this.save.musicOff);
   }
 
-  /** The player says something: into the feed, in a bubble over their head, and to everyone on the server. */
-  private sayLocal(text: string): void {
-    this.server.localChat(text);
-    this.bubble.draw(text);
-    this.bubbleT = 5;
-  }
-
-  /** CrazyGames can turn chat off (its chat setting): the chat box and button go away. */
-  private applyChatSetting(): void {
-    const off = platform.chatDisabled;
-    document.getElementById('chat')?.classList.toggle('hidden', off);
-    if (off && this.hud.chatting) this.hud.closeChat();
-  }
-
   /** The game's own mute, overridden by CrazyGames' mute setting. */
   private applyMute(): void {
     this.sfx.setMuted(this.save.muted || platform.muted);
@@ -759,6 +770,9 @@ export class Game {
     this.hud.setSound(!this.save.muted);
     writeSave(this.save);
   }
+
+  /** The landing menu, while it's up (returning players only). */
+  private menu: Menu | null = null;
 
   /** What the flight joystick ring shows (it only moves sideways). */
   private flightStick = { active: true, originX: 0, originY: 0, x: 0, y: 0 };
@@ -889,7 +903,7 @@ export class Game {
     this.updateFireworks(realDt);
     this.updateVisuals(realDt, dt);
     // The reveal screen and the shop are breaks in play.
-    platform.setPlaying(this.state !== 'reveal' && !this.hud.shopOpen && !this.hud.modalOpen);
+    platform.setPlaying(!this.menu && this.state !== 'reveal' && !this.hud.shopOpen && !this.hud.modalOpen);
     this.input.endFrame();
   }
 
@@ -2199,10 +2213,9 @@ export class Game {
 
   /** Runs the server, draws the other players, and passes on its events, standings and player count. */
   private updateServer(realDt: number): void {
-    const fav = this.save.pads.reduce<PadSlot | null>((a, b) => (b && (!a || b.rarity > a.rarity) ? b : a), null);
-    this.server.setLocal({ name: this.save.profile.name || 'You', income: incomePerSecond(this.save), best: this.save.best, favorite: fav?.name ?? '' });
+    this.server.setLocal({ name: this.save.profile.name || 'You', income: incomePerSecond(this.save), best: this.save.best });
     this.server.update(realDt);
-    this.remote.update(this.time, realDt, this.px, this.pz);
+    this.remote.update(this.time, realDt, this.px, this.pz, this.camera.position);
     for (const e of this.server.drain()) {
       if (e.kind === 'act') {
         this.onRemoteAct(e.act, e.tier ?? 0, e.count ?? 1);
@@ -2253,7 +2266,7 @@ export class Game {
     }
   }
 
-  /** Notices the player walking into someone else's plot: a toast, and the owner may say hi. */
+  /** Notices the player walking into someone else's plot: a toast. */
   private updateVisit(): void {
     const here = plotAt(this.px, this.pz);
     const index = here && here.index !== OWN_SLOT ? here.index : null;
@@ -2263,7 +2276,6 @@ export class Game {
     const owner = this.remote.ownerOf(index);
     if (owner) {
       this.hud.toast(`Visiting ${owner.name}'s base`, 'small');
-      this.server.visit(owner.id);
     } else {
       this.hud.toast('An open plot, waiting for a player', 'small');
     }
@@ -2319,7 +2331,6 @@ export class Game {
         primary: true,
         action: () => {
           this.likePop(SLOTS[owner.slot], near.index);
-          this.server.like(owner.id);
           this.hud.feed('You', `liked ${owner.name}'s ${near.pad.name}`, 'news');
         },
       },
@@ -3417,8 +3428,6 @@ export class Game {
     this.player.chute.scale.y = this.chuteScale * (1 - flutter * 0.15 + Math.sin(this.time * 20) * flutter * 0.05);
     this.updateHelmet(realDt);
     this.updateShield(realDt, inFlight);
-    this.bubbleT = Math.max(0, this.bubbleT - realDt);
-    this.bubble.sprite.visible = this.bubbleT > 0;
 
     const free = this.state === 'home' && !this.walking && this.pulling <= 0 && !this.hud.modalOpen;
     const action = free ? this.actionLabel() : null;
@@ -3627,21 +3636,18 @@ export class Game {
    */
   private updateEvents(realDt: number): void {
     const ev = this.events;
-    const what = ev.tick(realDt, this.save.flightNo >= EVENT_TIMING.fromFlight);
+    const what = ev.tick(realDt, this.save.flightNo >= EVENT_TIMING.fromFlight && !this.menu);
     const phase = ev.phase;
     if (what === 'soon' && phase.kind === 'soon') {
       this.hud.toast(`${phase.event.icon} ${phase.event.name} starts in ${Math.ceil(phase.left)} s!`, 'gold');
       this.hud.feed('Event', `${phase.event.name} starts soon: ${phase.event.description.toLowerCase()}`, 'news', phase.event.color);
       this.sfx.unlockChime();
-      this.server.eventNews('soon', phase.event.name);
     } else if (what === 'start' && phase.kind === 'live') {
       const mins = phase.event.length / 60;
       this.hud.grandBanner(`${phase.event.name.toUpperCase()}!`, `${phase.event.description} for ${mins % 1 ? mins.toFixed(1) : mins} minutes`);
       this.sfx.fanfare(4);
-      this.server.eventNews('start', phase.event.name);
     } else if (what === 'end') {
       this.hud.toast('The event is over. Another one soon!', 'small');
-      this.server.eventNews('end', '');
     }
     this.hud.setEvent(phase);
   }
@@ -3951,6 +3957,8 @@ export class Game {
           rate = 5;
           break;
         }
+        // Behind the landing menu the camera sways gently round behind the player, looking out over the town.
+        if (this.menu) this.camYaw = HOME_YAW + Math.sin(this.time * 0.18) * 0.45;
         // Third person: behind and above the player, swinging round behind them as they walk forward.
         const moving = this.walking || this.stepping;
         // The camera eases round behind the way the player walks, so there's less dragging to do. Not while

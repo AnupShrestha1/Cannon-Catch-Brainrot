@@ -9,13 +9,12 @@
 //   fountain at the end of the lane and walk to their plot; some are brand new, most return with saved progress.
 // - They're busy: they share the hub with you, so you see them queue for the cannon, dive in and get fired into
 //   the sky, crank the gacha machines, stir the cauldron and buy upgrades at the stall.
-// - They talk: speech bubbles over heads, short question-and-answer threads, hellos and goodbyes, reactions to
-//   big pulls, and comments when they visit someone's base (yours included).
+// - They react without words: a wave back, a dance-off, a flex after a big pull. There is no chat.
 //
 // The game only talks to this through the shape a real server would have: snapshots of the other players (who,
 // which slot, where, doing what, what's on display, their stats), a stream of events (joins, leaves, big pulls,
-// new zones, chat, and actions on shared things: firing the cannon, spinning a machine, stirring the cauldron),
-// and a few messages from the local player (their stats, the plot they're visiting, likes, big moments, whether
+// new zones, and actions on shared things: firing the cannon, spinning a machine, stirring the cauldron),
+// and a few messages from the local player (their stats, emotes, big moments, whether
 // they're in the cannon). Swapping in a real server means replacing this file, not the game.
 import { CHARGE, FLIGHT, GACHA, GEMS, MAX_ZONE, RARITIES, TRACKS, ZONES, ECONOMY, zoneIndexAt } from './config';
 import { Base, bumpSolids, floorWorld } from './base';
@@ -64,7 +63,6 @@ import {
 import { defaultSave, type Owned, type PadSlot, type Save } from './store';
 import type { Outfit } from './world';
 import { emoteById } from './emotes';
-import { BACKCHANNEL, LINES, PERSONAS, THREADS, fill, idleLine, style, type Persona, type Topic } from './chat';
 
 export type Pose = 'idle' | 'walk' | 'hidden' | 'dive' | 'up' | 'fall' | 'chute' | 'land';
 
@@ -87,8 +85,6 @@ export interface RemotePlayer {
   chute: number;
   /** Away from keyboard: standing still, tagged AFK. */
   afk: boolean;
-  /** What they said last, while it's still showing over their head ('' for nothing). */
-  bubble: string;
   /** The emote they're playing ('' for none), and how many seconds into it. */
   emote: string;
   emoteT: number;
@@ -101,7 +97,7 @@ export interface RemotePlayer {
 }
 
 export interface ServerEvent {
-  kind: 'join' | 'leave' | 'pull' | 'merge' | 'zone' | 'rebirth' | 'chat' | 'act';
+  kind: 'join' | 'leave' | 'pull' | 'merge' | 'zone' | 'rebirth' | 'act';
   /** For 'act': someone used a shared thing (fired the cannon, spun gacha machine `tier`, stirred the cauldron). */
   act?: 'fire' | 'spin' | 'stir' | 'rebirth';
   tier?: number;
@@ -119,8 +115,6 @@ export interface LocalPlayer {
   name: string;
   income: number;
   best: number;
-  /** Their best brainrot on display, for visitors to talk about. */
-  favorite: string;
 }
 
 /** Players in one server, the local player included: one per plot. */
@@ -143,19 +137,10 @@ const OUTFITS: Outfit[] = [
   { skin: 0xd9a066, shirt: 0x1d1640, pants: 0x6b6b7a, cap: 0xff7a1a },
 ];
 
-/** Nobody says a line someone said in the last this-many seconds (or is about to say). */
-const REPEAT_WINDOW = 150;
-/** At least this long between any two lines in the chat, so people don't talk in the same instant. */
-const LINE_GAP = 0.9;
-/** A line's key for spotting repeats: lower case, letters and digits only. */
-const lineKey = (line: string) => line.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim() || line;
-
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const pick = <T>(list: readonly T[]) => list[Math.floor(Math.random() * list.length)];
 const RADIUS = 0.45;
 const MUZZLE_Y = 3.2;
-/** How long a speech bubble stays up. */
-const BUBBLE_SECONDS = 5;
 const JUMP_SPEED = 9;
 const GRAVITY = 30;
 
@@ -193,17 +178,11 @@ interface Bot extends RemotePlayer {
   lookAt: number;
   lookIn: number;
   spin: number;
-  bubbleTtl: number;
   /** Seconds left in this session; going AFK first, then gone. */
   session: number;
   afkFor: number;
   nextAfkIn: number;
   leaving: boolean;
-  /** How they type. */
-  persona: Persona;
-  /** When they last said anything (server seconds), so nobody talks too often. */
-  lastSaid: number;
-  greetCooldown: number;
   /** When it last went to the shop stall, so it doesn't run there for every coin. */
   shopAt: number;
 }
@@ -361,33 +340,6 @@ function headStart(save: Save, minutes: number): void {
 }
 
 
-/** What bots might say back to a chat line, and how likely anyone answers at all (else it's ignored). */
-function chatReply(t: string): { lines: string[]; chance: number; greeting?: boolean } | null {
-  const has = (re: RegExp) => re.test(t);
-  if (has(/\b(hi+|hello+|hey+|yo+|sup|hola|howdy|hai|helo|hiya)\b/)) {
-    return { lines: ['hi!', 'hey 👋', 'hello!', 'yo', 'hii', 'heyy', 'hi :D', 'sup'], chance: 0.85, greeting: true };
-  }
-  if (has(/how (are|r) (you|u)|\bhru\b|\bwyd\b|what'?s up|wassup/)) {
-    return { lines: ['good hbu', 'chillin', 'grinding gems lol', 'good! just got a rare', 'tired lol', 'pretty good'], chance: 0.75 };
-  }
-  if (has(/\b(thanks|thank you|thx|ty|tysm)\b/)) return { lines: ['np', 'np!', 'yw', '👍'], chance: 0.6 };
-  if (has(/\b(bye|gtg|cya|see ya|goodbye|g2g)\b/)) return { lines: ['bye!', 'cya', 'bye 👋', 'see ya', 'byee'], chance: 0.7 };
-  if (has(/mythic/)) return { lines: ['mythics are super rare', 'cosmic machine has the best mythic odds', 'merge 8 legendaries for one', 'never got one 😭'], chance: 0.7 };
-  if (has(/\bgems?\b/)) return { lines: ['launch higher, cloud kingdom gems are x3', 'fly through them lol', 'upgrade gem finder'], chance: 0.65 };
-  if (has(/merge|cauldron|pot\b/)) return { lines: ['purple pot behind the cannon', 'merge station by the cannon'], chance: 0.65 };
-  if (has(/upgrade|shop|cannon/)) return { lines: ['shop stall next to the cannon', 'upgrade cannon first fr', 'cannon power is the best upgrade'], chance: 0.6 };
-  if (has(/rebirth/)) return { lines: ['more money forever', 'x1.5 income but u restart'], chance: 0.6 };
-  if (has(/trade|trading/)) return { lines: ['no trading yet lol', 'trade what'], chance: 0.6 };
-  if (has(/\b(gg|nice|wow|cool|pog|poggers|lets go|let's go)\b/)) return { lines: ['ty', 'gg', '😄', 'ikr', 'gg'], chance: 0.5 };
-  if (has(/skibidi|rizz|sigma|ohio|cooked|no cap|fanum|aura|mewing|bussin|slay|tung|tralalero|bombardiro|sahur/))
-    return { lines: ['💀', 'bro said it', 'no shot', 'real', 'tung tung tung sahur', 'aura -1000', 'brainrot maxxing', 'chat is this real'], chance: 0.55 };
-  if (has(/\b(rad|gnarly|tubular|groovy|whatever)\b/)) return { lines: ['ok boomer lol', 'rad 😎', 'whats rad', 'lol who says that'], chance: 0.55 };
-  if (has(/^(w+o+|y+a+y+|w+e+e+|a+h+|let'?s go+|yippee)/)) return { lines: ['wooo', 'yippee', 'lol', 'W'], chance: 0.3 };
-  if (has(/\b(lol|lmao|haha+|xd|lmfao)\b/)) return { lines: ['lol', '😂', 'lmao', 'haha'], chance: 0.4 };
-  if (t.includes('?')) return { lines: ['idk', 'not sure lol', 'good question', 'no idea', 'try it and see'], chance: 0.45 };
-  return { lines: ['lol', 'fr', 'true', 'ok', 'nice', 'same', 'real', '?'], chance: 0.22 };
-}
-
 /** How long a player stays this session: a quick look, a normal session, or in for the long haul. */
 function sessionLength(): number {
   const r = Math.random();
@@ -402,11 +354,6 @@ function withArticle(rarity: number): string {
   return `${/^[AEIOU]/.test(name) ? 'an' : 'a'} ${name.toUpperCase()}`;
 }
 
-/** The best brainrot on a showcase, or null. */
-function favoriteOf(pads: (PadSlot | null)[]): PadSlot | null {
-  return pads.reduce<PadSlot | null>((a, b) => (b && (!a || b.rarity > a.rarity) ? b : a), null);
-}
-
 /** Turns an angle toward a target by at most `step`, the short way round. */
 function turnToward(from: number, to: number, step: number): number {
   const diff = Math.atan2(Math.sin(to - from), Math.cos(to - from));
@@ -418,18 +365,12 @@ export class FakeServer {
   private bots: Bot[] = [];
   private events: ServerEvent[] = [];
   private nextId = 1;
-  private chatIn = rand(12, 30);
   private joins: { slot: PlotSlot; at: number }[] = [];
   private later: { at: number; run: () => void }[] = [];
   private time = 0;
-  private local: LocalPlayer = { name: 'You', income: 0, best: 0, favorite: '' };
+  private local: LocalPlayer = { name: 'You', income: 0, best: 0 };
   /** The local player is in the cannon (or diving in): bots wait their turn. */
   private cannonBusy = false;
-  /** Lines said lately, so nobody repeats them for a while. */
-  /** Lines said lately (by key, with when), lines planned but not said yet, and when the last line went out. */
-  private said: { key: string; at: number }[] = [];
-  private pending = new Set<string>();
-  private lastLineAt = -99;
 
   constructor() {
     // You usually join a server that already has three to five people in it; the rest fill up soon.
@@ -462,7 +403,7 @@ export class FakeServer {
     this.cannonBusy = busy;
   }
 
-  /** The local player's stats, for the leaderboards and for visitors to talk about. */
+  /** The local player's stats, for the leaderboards. */
   setLocal(local: LocalPlayer): void {
     this.local = local;
   }
@@ -473,41 +414,6 @@ export class FakeServer {
       { name: this.local.name, income: this.local.income, best: this.local.best, you: true },
       ...this.bots.map((b) => ({ name: b.name, income: b.income, best: b.best, you: false })),
     ];
-  }
-
-  /** The local player walked into someone's plot. */
-  visit(id: number): void {
-    const bot = this.bots.find((b) => b.id === id);
-    if (!bot || bot.greetCooldown > 0 || bot.afk) return;
-    bot.greetCooldown = 90;
-    this.talk(bot, 'greetHost', {}, rand(0.6, 1.8));
-  }
-
-  /**
-   * The local player said something in the chat. Like real people, bots answer some things and ignore others:
-   * nearly always a hello or a question to them by name, often a question about the game, now and then
-   * anything else. Answers come a moment later, as long as it takes to type them.
-   */
-  localChat(text: string): void {
-    this.events.push({ kind: 'chat', name: this.local.name, text });
-    const t = text.toLowerCase();
-    const named = this.bots.find((b) => !b.afk && !b.leaving && t.includes(b.name.toLowerCase()));
-    const reply = chatReply(t);
-    if (!reply) return;
-    const chance = named ? Math.max(0.85, reply.chance) : reply.chance;
-    if (Math.random() > chance) return;
-    const first = named ?? this.someone();
-    if (!first) return;
-    const answer = (bot: Bot, delay: number) => {
-      const line = this.fresh(reply.lines);
-      if (line) this.sayLater(bot, line, delay);
-    };
-    answer(first, rand(1, 2.6));
-    // A hello often gets two.
-    if (reply.greeting && Math.random() < 0.45) {
-      const second = this.someone(first);
-      if (second) answer(second, rand(2.4, 4.5));
-    }
   }
 
   /** A bot plays an emote (only standing still, at the base). */
@@ -528,14 +434,6 @@ export class FakeServer {
       cry: ['laugh', 'wave'],
       laugh: ['laugh'],
     };
-    const said: Record<string, Topic> = {
-      wave: 'emoteWave',
-      dance: 'emoteDance',
-      clap: 'emoteClap',
-      flex: 'emoteFlex',
-      cry: 'emoteCry',
-      laugh: 'emoteLaugh',
-    };
     let n = 0;
     for (const bot of near.sort(() => Math.random() - 0.5)) {
       if (n >= 2 || Math.random() > 0.5) continue;
@@ -544,33 +442,13 @@ export class FakeServer {
         bot.facing = Math.atan2(x - bot.x, z - bot.z) + Math.PI;
         this.emote(bot, pick(answer[id] ?? ['wave']));
       });
-      // The first to join in may say something too.
-      if (n === 1 && said[id]) this.talk(bot, said[id], {}, rand(1, 2.2), 0.35);
     }
   }
 
-  /** A timed event is coming, starting or over: a few people say something about it. */
-  eventNews(stage: 'soon' | 'start' | 'end', name: string): void {
-    const topic: Topic = stage === 'soon' ? 'eventSoon' : stage === 'start' ? 'eventStart' : 'eventEnd';
-    const people = this.bots.filter((b) => !b.afk && !b.leaving).sort(() => Math.random() - 0.5);
-    const n = stage === 'start' ? 2 : 1;
-    people.slice(0, n).forEach((bot, i) => this.talk(bot, topic, { event: name }, rand(1.5, 3.5) + i * rand(1.5, 3), stage === 'start' ? 0.9 : 0.6));
-  }
-
-  /** The local player liked one of a bot's brainrots. */
-  like(id: number): void {
-    const bot = this.bots.find((b) => b.id === id);
-    if (bot && !bot.afk) this.talk(bot, 'thanks', {}, rand(0.5, 1.5));
-  }
-
-  /** Something big happened to the local player; the server tells everyone, and someone may react. */
+  /** Something big happened to the local player; the server tells everyone. */
   reportLocal(event: { kind: 'pull' | 'zone'; text: string; rarity?: number }): void {
     const color = event.rarity !== undefined ? RARITIES[event.rarity].css : undefined;
     this.events.push({ kind: event.kind, name: this.local.name, text: event.text, color });
-    const r = event.rarity ?? 0;
-    if (event.kind === 'pull' && r >= 4) this.react(r >= 6 ? 'wowCelestial' : r === 5 ? 'wowMythic' : 'wowLegendary', { name: this.local.name });
-    const zone = /reached (.+?)!?$/.exec(event.text)?.[1];
-    if (event.kind === 'zone' && zone) this.react('otherZone', { zone, name: this.local.name }, undefined, 0.35);
   }
 
   update(dt: number): void {
@@ -581,7 +459,6 @@ export class FakeServer {
       job.run();
     }
     for (const bot of [...this.bots]) this.step(bot, dt);
-    this.chatter(dt);
     for (const j of [...this.joins]) {
       if (this.time < j.at) continue;
       this.joins.splice(this.joins.indexOf(j), 1);
@@ -626,7 +503,6 @@ export class FakeServer {
       jump: 0,
       chute: 0,
       afk: false,
-      bubble: '',
       emote: '',
       emoteT: 0,
       pads: save.pads,
@@ -642,20 +518,16 @@ export class FakeServer {
       vx: 0,
       vz: 0,
       runSpeed: rand(7, 9.5),
-      persona: pick(PERSONAS),
-      lastSaid: -99,
       jumpV: 0,
       stuck: 0,
       lookAt: 0,
       lookIn: 0,
       spin: 0,
-      bubbleTtl: 0,
       // Someone already here is partway through their session.
       session: sessionLength() * (joining ? 1 : rand(0.15, 1)),
       afkFor: 0,
       nextAfkIn: rand(240, 900),
       leaving: false,
-      greetCooldown: 0,
       shopAt: -999,
     };
     this.bots.push(bot);
@@ -663,13 +535,6 @@ export class FakeServer {
     this.events.push({ kind: 'join', name, text: 'arrived in town', at: [x, 1, z] });
     // Walk home up the lane.
     this.goHome(bot);
-    // A couple of people say hi.
-    const others = this.bots.filter((b) => b !== bot && !b.afk).sort(() => Math.random() - 0.5);
-    others.slice(0, Math.random() < 0.5 ? 1 : 2).forEach((other, i) => {
-      this.talk(other, 'welcome', { name }, rand(2, 4) + i * rand(1.5, 3));
-    });
-    // The newcomer says something once they've looked around.
-    if (Math.random() < 0.45) this.talk(bot, 'arrived', {}, rand(6, 12));
   }
 
   private removeBot(bot: Bot): void {
@@ -681,7 +546,7 @@ export class FakeServer {
     this.joins.push({ slot: bot.slotRef, at: this.time + wait });
   }
 
-  /** At the end of their session: half go AFK for a bit first, some say bye, then they're gone. */
+  /** At the end of their session: half go AFK for a bit first, then they're gone. */
   private startLeaving(bot: Bot): void {
     bot.leaving = true;
     if (Math.random() < 0.5) {
@@ -691,141 +556,7 @@ export class FakeServer {
       bot.arrive = null;
       return;
     }
-    if (Math.random() < 0.6) this.talk(bot, 'bye', {}, rand(0.1, 0.5));
     this.after(rand(2.5, 4.5), () => this.removeBot(bot));
-  }
-
-  // ---------------------------------------------------------------- talking
-
-  /**
-   * Says a line now: unless the speaker left or went AFK, or someone said the same thing lately. Right after
-   * someone else's line it waits a beat, so two people never talk in the same instant.
-   */
-  private say(bot: Bot, raw: string): void {
-    if (!this.bots.includes(bot) || bot.afk) return;
-    const key = lineKey(raw);
-    if (this.time - this.lastLineAt < LINE_GAP) {
-      this.pending.add(key);
-      this.after(rand(LINE_GAP, LINE_GAP * 2.2), () => {
-        this.pending.delete(key);
-        this.say(bot, raw);
-      });
-      return;
-    }
-    if (this.saidLately(key)) return;
-    // Nobody fires off two lines a second apart: a second one waits its turn.
-    if (this.time - bot.lastSaid < 2.5) {
-      this.pending.add(key);
-      this.after(rand(2.5, 4), () => {
-        this.pending.delete(key);
-        this.say(bot, raw);
-      });
-      return;
-    }
-    const text = style(raw, bot.persona);
-    this.lastLineAt = this.time;
-    bot.lastSaid = this.time;
-    bot.bubble = text;
-    bot.bubbleTtl = BUBBLE_SECONDS;
-    this.events.push({ kind: 'chat', name: bot.name, text });
-    this.said.push({ key, at: this.time });
-    this.said = this.said.filter((s) => this.time - s.at < REPEAT_WINDOW);
-  }
-
-  private saidLately(key: string): boolean {
-    return this.said.some((s) => s.key === key && this.time - s.at < REPEAT_WINDOW);
-  }
-
-  /** Whether a line was said lately or is about to be. */
-  private used(line: string): boolean {
-    const key = lineKey(line);
-    return this.pending.has(key) || this.saidLately(key);
-  }
-
-  /** A line from `lines` nobody said lately, with its {placeholders} filled (lines it can't fill are skipped). */
-  private fresh(lines: readonly string[], vars: Record<string, string | number> = {}): string | null {
-    const ok = lines.map((l) => fill(l, vars)).filter((l) => !l.includes('{') && !this.used(l));
-    return ok.length ? pick(ok) : null;
-  }
-
-  /**
-   * Says a line after a delay plus the time to type it. The line is reserved from the moment it's planned,
-   * so nobody else picks it meanwhile.
-   */
-  private sayLater(bot: Bot, line: string, delay: number): void {
-    const key = lineKey(line);
-    this.pending.add(key);
-    this.after(delay + line.length * 0.05, () => {
-      this.pending.delete(key);
-      this.say(bot, line);
-    });
-  }
-
-  /** A line about something that happened, if the bot isn't AFK and there's a fresh one. */
-  private talk(bot: Bot, topic: Topic, vars: Record<string, string | number> = {}, delay = rand(0.6, 1.6), chance = 1): void {
-    // Someone who just spoke lets this one go (except their own big moments, which use chance 1).
-    if (bot.afk || Math.random() > chance || (chance < 1 && this.time - bot.lastSaid < 8)) return;
-    const line = this.fresh(LINES[topic], vars);
-    if (line) this.sayLater(bot, line, delay);
-  }
-
-  /** Someone who isn't AFK, other than `not`. */
-  private someone(not?: Bot): Bot | null {
-    const pool = this.bots.filter((b) => b !== not && !b.afk && !b.leaving);
-    return pool.length ? pick(pool) : null;
-  }
-
-  /** Something happened to someone: now and then one other person says something about it. */
-  private react(topic: Topic, vars: Record<string, string | number> = {}, not?: Bot, chance = 0.45): void {
-    const bot = this.talker(not) ?? this.someone(not);
-    if (bot) this.talk(bot, topic, vars, rand(1.2, 3.2), chance);
-  }
-
-  /** Someone free to talk: not AFK, and quiet for a while. */
-  private talker(not?: Bot): Bot | null {
-    const pool = this.bots.filter((b) => b !== not && !b.afk && !b.leaving && this.time - b.lastSaid > 12);
-    return pool.length ? pick(pool) : null;
-  }
-
-  /**
-   * Every so often, unevenly: a remark (sometimes just noise), or a question that may or may not get an
-   * answer. A line now and then sets off a quick "lol" or "fr" from someone else, so chat comes in bursts.
-   */
-  private chatter(dt: number): void {
-    this.chatIn -= dt;
-    if (this.chatIn > 0) return;
-    // Lulls and bursts: mostly 15-45 s apart, sometimes a long quiet.
-    this.chatIn = Math.random() < 0.2 ? rand(45, 90) : rand(15, 45);
-    const asker = this.talker();
-    if (!asker) return;
-    if (Math.random() < 0.3) {
-      const threads = THREADS.filter(([q]) => !this.used(q));
-      if (!threads.length) return;
-      const [q, answers] = pick(threads);
-      this.say(asker, q);
-      // About half the questions get answered; a few get two (different) answers, many just hang there.
-      const answerer = answers.length && Math.random() < 0.55 ? this.talker(asker) : null;
-      if (answerer) {
-        const a1 = this.fresh(answers);
-        if (a1) this.sayLater(answerer, a1, rand(2.5, 6));
-        const second = Math.random() < 0.15 ? this.talker(answerer) : null;
-        const a2 = second && second !== asker ? this.fresh(answers) : null;
-        if (second && a2) this.sayLater(second, a2, rand(5, 9));
-      } else if (Math.random() < 0.3) {
-        const nudge = this.fresh(['??', 'anyone?', 'nvm', 'nvm found it', 'ok then', 'hello??', 'guess not lol']);
-        if (nudge) this.sayLater(asker, nudge, rand(8, 14));
-      }
-      return;
-    }
-    let line = idleLine(asker.persona);
-    for (let i = 0; i < 6 && this.used(line); i++) line = idleLine(asker.persona);
-    if (this.used(line)) return;
-    this.say(asker, line);
-    if (Math.random() < 0.25) {
-      const other = this.talker(asker);
-      const back = other ? this.fresh(BACKCHANNEL) : null;
-      if (other && back) this.sayLater(other, back, rand(1.2, 3.5));
-    }
   }
 
   // ---------------------------------------------------------------- each player, each frame
@@ -839,9 +570,6 @@ export class FakeServer {
     bot.cannon = s.cannon;
     bot.rebirths = s.rebirths;
     bot.pads = s.pads;
-    bot.greetCooldown = Math.max(0, bot.greetCooldown - dt);
-    bot.bubbleTtl -= dt;
-    if (bot.bubbleTtl <= 0) bot.bubble = '';
     if (bot.emote) {
       bot.emoteT += dt;
       if (bot.emoteT > (emoteById(bot.emote)?.length ?? 0) || bot.pose !== 'idle') bot.emote = '';
@@ -871,7 +599,6 @@ export class FakeServer {
       if (bot.afkFor <= 0) {
         bot.afk = false;
         if (bot.leaving) this.removeBot(bot);
-        else this.talk(bot, 'afkBack', {}, rand(0.5, 2), 0.35);
       }
       return;
     }
@@ -883,11 +610,6 @@ export class FakeServer {
     if (bot.nextAfkIn <= 0 && !bot.path.length) {
       // Stepped away from the keyboard for a minute or two.
       bot.nextAfkIn = rand(300, 900);
-      // Some say so first (said now: once AFK they're quiet).
-      if (Math.random() < 0.3) {
-        const line = this.fresh(LINES.afkGoing);
-        if (line) this.say(bot, line);
-      }
       bot.afk = true;
       bot.afkFor = rand(40, 120);
       return;
@@ -1076,7 +798,6 @@ export class FakeServer {
         if (best && best.rarity >= 3) {
           const r = RARITIES[best.rarity];
           this.events.push({ kind: 'merge', name: bot.name, text: `merged ${withArticle(best.rarity)} ${best.name}!`, color: r.css });
-          this.talk(bot, 'selfMerge', { thing: best.name }, rand(0.6, 1.4), 0.4);
         }
       });
       return;
@@ -1089,7 +810,6 @@ export class FakeServer {
           bot.wait = rand(1.5, 3);
           bot.facing = -Math.PI / 2;
           shop(s, 4);
-          this.talk(bot, 'shop', {}, rand(0.5, 1.5), 0.2);
         });
         return;
       }
@@ -1130,15 +850,7 @@ export class FakeServer {
         if (best && best.rarity >= 3) {
           const r = RARITIES[best.rarity];
           this.events.push({ kind: 'pull', name: bot.name, text: `pulled ${withArticle(best.rarity)} ${best.name}!`, color: r.css });
-          if (best.rarity >= 4) {
-            const r = best.rarity;
-            this.talk(bot, r >= 6 ? 'selfCelestial' : r === 5 ? 'selfMythic' : 'selfLegendary', {}, rand(0.6, 1.2));
-            this.after(0.6, () => this.emote(bot, pick(['dance', 'flex'])));
-            this.react(r >= 6 ? 'wowCelestial' : r === 5 ? 'wowMythic' : 'wowLegendary', { name: bot.name }, bot);
-          }
-        } else if (best && best.rarity <= 1 && count > 1) {
-          // A ten-pull of junk.
-          this.talk(bot, 'commonStreak', {}, rand(0.8, 1.6), 0.3);
+          if (best.rarity >= 4) this.after(0.6, () => this.emote(bot, pick(['dance', 'flex'])));
         }
       });
     });
@@ -1194,14 +906,6 @@ export class FakeServer {
     const [x, z] = fromPlot(host, rand(-0.8, 0.8), Math.random() < 0.4 ? rand(1.5, 3) : rand(-18, -2));
     this.go(bot, this.route(bot, x, z), () => {
       bot.wait = rand(3, 7);
-      if (Math.random() < 0.6) {
-        // Talk about the host's best brainrot, or just the base if there's nothing on show.
-        const yours = host.index === OWN_SLOT;
-        const hostBot = this.bots.find((b) => b.slotRef === host);
-        const fav = yours ? this.local.favorite : favoriteOf(hostBot?.pads ?? [])?.name ?? '';
-        // Lines naming a brainrot are skipped when the base has none on show.
-        this.talk(bot, 'visit', fav ? { fav } : {}, rand(0.5, 2));
-      }
       bot.arrive = () => this.goHome(bot);
     });
   }
@@ -1312,7 +1016,6 @@ export class FakeServer {
   private landed(bot: Bot, apex: number): void {
     const s = bot.save;
     const beforeZone = Math.min(zoneIndexAt(s.best), MAX_ZONE);
-    const beforeBest = s.best;
     s.flightNo += 1;
     s.gems += Math.round(gemsFrom(apex, rand(0.45, 0.8)) * trackBoost(s, 'finder'));
     s.best = Math.max(s.best, apex);
@@ -1321,16 +1024,7 @@ export class FakeServer {
     if (zone > beforeZone) {
       const z = ZONES[zone];
       this.events.push({ kind: 'zone', name: bot.name, text: `reached ${z.name}!`, color: `#${z.gemColor.toString(16).padStart(6, '0')}` });
-      this.talk(bot, 'selfZone', { zone: z.name }, rand(0.8, 1.6), 0.6);
-      this.react('otherZone', { zone: z.name, name: bot.name }, bot, 0.3);
-      return;
     }
-    // Now and then, a word about how the flight went.
-    const roll = Math.random();
-    if (apex > beforeBest && beforeBest > 0) this.talk(bot, 'bigFlight', {}, rand(0.8, 1.6), 0.12);
-    else if (roll < 0.05) this.talk(bot, 'landPerfect', {}, rand(0.6, 1.2));
-    else if (roll < 0.09) this.talk(bot, 'landCrash', {}, rand(0.6, 1.2));
-    else if (roll < 0.13 && zone >= 1) this.talk(bot, 'landHazard', {}, rand(0.6, 1.2));
   }
 
   /** Back to the start for a permanent income bonus, keeping the rarest brainrot, like the player's rebirth. */
@@ -1344,8 +1038,6 @@ export class FakeServer {
       text: `rebirthed! ×${formatMult(incomeMultiplier(s))} income${newFloor ? ' and a new floor' : ''}`,
       color: '#ffd84a',
     });
-    this.talk(bot, 'selfRebirth', { n: s.rebirths }, rand(1.2, 2), 0.6);
-    this.react('otherRebirth', { name: bot.name }, bot, 0.4);
   }
 }
 

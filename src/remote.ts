@@ -17,54 +17,10 @@ interface Avatar {
   tag: Label;
   /** What the name tag shows now (the name, or the name with AFK). */
   tagText: string;
-  bubble: THREE.Sprite;
-  drawBubble: (text: string) => void;
-  bubbleText: string;
   phase: number;
   /** The emote last seen playing, and how far in, to notice a new one starting. */
   emote: string;
   emoteT: number;
-}
-
-/** A speech bubble: a white rounded box with dark text and a little tail, drawn on a canvas. */
-export function makeBubble(): { sprite: THREE.Sprite; draw: (text: string) => void } {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 128;
-  const g = canvas.getContext('2d')!;
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }));
-  sprite.scale.set(4, 1, 1);
-  sprite.position.y = 3.35;
-  sprite.visible = false;
-  return {
-    sprite,
-    draw(text) {
-      g.clearRect(0, 0, 512, 128);
-      g.font = '700 40px Fredoka, system-ui, sans-serif';
-      const shown = text.length > 34 ? `${text.slice(0, 33)}…` : text;
-      const w = Math.min(500, g.measureText(shown).width + 44);
-      const x = (512 - w) / 2;
-      g.fillStyle = '#ffffff';
-      g.strokeStyle = '#1d1640';
-      g.lineWidth = 6;
-      g.beginPath();
-      g.roundRect(x, 8, w, 84, 26);
-      g.moveTo(240, 90);
-      g.lineTo(256, 118);
-      g.lineTo(272, 90);
-      g.fill();
-      g.stroke();
-      g.fillStyle = '#ffffff';
-      g.fillRect(242, 84, 28, 8);
-      g.fillStyle = '#1d1640';
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      g.fillText(shown, 256, 52);
-      texture.needsUpdate = true;
-    },
-  };
 }
 
 interface Plot {
@@ -105,7 +61,11 @@ export class RemoteView {
     return this.server.players().find((p) => p.slot === slot) ?? null;
   }
 
-  update(time: number, dt: number, viewerX: number, viewerZ: number): void {
+  /** Where the camera is: anyone standing right in front of the lens is left out of the shot. */
+  private eye = new THREE.Vector3(0, -99, 0);
+
+  update(time: number, dt: number, viewerX: number, viewerZ: number, eye?: THREE.Vector3): void {
+    if (eye) this.eye.copy(eye);
     const players = this.server.players();
     this.syncPlots(players, time, dt, viewerX, viewerZ);
     const seen = new Set<number>();
@@ -118,10 +78,9 @@ export class RemoteView {
         tag.set(p.name, '#ffffff');
         tag.sprite.scale.multiplyScalar(0.5);
         tag.sprite.position.y = 2.6;
-        const bubble = makeBubble();
-        rig.group.add(tag.sprite, bubble.sprite);
+        rig.group.add(tag.sprite);
         this.scene.add(rig.group);
-        avatar = { rig, tag, tagText: p.name, bubble: bubble.sprite, drawBubble: bubble.draw, bubbleText: '', phase: Math.random() * 10, emote: '', emoteT: 0 };
+        avatar = { rig, tag, tagText: p.name, phase: Math.random() * 10, emote: '', emoteT: 0 };
         this.avatars.set(p.id, avatar);
       }
       this.pose(avatar, p, time, dt);
@@ -163,24 +122,21 @@ export class RemoteView {
   /** Places an avatar and moves its limbs for what the player is doing. */
   private pose(avatar: Avatar, p: RemotePlayer, time: number, dt: number): void {
     const { rig } = avatar;
-    rig.group.visible = p.pose !== 'hidden';
     rig.group.position.set(p.x, p.y, p.z);
+    // Someone walking up to the camera would fill the screen with their back: they step out of the shot.
+    const lens = Math.hypot(p.x - this.eye.x, p.y + 1 - this.eye.y, p.z - this.eye.z) < 1.8;
+    rig.group.visible = p.pose !== 'hidden' && !lens;
     rig.group.rotation.y = p.pose === 'walk' || p.pose === 'idle' || p.pose === 'dive' ? p.facing : 0;
     // The helmet goes on for the cannon and the flight.
     const flying = p.pose !== 'walk' && p.pose !== 'idle';
     rig.helmet.visible = flying;
     rig.cap.visible = !flying;
-    // Name tag (with AFK when they're away) and speech bubble.
+    // Name tag, with AFK when they're away.
     const tagText = p.afk ? `${p.name} · AFK` : p.name;
     if (tagText !== avatar.tagText) {
       avatar.tagText = tagText;
       avatar.tag.set(tagText, p.afk ? '#c9ced6' : '#ffffff');
     }
-    if (p.bubble !== avatar.bubbleText) {
-      avatar.bubbleText = p.bubble;
-      if (p.bubble) avatar.drawBubble(p.bubble);
-    }
-    avatar.bubble.visible = !!p.bubble && rig.group.visible;
     rig.chute.visible = p.chute > 0.02;
     rig.chute.scale.setScalar(p.chute);
     const k = 1 - Math.exp(-14 * dt);

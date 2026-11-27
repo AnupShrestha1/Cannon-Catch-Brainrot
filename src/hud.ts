@@ -130,11 +130,6 @@ export class Hud {
   private handEl = byId('hand');
   private coachKey = '';
   private feedEl = byId('feed');
-  private chatForm = byId<HTMLFormElement>('chat');
-  private chatInput = byId<HTMLInputElement>('chatInput');
-  readonly chatBtn = byId<HTMLButtonElement>('chatBtn');
-  /** Called with what the player typed in the chat. */
-  onChat: (text: string) => void = () => {};
   private onlineEl = byId('online');
   private onlineKey = '';
   private revealEl = byId('cardReveal');
@@ -153,7 +148,6 @@ export class Hud {
   private last = { alt: -1, zone: '', best: -1, stack: '', prompt: '', coins: '', income: -1, gems: '', pack: -1, gift: '', shop: '' };
 
   constructor() {
-    this.bindChat();
     for (const id of ['modalBody', 'shopRows', 'cards']) this.dragScroll(byId(id));
     // Modals answer the keyboard and the backdrop too, so there's always a way out. Capture phase and
     // stopImmediatePropagation keep the key from also reaching the game (Space would launch).
@@ -452,9 +446,9 @@ export class Hud {
     this.reveal.classList.add('hidden');
   }
 
-  /** Whether the device has no hover, i.e. a phone or tablet: key hints are left off there. */
+  /** A phone or tablet (CrazyGames' device type, not touch detection): key hints are left off there. */
   private get isTouchLike(): boolean {
-    return window.matchMedia('(hover: none)').matches;
+    return document.body.classList.contains('mobile');
   }
 
   /** The context button for the pad underfoot, e.g. "Place Cannolini"; null hides it. */
@@ -467,14 +461,13 @@ export class Hud {
   }
 
   /**
-   * The server feed: chat and big moments from everyone, newest at the bottom, each fading after a while.
-   * `kind` 'chat' shows "name: text"; anything else shows "name text" as an announcement.
+   * The server feed: big moments from everyone ("name text"), newest at the bottom, each fading after a while.
    */
   feed(name: string, text: string, kind: string, color?: string): void {
     const line = document.createElement('div');
-    line.className = `feed-line ${kind === 'chat' ? 'chat' : 'news'}`;
+    line.className = `feed-line news ${kind}`;
     const who = document.createElement('b');
-    who.textContent = kind === 'chat' ? `${name}:` : name;
+    who.textContent = name;
     const what = document.createElement('span');
     what.textContent = ` ${text}`;
     if (color) what.style.color = color;
@@ -525,42 +518,6 @@ export class Hud {
     }
     document.body.append(wrap);
     setTimeout(() => wrap.remove(), 2900);
-  }
-
-  /** Opens the chat box and puts the cursor in it. */
-  openChat(): void {
-    // CrazyGames' chat setting can switch chat off (the form is hidden then).
-    if (this.chatForm.classList.contains('hidden')) return;
-    this.chatForm.classList.add('open');
-    this.chatInput.focus();
-  }
-
-  closeChat(): void {
-    this.chatForm.classList.remove('open');
-    this.chatInput.value = '';
-    this.chatInput.blur();
-  }
-
-  /** Whether the player is typing in the chat. */
-  get chatting(): boolean {
-    return document.activeElement === this.chatInput;
-  }
-
-  /** Sends what's typed (Enter), closes on Escape or when it loses focus empty. */
-  private bindChat(): void {
-    this.chatBtn.addEventListener('click', () => (this.chatForm.classList.contains('open') ? this.closeChat() : this.openChat()));
-    this.chatForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const text = this.chatInput.value.replace(/\s+/g, ' ').trim().slice(0, 80);
-      this.closeChat();
-      if (text) this.onChat(text);
-    });
-    this.chatInput.addEventListener('keydown', (e) => {
-      if (e.code === 'Escape') this.closeChat();
-    });
-    this.chatInput.addEventListener('blur', () => {
-      if (!this.chatInput.value.trim()) this.chatForm.classList.remove('open');
-    });
   }
 
   /**

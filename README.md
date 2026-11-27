@@ -47,7 +47,7 @@ the Network URL it prints.
 | At the base: level up a brainrot | Click Level up under it | Tap Level up under it |
 | At the base: store or sell the brainrot you're next to | E | The action button |
 | Backpack | Bag in the dock, or B | Bag in the dock |
-| Chat | Enter (or the Chat button), type, Enter to send, Esc to close | Chat button |
+| Landing menu (returning players) | PLAY, Space or Enter | Tap PLAY |
 | Scroll a panel (book, backpack, shop) | Drag it, or the mouse wheel | Drag it |
 
 Release the charge in the green band for +15% height, or the gold band for +30%.
@@ -103,25 +103,21 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     reads "Name · AFK"), some say "gtg bye", then they vanish in a puff. Players also go AFK for a minute
     or two mid-session. Newcomers appear in a puff by the fountain and walk down the lane to their plot;
     most return to saved progress, some are brand new.
-  - **They talk.** Speech bubbles over their heads and lines in the feed: hellos for newcomers,
-    questions that someone else answers a few seconds later ("how do u get gems" / "launch higher,
-    cloud kingdom gems are x3"), passing remarks, "LETS GOOO" on their own Legendaries and "lucky" on
-    other people's (yours included), and nobody repeats a line for a while.
+  - **They emote, never talk.** A dance or a flex after their own big pulls, a wave back when you wave,
+    and the odd emote standing around. There is no chat.
   - **They visit.** Bots stroll the lane, round the fountain and about the hub, and visit each other's
-    plots and yours, sometimes commenting on the best brainrot there ("how did u get Frigorifero
-    Fenicottero"). They route through the lane, so nobody walks through pedestals.
+    plots and yours. They route through the lane, so nobody walks through pedestals.
   - Each bot joins with progress played out offline by the same loop as the economy simulator, launches
     from the shared cannon (dive, up, free fall, parachute), pulls, merges, buys upgrades, levels up and
     rebirths. Their helmets go on in the cannon, like yours.
   - The feed (bottom left) shows joins and leaves, Epic and Legendary pulls and merges, new zones,
-    rebirths and chat. The counter top right shows the town's name and how many plots are taken
+    and rebirths. The counter top right shows the town's name and how many plots are taken
     ("Sky-2103 · 6/8 in town"); since the other players are simulated, nothing claims they're online, and the
     feed says they "arrived in town" or "left town".
-  - You can visit too: walk into anyone's plot ("Visiting Mia's base"), and the owner may say hi. Walk up
-    to one of their brainrots and press E to see its level and income and give it a 👍 (they'll thank
-    you).
+  - You can visit too: walk into anyone's plot ("Visiting Mia's base"). Walk up to one of their brainrots and
+    press E to see its level and income and give it a 👍.
   - The game only reads what a real server would send (player snapshots and events) and sends what a
-    real client would (its stats, visits, likes, big moments), so a real server can replace `net.ts`.
+    real client would (its stats, emotes, big moments), so a real server can replace `net.ts`.
   - To keep the frame rate up, other players' brainrots are only drawn within about 22 m of their plot,
     without shadows, and the sun's shadows follow the player (the town is too long for one shadow map).
     About 400 draw calls in the hub.
@@ -347,15 +343,8 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   its emoji popping over your head. Moving ends it. Players standing near may join in (a wave back, a
   dance-off), and others emote now and then on their own or after a big pull.
 - **Likes**: 👍 Nice! on someone's brainrot pops a big thumbs up with gold sparkles over it.
-- **Chat that sounds like people**: each other player has a way of typing (a Gen Z kid fluent in brainrot,
-  a hyped kid in caps, a chill one-word typer, a Gen X parent, a tryhard), with the odd typo or stretched
-  word. Chat comes in bursts and lulls, some of it noise ("wooooo"), and about half the questions get no
-  answer. Nobody talks more than once every 12 seconds. Nobody repeats a line anyone said in the last 2½
-  minutes (lines are reserved the moment they're planned, so two bots never pick the same one), there's
-  always a beat between two lines, and each line waits for the time it takes to type. There are lines for
-  arrivals and welcomes, goodbyes, going AFK and coming back, visiting and liking bases, big pulls (yours
-  and theirs, by rarity), junk ten-pulls, merges, new zones, rebirths, shopping, landings (perfect, crashes,
-  hazards) and your emotes. Stretched words and typos never touch names.
+- **No chat**: there is no chat box, no speech bubbles and no bot chatter. The other players show what they
+  feel with emotes only, so there's nothing to moderate and nothing to switch off.
 - **Gacha spin sound**: a coin clunks in, the crank ratchets faster then slows like a prize wheel, capsules
   rattle inside over a motor whirr, and a ka-chunk drops the capsule; a big prize adds a rising shimmer.
   Other players' pulls are heard nearby, quieter with distance.
@@ -365,8 +354,8 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   marker with one chip: the height, OPEN!, a pulsing pink NOW ×1.5, or CRASH!.
 - **Screen sizes**: short screens (phones on their side) shrink the HUD corners, dock and big buttons together;
   1080p and up enlarge them a little; tablets put the action button on its own row above the dock. Phones upright stack the bottom in rows:
-  the action button beside LAUNCH, then the dock with a round Chat button at its end, then the banner, then
-  the feed; in flight the chat and feed step aside for the PARACHUTE button and its gauge. Checked for
+  the action button beside LAUNCH, then the dock, then the banner, then
+  the feed; in flight the feed steps aside for the PARACHUTE button and its gauge. Checked for
   overlaps at 320×640, 360×760, 412×915, 812×375, 768×1024 and 1280×720 (home, gacha pad, cannon, rising,
   falling). Reveal
   cards size themselves from the screen. Every font size is one of 12 steps on a type scale (--fs-xs 12 px
@@ -395,11 +384,11 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
 - Daily rewards: a 7-day login streak (coins, a Rare on day 3, an Epic on day 7, both to the backpack).
 - Collection book: every character as a silhouette until pulled, with a one-time reward per completed
   page (500, 5,000 and 50,000 coins). Drag it (or any panel) up and down to scroll, with a little glide.
-- **Chat**: press Enter or the Chat button, type and press Enter. Your message shows in the feed and in a
-  bubble over your head. Bots answer like people do: nearly always a hello ("hey 👋", sometimes two of
-  them), often "how are you", thanks, goodbyes and questions about the game (gems, Mythics, merging, the
-  shop, rebirth, trading), now and then anything else, and they ignore the rest. Name someone and they'll
-  usually answer. Replies take as long as they'd take to type. While typing, keys don't move or fire.
+- **Landing menu**: returning players open on the game's logo over their live town (the camera sways
+  behind the player's showcase), "Welcome back" with their best height, brainrots, income and rebirth level,
+  sound and music toggles, and one big PLAY (Space or Enter on a keyboard). New players never see it: they
+  land straight in the tutorial at the cannon. Offline earnings and the daily reward open after PLAY, the HUD
+  and events wait behind the menu, and CrazyGames' gameplay start fires on PLAY.
 - Session gifts: 20 gems at 2 minutes (two more pulls, to keep a new player going), then 30 gems and a
   minute of income at 5 minutes, 50 gems and 2 minutes at 10, 100 gems (a Super pull) and 2 minutes at
   20, and 200 gems and 4 minutes at 40.
@@ -428,9 +417,13 @@ Not in this build: fusion of named characters, sky events, the rival, the spin w
 
 - Only the CrazyGames SDK loads from outside the game; fonts and everything else ship in `dist` with relative paths.
 - SDK: `loadingStart`/`loadingStop` around the loading screen, `gameplayStart`/`gameplayStop` on breaks (shop,
-  popups, reveals) but not on focus loss, `happytime` for rare highlights, the mute setting overrides the game's
-  sound, and the chat setting hides the chat box.
-- Phone or desktop comes from the SDK's system info (a coarse pointer outside CrazyGames).
+  popups, reveals, the landing menu) but not on focus loss, `happytime` for rare highlights, and the mute setting
+  overrides the game's sound.
+- New players land directly in gameplay (the tutorial at the cannon); returning players get the landing menu,
+  one click from play (the most the gameplay requirements allow).
+- No chat or user-generated text anywhere, so no moderation or chat setting is needed.
+- Phone or desktop comes from the SDK's system info (a coarse pointer outside CrazyGames), never touch detection;
+  it sets `body.mobile`, which hides the keyboard hints.
 - Progress saves through the SDK Data module, so turn on **Progress Save** in the submission form.
 - A signed-in CrazyGames player who hasn't chosen a name uses their CrazyGames username.
 - No ads, no external links, no login, no fullscreen button.
@@ -577,8 +570,9 @@ All first-pass numbers live in `src/config.ts`.
 | `src/characters.ts` | The 12 character models, their idle animations, blinking, and the Mythic rainbow |
 | `src/world.ts` | Sky pieces, cannon, player avatar, gems, hazards, guide arrows, labels |
 | `src/layout.ts` | The town: the lane, the eight plot slots, where the hub's things stand, and walking limits |
-| `src/net.ts` | The fake multiplayer server: bot players on the real economy, events, chat, standings |
-| `src/remote.ts` | Draws other players (avatars, name tags, poses, parachutes) and their plots from server snapshots |
+| `src/net.ts` | The fake multiplayer server: bot players on the real economy, events, emotes, standings |
+| `src/remote.ts` | Draws other players (avatars, name tags, poses, parachutes) and their plots from server snapshots; anyone right at the camera steps out of the shot |
+| `src/menu.ts` | The landing menu for returning players: logo, stats, sound and music toggles, PLAY |
 | `src/scenery.ts` | Sky dome, ground, hills, mountains, swaying trees, ground cover, windmill, pond, butterflies, the leaderboards |
 | `src/fx.ts` | Particle bursts and wind streaks |
 | `src/hud.ts` | HTML overlay: wallet and gems, altitude, run gems, meters, dock, shop, modals, level-up buttons, tuning panel |
