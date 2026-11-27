@@ -40,6 +40,7 @@ export class Menu {
     logo.append(el('span', 'l1', 'Cannon'), el('span', 'l2', 'Catch'), el('span', 'l3', 'Brainrot'));
 
     const hello = el('p', 'menu-hello', info.name ? `Welcome back, ${info.name}!` : 'Welcome back!');
+    const solo = el('p', 'menu-solo', 'Single-player · your neighbours are 🤖 bots');
 
     const stats = el('div', 'menu-stats');
     const chip = (icon: string, value: string, label: string) => {
@@ -79,7 +80,7 @@ export class Menu {
     toggle('Music', info.music, ['🎵', '🔕'], () => this.actions.music());
 
     const card = el('div', 'menu-card');
-    card.append(logo, hello, stats, play);
+    card.append(logo, hello, solo, stats, play);
     this.root.append(el('div', 'menu-shade'), card, corner);
     document.body.append(this.root);
     document.body.classList.add('menu-open');

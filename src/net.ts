@@ -1,11 +1,11 @@
-// A fake multiplayer server, simulating a real lobby of this kind of game. The other seven plots are played by
-// bots that use the real game rules (the same pull, merge, upgrade and level code and the same costs as the
-// player) and behave like people:
+// The town's bots. This is a single-player game: the other seven plots are played by bots, and the game says so
+// everywhere they appear (a 🤖 before every bot name, "You + 5 bots" in the corner). They use the real game rules
+// (the same pull, merge, upgrade and level code and the same costs as the player) and move about like players:
 //
 // - They move like players: they run with momentum, curve through corners, turn at a limited rate, jump a lot
 //   while running, look around when they stop, step around each other and get themselves unstuck.
-// - The lobby lives: you usually join with three to five others; people leave after realistic sessions (often
-//   going AFK first), and matchmaking fills a free slot within seconds to a minute. Newcomers spawn by the
+// - The town lives: there are usually three to five bots when you arrive; bots leave after a while (often
+//   standing idle first), and a new one takes a free plot within seconds to a minute. Newcomers spawn by the
 //   fountain at the end of the lane and walk to their plot; some are brand new, most return with saved progress.
 // - They're busy: they share the hub with you, so you see them queue for the cannon, dive in and get fired into
 //   the sky, crank the gacha machines, stir the cauldron and buy upgrades at the stall.
@@ -116,6 +116,9 @@ export interface LocalPlayer {
   income: number;
   best: number;
 }
+
+/** Every bot's name starts with this, so nobody mistakes them for real people. */
+export const BOT_MARK = '🤖';
 
 /** Players in one server, the local player included: one per plot. */
 export const CAPACITY = SLOTS.length;
@@ -361,7 +364,6 @@ function turnToward(from: number, to: number, step: number): number {
 }
 
 export class FakeServer {
-  readonly name = `Sky-${Math.floor(rand(1000, 9999))}`;
   private bots: Bot[] = [];
   private events: ServerEvent[] = [];
   private nextId = 1;
@@ -474,7 +476,7 @@ export class FakeServer {
 
   private addBot(slot: PlotSlot, joining: boolean): void {
     const used = new Set(this.bots.map((b) => b.name));
-    const name = pick(NAMES.filter((n) => !used.has(n)));
+    const name = `${BOT_MARK} ${pick(NAMES.filter((n) => !used.has(`${BOT_MARK} ${n}`)))}`;
     // Everyone in the lobby looks different.
     const worn = new Set(this.bots.map((b) => b.outfit));
     const outfit = pick(OUTFITS.filter((o) => !worn.has(o)));

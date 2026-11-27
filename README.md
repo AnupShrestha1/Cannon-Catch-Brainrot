@@ -85,9 +85,12 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
   cauldron, the fountain). The shared cannon is at the world origin, so flights and their cameras are
   unchanged. With real multiplayer the server assigns each player a plot; this client is the first plot
   on the cannon side.
-- **Fake multiplayer** (`src/net.ts`, `src/remote.ts`): a pretend server simulates a real lobby. The
-  other plots are played by bots that use the real rules (the same pull, merge, upgrade and level code
-  and costs as you).
+- **Single-player, with bots** (`src/net.ts`, `src/remote.ts`): the other plots are played by bots that use
+  the real rules (the same pull, merge, upgrade and level code and costs as you). The game says they're bots
+  everywhere they appear: every bot name starts with 🤖 (name tags, base signs, the feed, the leaderboards,
+  "Visiting 🤖 Mia's base"), the counter top right reads "You + 5 🤖 bots", the landing menu says
+  "Single-player · your neighbours are 🤖 bots", a loading tip says so, and after your first flight a note
+  explains it once. Nothing pretends to be a person: no chat, no "online", no AFK tags.
   - **They move like players.** They run with momentum, ease in and out, curve through corners (aiming
     a little ahead along their route), turn at a limited rate and weave slightly on long runs. Each has
     its own running speed. They jump a lot while running, look around when they stop, spin now and then,
@@ -97,11 +100,10 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     another go; they stand on the machines' pads and spin them, stir the cauldron, and walk to the shop
     stall to buy upgrades. In 10 simulated minutes, seven bots fire about 75 shots and spin about 60
     pulls.
-  - **The lobby lives.** The server holds 8, one per plot. You usually join with three to five others, and
-    matchmaking fills a free slot within 10 to 45 seconds (now and then it stays open for a minute or
-    two). Sessions last from a few minutes to an hour; about half of the leavers go AFK first (their tag
-    reads "Name · AFK"), some say "gtg bye", then they vanish in a puff. Players also go AFK for a minute
-    or two mid-session. Newcomers appear in a puff by the fountain and walk down the lane to their plot;
+  - **The town lives.** There are 8 plots. You usually arrive with three to five bots, and a new bot takes
+    a free plot within 10 to 45 seconds (now and then it stays open for a minute or two). Bots stay from a
+    few minutes to an hour; about half stand idle a while before they leave, then vanish in a puff. Bots
+    also stand idle for a minute or two now and then. Newcomers appear in a puff by the fountain and walk down the lane to their plot;
     most return to saved progress, some are brand new.
   - **They emote, never talk.** A dance or a flex after their own big pulls, a wave back when you wave,
     and the odd emote standing around. There is no chat.
@@ -111,10 +113,8 @@ Release the charge in the green band for +15% height, or the gold band for +30%.
     from the shared cannon (dive, up, free fall, parachute), pulls, merges, buys upgrades, levels up and
     rebirths. Their helmets go on in the cannon, like yours.
   - The feed (bottom left) shows joins and leaves, Epic and Legendary pulls and merges, new zones,
-    and rebirths. The counter top right shows the town's name and how many plots are taken
-    ("Sky-2103 · 6/8 in town"); since the other players are simulated, nothing claims they're online, and the
-    feed says they "arrived in town" or "left town".
-  - You can visit too: walk into anyone's plot ("Visiting Mia's base"). Walk up to one of their brainrots and
+    and rebirths ("🤖 Mia arrived in town", "🤖 Mia left town").
+  - You can visit too: walk into any bot's plot ("Visiting 🤖 Mia's base"). Walk up to one of their brainrots and
     press E to see its level and income and give it a 👍.
   - The game only reads what a real server would send (player snapshots and events) and sends what a
     real client would (its stats, emotes, big moments), so a real server can replace `net.ts`.
@@ -570,7 +570,7 @@ All first-pass numbers live in `src/config.ts`.
 | `src/characters.ts` | The 12 character models, their idle animations, blinking, and the Mythic rainbow |
 | `src/world.ts` | Sky pieces, cannon, player avatar, gems, hazards, guide arrows, labels |
 | `src/layout.ts` | The town: the lane, the eight plot slots, where the hub's things stand, and walking limits |
-| `src/net.ts` | The fake multiplayer server: bot players on the real economy, events, emotes, standings |
+| `src/net.ts` | The town's bots: bot players on the real economy, events, emotes, standings |
 | `src/remote.ts` | Draws other players (avatars, name tags, poses, parachutes) and their plots from server snapshots; anyone right at the camera steps out of the shot |
 | `src/menu.ts` | The landing menu for returning players: logo, stats, sound and music toggles, PLAY |
 | `src/scenery.ts` | Sky dome, ground, hills, mountains, swaying trees, ground cover, windmill, pond, butterflies, the leaderboards |

@@ -4155,6 +4155,15 @@ body.menu-open #hud {
   text-shadow: var(--stroke-thin);
 }
 
+.menu-solo {
+  margin: -8px 0 0;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(29, 22, 64, 0.55);
+  color: #fff;
+  font: 600 var(--fs-s) var(--body);
+}
+
 .menu-stats {
   display: flex;
   flex-wrap: wrap;

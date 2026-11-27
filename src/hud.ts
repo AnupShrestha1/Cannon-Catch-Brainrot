@@ -707,15 +707,13 @@ export class Hud {
     });
   }
 
-  /**
-   * The town's name and how many plots are taken. The other players are simulated, so this never claims
-   * anyone is "online".
-   */
-  setOnline(count: number, server: string, capacity: number): void {
-    const key = `${count}|${server}`;
+  /** Who's in town: the player and how many bots (single-player, so it never suggests anyone's online). */
+  setOnline(bots: number): void {
+    const key = String(bots);
     if (key === this.onlineKey) return;
     this.onlineKey = key;
-    this.onlineEl.textContent = `${server} · ${count}/${capacity} in town`;
+    this.onlineEl.textContent = `You + ${bots} 🤖 ${bots === 1 ? 'bot' : 'bots'}`;
+    this.onlineEl.title = 'A single-player game: everyone else in town is a bot';
   }
 
   /** Places one level-up button per item, reusing them frame to frame, and hides the rest. */

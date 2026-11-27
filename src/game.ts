@@ -31,7 +31,7 @@ import {
   walkStep,
   type PlotSlot,
 } from './layout';
-import { CAPACITY, FakeServer, describePad } from './net';
+import { FakeServer, describePad } from './net';
 import { RemoteView } from './remote';
 import {
   CHARGE,
@@ -1501,6 +1501,11 @@ export class Game {
     this.walkVel.set(0, 0);
     this.camYaw = 0;
     this.facing = 0;
+    // Back from the first flight: who the others in town are, said once.
+    if (!this.hasHint('bots')) {
+      this.completeHint('bots');
+      this.after(1.6, () => this.hud.toast('Everyone else in town is a 🤖 bot. Out-earn them on the leaderboards!', 'small'));
+    }
   }
 
   /** A machine the player is standing on a pull pad of, and which pad (×1 or ×10), or null. */
@@ -2227,7 +2232,7 @@ export class Game {
         this.fx.burst(this.tmp.set(...e.at), { count: 22, color: 0xffffff, speed: 4, life: 0.9, size: 1.1, grow: 1.6, up: 2 });
       }
     }
-    this.hud.setOnline(this.server.online, this.server.name, CAPACITY);
+    this.hud.setOnline(this.server.online - 1);
     this.boardTimer -= realDt;
     if (this.boardTimer <= 0) {
       this.boardTimer = 2;

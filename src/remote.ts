@@ -15,7 +15,7 @@ const DETAIL_RANGE = 52;
 interface Avatar {
   rig: PlayerRig;
   tag: Label;
-  /** What the name tag shows now (the name, or the name with AFK). */
+  /** What the name tag shows now. */
   tagText: string;
   phase: number;
   /** The emote last seen playing, and how far in, to notice a new one starting. */
@@ -131,11 +131,10 @@ export class RemoteView {
     const flying = p.pose !== 'walk' && p.pose !== 'idle';
     rig.helmet.visible = flying;
     rig.cap.visible = !flying;
-    // Name tag, with AFK when they're away.
-    const tagText = p.afk ? `${p.name} · AFK` : p.name;
-    if (tagText !== avatar.tagText) {
-      avatar.tagText = tagText;
-      avatar.tag.set(tagText, p.afk ? '#c9ced6' : '#ffffff');
+    // Name tag (🤖 and the name). Bots standing idle aren't tagged AFK: that's for people.
+    if (p.name !== avatar.tagText) {
+      avatar.tagText = p.name;
+      avatar.tag.set(p.name, '#ffffff');
     }
     rig.chute.visible = p.chute > 0.02;
     rig.chute.scale.setScalar(p.chute);
